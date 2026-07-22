@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { margin: 0; background: #fafbfc; color: #1c2530; }
+a { color: #63c94e; }
+a:hover { color: #4fae3b; }
+
+/* Evita o zoom automático do Safari iOS ao focar campos com fonte < 16px */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
