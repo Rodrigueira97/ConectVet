@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { CATEGORIAS, ESTADOS_CIDADES, onlyDigits } from '@/lib/mockData';
 import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
+import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE } from '@/lib/api';
 
 type Role = 'clinica' | 'profissional';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -63,6 +64,8 @@ export default function CadastroPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [cepStatus, setCepStatus] = useState<CepStatus>('idle');
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   function cField<K extends keyof typeof initialClinica>(key: K, value: (typeof initialClinica)[K]) {
     setClinica((f) => ({ ...f, [key]: value }));
@@ -128,11 +131,66 @@ export default function CadastroPage() {
     return e;
   }
 
-  function cadastrar() {
+  async function cadastrar() {
     const e = validate();
     setErrors(e);
+    setApiError('');
     if (Object.keys(e).length > 0) return;
-    router.push(`/${role}`);
+
+    setSubmitting(true);
+    try {
+      if (role === 'clinica') {
+        const [alvaraUrl] = await uploadArquivos([alvara as File]);
+        const fotosEstrutura = await uploadArquivos(Array.from(fotos as FileList));
+
+        const { accessToken, role: contaRole } = await registrarClinica({
+          email, senha,
+          nome: clinica.nome,
+          cnpj: onlyDigits(clinica.cnpj),
+          inscricaoEstadual: clinica.inscricaoEstadual,
+          responsavelTecnico: clinica.responsavelTecnico,
+          cep: clinica.cep || undefined,
+          estado: clinica.estado,
+          cidade: clinica.cidade,
+          bairro: clinica.bairro || undefined,
+          rua: clinica.rua,
+          numero: clinica.numero,
+          complemento: clinica.complemento || undefined,
+          alvaraUrl,
+          fotosEstrutura,
+          planosSaude: clinica.planosSaude || undefined,
+          sistemas: clinica.sistemas || undefined,
+          observacoes: clinica.observacoes || undefined,
+        });
+        setSession(accessToken, contaRole);
+        router.push('/clinica');
+      } else {
+        const [comprovanteUrl] = await uploadArquivos([comprovante as File]);
+        const idDocUrls = await uploadArquivos(Array.from(idDocs as FileList));
+        const [curriculoUrl] = await uploadArquivos([curriculo as File]);
+
+        const { accessToken, role: contaRole } = await registrarProfissional({
+          email, senha,
+          nome: prof.nome,
+          documento: onlyDigits(prof.doc),
+          funcao: CATEGORIA_VALUE[prof.funcao as string],
+          tipoComprovacao: comprovacao?.label ?? '',
+          comprovanteUrl,
+          idDocUrls,
+          curriculoUrl,
+          areaAtuacao: prof.areaAtuacao,
+          planoSaude: prof.planoSaude || undefined,
+          regioesAtendimento: prof.regioes,
+          observacoes: prof.observacoes || undefined,
+        });
+        setSession(accessToken, contaRole);
+        router.push('/profissional');
+      }
+    } catch (err) {
+      setApiError(err instanceof ApiError ? err.message : 'Não foi possível concluir o cadastro. Tente novamente.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -266,9 +324,14 @@ export default function CadastroPage() {
         {Object.keys(errors).length > 0 && (
           <div className="text-sm font-semibold text-danger mb-3">Corrija os campos destacados acima antes de continuar.</div>
         )}
+        {apiError && <div className="text-sm font-semibold text-danger mb-3">{apiError}</div>}
 
-        <button onClick={cadastrar} className="w-full py-3.5 rounded-lg bg-primary hover:bg-primaryDark text-white font-bold text-sm">
-          Criar conta
+        <button
+          onClick={cadastrar}
+          disabled={submitting}
+          className="w-full py-3.5 rounded-lg bg-primary hover:bg-primaryDark text-white font-bold text-sm disabled:opacity-60"
+        >
+          {submitting ? 'Enviando...' : 'Criar conta'}
         </button>
 
         <div className="text-center mt-5 mb-8 text-sm text-gray-500">

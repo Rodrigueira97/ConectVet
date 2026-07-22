@@ -1,0 +1,206 @@
+// Prisma schema do ConectVet
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CLINICA
+  PROFISSIONAL
+  ADMIN
+}
+
+enum Categoria {
+  VETERINARIO_CLINICO
+  VETERINARIO_ESPECIALISTA
+  ESTAGIARIO
+  AUXILIAR
+}
+
+enum VagaStatus {
+  ABERTA
+  PREENCHIDA
+  CONCLUIDA
+  CANCELADA
+}
+
+enum CandidaturaStatus {
+  PENDENTE
+  ACEITO
+  RECUSADO
+}
+
+enum PagamentoStatus {
+  RETIDO
+  LIBERADO
+}
+
+enum AvaliacaoAutor {
+  CLINICA
+  PROFISSIONAL
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  senhaHash String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinica      Clinica?
+  profissional Profissional?
+
+  @@map("users")
+}
+
+model Clinica {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  nome               String
+  cnpj               String @unique
+  inscricaoEstadual  String
+  responsavelTecnico String
+
+  cep         String?
+  estado      String
+  cidade      String
+  bairro      String?
+  rua         String
+  numero      String
+  complemento String?
+
+  alvaraUrl      String
+  fotosEstrutura String[]
+  planosSaude    String?
+  sistemas       String?
+  observacoes    String?
+
+  vagas Vaga[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("clinicas")
+}
+
+model Profissional {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  nome      String
+  documento String    @unique // CPF ou CNPJ
+  funcao    Categoria
+
+  tipoComprovacao String
+  comprovanteUrl  String
+  idDocUrls       String[]
+  curriculoUrl    String
+
+  areaAtuacao        String
+  planoSaude         String?
+  regioesAtendimento String
+  observacoes        String?
+
+  candidaturas Candidatura[]
+  avaliacoes   Avaliacao[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profissionais")
+}
+
+model Vaga {
+  id        String  @id @default(cuid())
+  clinicaId String
+  clinica   Clinica @relation(fields: [clinicaId], references: [id], onDelete: Cascade)
+
+  categoria Categoria
+
+  cep         String?
+  estado      String
+  cidade      String
+  bairro      String?
+  rua         String
+  numero      String
+  complemento String?
+
+  data       DateTime @db.Date
+  horaInicio String
+  horaFim    String
+  valor      Decimal  @db.Decimal(10, 2)
+  descricao  String?
+
+  status VagaStatus @default(ABERTA)
+
+  candidaturas Candidatura[]
+  pagamento    Pagamento?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("vagas")
+}
+
+model Candidatura {
+  id             String       @id @default(cuid())
+  vagaId         String
+  vaga           Vaga         @relation(fields: [vagaId], references: [id], onDelete: Cascade)
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  status CandidaturaStatus @default(PENDENTE)
+
+  pagamento  Pagamento?
+  avaliacoes Avaliacao[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([vagaId, profissionalId])
+  @@map("candidaturas")
+}
+
+model Pagamento {
+  id            String      @id @default(cuid())
+  vagaId        String      @unique
+  vaga          Vaga        @relation(fields: [vagaId], references: [id], onDelete: Cascade)
+  candidaturaId String      @unique
+  candidatura   Candidatura @relation(fields: [candidaturaId], references: [id], onDelete: Cascade)
+
+  valorBruto   Decimal         @db.Decimal(10, 2)
+  taxa         Decimal         @db.Decimal(10, 2)
+  valorLiquido Decimal         @db.Decimal(10, 2)
+  status       PagamentoStatus @default(RETIDO)
+
+  createdAt  DateTime  @default(now())
+  liberadoEm DateTime?
+
+  @@map("pagamentos")
+}
+
+model Avaliacao {
+  id             String       @id @default(cuid())
+  candidaturaId  String
+  candidatura    Candidatura  @relation(fields: [candidaturaId], references: [id], onDelete: Cascade)
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  autor      AvaliacaoAutor
+  nota       Int
+  comentario String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([candidaturaId, autor])
+  @@map("avaliacoes")
+}

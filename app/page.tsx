@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { login, setSession, ApiError } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -8,12 +9,23 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function entrar() {
+  async function entrar() {
     if (!/\S+@\S+\.\S+/.test(email)) return setError('Informe um e-mail válido.');
     if (!senha || senha.length < 4) return setError('A senha deve ter ao menos 4 caracteres.');
     setError('');
-    router.push(`/${role}`);
+    setLoading(true);
+    try {
+      const { accessToken, role: contaRole } = await login(email, senha);
+      setSession(accessToken, contaRole);
+      const destino = contaRole === 'CLINICA' ? '/clinica' : contaRole === 'PROFISSIONAL' ? '/profissional' : '/admin';
+      router.push(destino);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível entrar. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -65,13 +77,15 @@ export default function LoginPage() {
               onChange={(e) => { setSenha(e.target.value); setError(''); }}
               placeholder="Senha"
               className="px-3.5 py-3 rounded-lg border border-gray-300 text-sm outline-none"
+              onKeyDown={(e) => e.key === 'Enter' && entrar()}
             />
             {error && <div className="text-sm text-danger">{error}</div>}
             <button
               onClick={entrar}
-              className="mt-1.5 py-3.5 rounded-lg bg-primary hover:bg-primaryDark text-white font-bold text-sm"
+              disabled={loading}
+              className="mt-1.5 py-3.5 rounded-lg bg-primary hover:bg-primaryDark text-white font-bold text-sm disabled:opacity-60"
             >
-              Entrar
+              {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </div>
 
@@ -83,7 +97,7 @@ export default function LoginPage() {
             href="/admin"
             className="mt-6 block text-center py-2.5 rounded-lg border border-dashed border-gray-300 text-xs font-bold text-gray-400 hover:text-gray-600 hover:border-gray-400"
           >
-            Acesso admin (provisório)
+            Acesso administrativo
           </a>
         </div>
       </div>

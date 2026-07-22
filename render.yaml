@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: conectvet-api
+    runtime: node
+    plan: free
+    rootDir: api
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build && npx prisma migrate deploy
+    startCommand: node dist/src/main.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_SENHA
+        sync: false

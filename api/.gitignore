@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+*.log
+
+# Keep environment variables out of version control
+.env
+.env.local
+
+/generated/prisma
+
+# Arquivos enviados via /uploads (armazenamento local, só para dev)
+/uploads/*
+!/uploads/.gitkeep

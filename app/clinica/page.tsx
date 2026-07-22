@@ -1,14 +1,19 @@
 'use client';
-import { useMemo, useState } from 'react';
-import {
-  FEED_MOCK, MINHAS_VAGAS_MOCK, PAGAMENTOS_MOCK, CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA,
-  ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge,
-} from '@/lib/mockData';
-import { MinhaVaga, Pagamento, Avaliacao } from '@/lib/types';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge } from '@/lib/mockData';
+import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, PlusIcon, GridIcon, UserIcon } from '@/app/components/icons';
 import { maskCEP } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
+import {
+  ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE,
+  Vaga, Candidatura, Clinica,
+  getClinicaMe, updateClinicaMe, getFeed, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
+  getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
+  criarAvaliacao,
+} from '@/lib/api';
 
 type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'perfil';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -17,25 +22,66 @@ function withCurrent(list: string[], current: string) {
   return current && !list.includes(current) ? [...list, current] : list;
 }
 
+function formatDataBR(iso: string) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+}
+
+function localDaVaga(v: { rua: string; numero: string; complemento?: string | null; bairro?: string | null; cidade: string; estado: string }) {
+  return buildEndereco({ rua: v.rua, numero: v.numero, complemento: v.complemento || undefined, bairro: v.bairro || undefined, cidade: v.cidade, estado: v.estado });
+}
+
+const vagaFormInicial = {
+  outroEndereco: false, cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '',
+  data: '', horaInicio: '', horaFim: '', valor: '', categoria: '' as Categoria | '', descricao: '',
+};
+
 export default function ClinicaPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('home');
-  const [clinica, setClinica] = useState({
-    nome: 'Clínica VetSaúde Ltda', cnpj: '', responsavel: '', cep: '05426-200',
-    estado: 'SP', cidade: 'São Paulo', bairro: 'Pinheiros', rua: 'Rua dos Pinheirais', numero: '450', complemento: '',
-  });
-  const [minhasVagas, setMinhasVagas] = useState<MinhaVaga[]>(MINHAS_VAGAS_MOCK);
-  const [pagamentos, setPagamentos] = useState<Pagamento[]>(PAGAMENTOS_MOCK);
-  const [avaliacoesProfissional, setAvaliacoesProfissional] = useState<Record<string, Avaliacao>>({});
+  const [clinica, setClinica] = useState<Clinica | null>(null);
+  const [feed, setFeed] = useState<Vaga[]>([]);
+  const [minhasVagas, setMinhasVagas] = useState<Vaga[]>([]);
+  const [candidatos, setCandidatos] = useState<Candidatura[]>([]);
   const [selectedMvId, setSelectedMvId] = useState<string | null>(null);
   const [selectedCandId, setSelectedCandId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [vagaSelecionada, setVagaSelecionada] = useState<VagaDetalheData | null>(null);
+  const [actionError, setActionError] = useState('');
 
-  const [vagaForm, setVagaForm] = useState({
-    outroEndereco: false, cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '',
-    data: '', horaInicio: '', horaFim: '', valor: '', categoria: '', descricao: '',
-  });
+  const [vagaForm, setVagaForm] = useState(vagaFormInicial);
   const [vagaCepStatus, setVagaCepStatus] = useState<CepStatus>('idle');
+  const [publishing, setPublishing] = useState(false);
+
+  const [perfilForm, setPerfilForm] = useState({ nome: '', cnpj: '' });
+  const [savingPerfil, setSavingPerfil] = useState(false);
+
+  useEffect(() => {
+    if (!getToken()) { router.push('/'); return; }
+    (async () => {
+      try {
+        const [c, f, mv] = await Promise.all([getClinicaMe(), getFeed(), getMinhasVagas()]);
+        setClinica(c);
+        setPerfilForm({ nome: c.nome, cnpj: c.cnpj });
+        setFeed(f);
+        setMinhasVagas(mv);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/'); }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [router]);
+
+  useEffect(() => {
+    if (tab !== 'candidatos' || !selectedMvId) return;
+    getCandidatosDaVaga(selectedMvId).then(setCandidatos).catch(() => {});
+  }, [tab, selectedMvId]);
+
+  async function refreshMinhasVagas() {
+    setMinhasVagas(await getMinhasVagas());
+  }
 
   async function buscarCepVaga(cep: string) {
     setVagaCepStatus('loading');
@@ -63,12 +109,14 @@ export default function ClinicaPage() {
     if (d.length === 8) buscarCepVaga(d);
   }
 
-  const enderecoCompleto = vagaForm.outroEndereco ? buildEndereco(vagaForm) : buildEndereco(clinica);
+  const enderecoParaExibir = vagaForm.outroEndereco
+    ? buildEndereco(vagaForm)
+    : clinica ? buildEndereco(clinica) : '';
   const publishDisabled = vagaForm.outroEndereco
     ? (!vagaForm.rua || !vagaForm.numero || !vagaForm.cidade || !vagaForm.estado)
-    : !clinica.rua;
+    : !clinica?.rua;
 
-  const minVal = MIN_VALORES[vagaForm.categoria as keyof typeof MIN_VALORES];
+  const minVal = vagaForm.categoria ? MIN_VALORES[vagaForm.categoria] : undefined;
   const valorNum = parseFloat(vagaForm.valor);
   let horaLabel = '';
   if (vagaForm.horaInicio && vagaForm.horaFim) {
@@ -79,69 +127,118 @@ export default function ClinicaPage() {
     horaLabel = `Duração: ${diff.toFixed(1)}h${diff > 12 ? ' — excede o máximo de 12h' : ''}`;
   }
 
-  function publicarVaga() {
-    if (publishDisabled) return;
-    const local = enderecoCompleto;
-    const horario = vagaForm.horaInicio && vagaForm.horaFim ? `${vagaForm.horaInicio} - ${vagaForm.horaFim}` : '';
-    if (editingId) {
-      setMinhasVagas((prev) => prev.map((m) => m.id !== editingId ? m : {
-        ...m, categoria: (vagaForm.categoria as any) || m.categoria, valor: vagaForm.valor || m.valor,
-        local: local || m.local, horario: horario || m.horario, descricao: vagaForm.descricao || m.descricao,
-      }));
-      setEditingId(null);
-    } else {
-      setMinhasVagas((prev) => [{
-        id: 'mv' + Date.now(), categoria: vagaForm.categoria as any, local, horario, valor: vagaForm.valor,
-        descricao: vagaForm.descricao, data: vagaForm.data, status: 'aberta', candidatos: [],
-      }, ...prev]);
+  async function publicarVaga() {
+    if (publishDisabled || !vagaForm.categoria || !clinica) return;
+    setPublishing(true);
+    setActionError('');
+    const endereco = vagaForm.outroEndereco
+      ? { cep: vagaForm.cep || undefined, estado: vagaForm.estado, cidade: vagaForm.cidade, bairro: vagaForm.bairro || undefined, rua: vagaForm.rua, numero: vagaForm.numero, complemento: vagaForm.complemento || undefined }
+      : { cep: clinica.cep || undefined, estado: clinica.estado, cidade: clinica.cidade, bairro: clinica.bairro || undefined, rua: clinica.rua, numero: clinica.numero, complemento: clinica.complemento || undefined };
+    const payload = {
+      categoria: CATEGORIA_VALUE[vagaForm.categoria],
+      ...endereco,
+      data: vagaForm.data,
+      horaInicio: vagaForm.horaInicio,
+      horaFim: vagaForm.horaFim,
+      valor: vagaForm.valor,
+      descricao: vagaForm.descricao || undefined,
+    };
+    try {
+      if (editingId) {
+        await atualizarVaga(editingId, payload);
+        setEditingId(null);
+      } else {
+        await criarVaga(payload);
+      }
+      setVagaForm(vagaFormInicial);
+      setVagaCepStatus('idle');
+      await refreshMinhasVagas();
+      setTab('painel');
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível publicar a vaga.');
+    } finally {
+      setPublishing(false);
     }
-    setVagaForm({ outroEndereco: false, cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '', data: '', horaInicio: '', horaFim: '', valor: '', categoria: '', descricao: '' });
-    setVagaCepStatus('idle');
-    setTab('painel');
   }
 
-  function editarVaga(mv: MinhaVaga) {
-    const [horaInicio, horaFim] = (mv.horario || '').split(' - ').map((x) => x.trim());
-    const parts = (mv.local || '').split(',').map((x) => x.trim());
-    let bairro = '', cidade = '', estado = '';
-    if (parts.length >= 2) {
-      bairro = parts[0];
-      const cs = parts[1].split(' - ').map((x) => x.trim());
-      cidade = cs[0] || ''; estado = cs[1] || '';
-    }
+  function editarVaga(mv: Vaga) {
     setEditingId(mv.id);
-    setVagaForm({ outroEndereco: true, cep: '', estado, cidade, bairro, rua: '', numero: '', complemento: '', data: '', horaInicio: horaInicio || '', horaFim: horaFim || '', valor: mv.valor, categoria: mv.categoria, descricao: mv.descricao || '' });
+    setVagaForm({
+      outroEndereco: true,
+      cep: mv.cep || '', estado: mv.estado, cidade: mv.cidade, bairro: mv.bairro || '', rua: mv.rua, numero: mv.numero, complemento: mv.complemento || '',
+      data: mv.data.slice(0, 10), horaInicio: mv.horaInicio, horaFim: mv.horaFim, valor: mv.valor, categoria: CATEGORIA_LABEL[mv.categoria] as Categoria, descricao: mv.descricao || '',
+    });
     setVagaCepStatus('idle');
     setTab('criar-vaga');
   }
 
-  function cancelarVaga(id: string) {
-    setMinhasVagas((prev) => prev.map((m) => m.id !== id ? m : { ...m, status: 'cancelada' }));
+  async function cancelarVaga(id: string) {
+    setActionError('');
+    try {
+      await apiCancelarVaga(id);
+      await refreshMinhasVagas();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível cancelar a vaga.');
+    }
   }
 
   function aceitarCandidato(mvId: string, candId: string) {
     const mv = minhasVagas.find((m) => m.id === mvId);
-    if (!mv || mv.status !== 'aberta') return; // cada vaga só pode ter um profissional aprovado
+    if (!mv || mv.status !== 'ABERTA') return; // cada vaga só pode ter um profissional aprovado
     setSelectedMvId(mvId); setSelectedCandId(candId); setTab('pagamento');
   }
-  function recusarCandidato(mvId: string, candId: string) {
-    setMinhasVagas((prev) => prev.map((m) => m.id !== mvId ? m : { ...m, candidatos: m.candidatos.map((c) => c.id === candId ? { ...c, status: 'recusado' } : c) }));
+
+  async function recusarCandidato(candId: string) {
+    setActionError('');
+    try {
+      await recusarCandidatura(candId);
+      if (selectedMvId) setCandidatos(await getCandidatosDaVaga(selectedMvId));
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível recusar o candidato.');
+    }
   }
-  function confirmarPagamento() {
-    if (!selectedMvId || !selectedCandId) return;
-    setMinhasVagas((prev) => prev.map((m) => m.id !== selectedMvId ? m : {
-      ...m, status: 'preenchida',
-      candidatos: m.candidatos.map((c) => c.id === selectedCandId ? { ...c, status: 'aceito' } : (c.status === 'pendente' ? { ...c, status: 'recusado' } : c)),
-    }));
-    setPagamentos((prev) => [{ id: 'p' + Date.now(), mvId: selectedMvId, candId: selectedCandId, nome: minhasVagas.find(m => m.id === selectedMvId)?.candidatos.find(c => c.id === selectedCandId)?.nome || '', status: 'retido' }, ...prev]);
-    setTab('painel');
+
+  async function confirmarPagamento() {
+    if (!selectedCandId) return;
+    setActionError('');
+    try {
+      await aceitarCandidatura(selectedCandId);
+      await refreshMinhasVagas();
+      setTab('painel');
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível confirmar o pagamento.');
+    }
   }
-  function liberarPagamento(mvId: string) {
-    setMinhasVagas((prev) => prev.map((m) => m.id !== mvId ? m : { ...m, status: 'concluida' }));
-    setPagamentos((prev) => prev.map((p) => p.mvId !== mvId ? p : { ...p, status: 'liberado' }));
+
+  async function handleLiberarPagamento(pagamentoId: string) {
+    setActionError('');
+    try {
+      await apiLiberarPagamento(pagamentoId);
+      await refreshMinhasVagas();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível liberar o pagamento.');
+    }
+  }
+
+  async function salvarPerfil() {
+    setSavingPerfil(true);
+    setActionError('');
+    try {
+      const atualizado = await updateClinicaMe({ nome: perfilForm.nome });
+      setClinica(atualizado);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível salvar o perfil.');
+    } finally {
+      setSavingPerfil(false);
+    }
   }
 
   const selectedMv = minhasVagas.find((m) => m.id === selectedMvId) || null;
+  const selectedCand = candidatos.find((c) => c.id === selectedCandId) || null;
+
+  if (loading || !clinica) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Carregando...</div>;
+  }
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -164,29 +261,39 @@ export default function ClinicaPage() {
           <VagaDetalheView vaga={vagaSelecionada} onBack={() => setVagaSelecionada(null)} accentClass="text-primary" />
         ) : (
         <>
+        {actionError && (
+          <div className="max-w-3xl mx-auto pt-6 px-8">
+            <div className="text-sm font-semibold text-danger bg-red-50 rounded-lg p-3">{actionError}</div>
+          </div>
+        )}
+
         {tab === 'home' && (
           <div className="max-w-3xl mx-auto p-8">
             <h1 className="text-2xl font-extrabold mb-1">Vagas no feed</h1>
             <p className="text-sm text-gray-500 mb-6">Visão geral das vagas publicadas na plataforma</p>
             <div className="flex flex-col gap-4">
-              {FEED_MOCK.map((v, i) => (
-                <div
-                  key={i}
-                  onClick={() => setVagaSelecionada({ clinica: v.clinica, categoria: v.categoria, turno: v.turno, local: v.local, data: v.data, horario: v.horario, valor: v.valor, descricao: v.descricao })}
-                  className="bg-white border border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
-                >
-                  <div className="flex justify-between items-start gap-3">
-                    <div>
-                      <div className="text-xs font-bold text-primary uppercase">{v.categoria} · {v.turno}</div>
-                      <div className="text-lg font-extrabold mt-1">{v.clinica}</div>
+              {feed.map((v) => {
+                const local = localDaVaga(v);
+                return (
+                  <div
+                    key={v.id}
+                    onClick={() => setVagaSelecionada({ clinica: v.clinica?.nome, categoria: CATEGORIA_LABEL[v.categoria], local, data: formatDataBR(v.data), horario: `${v.horaInicio} - ${v.horaFim}`, valor: v.valor, descricao: v.descricao || undefined })}
+                    className="bg-white border border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[v.categoria]}</div>
+                        <div className="text-lg font-extrabold mt-1">{v.clinica?.nome}</div>
+                      </div>
+                      <div className="bg-green-100 text-green-700 font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
                     </div>
-                    <div className="bg-green-100 text-green-700 font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
+                    <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
+                      <div>LOCAL {local}</div><div>DATA {formatDataBR(v.data)}</div><div>HORÁRIO {v.horaInicio} - {v.horaFim}</div>
+                    </div>
                   </div>
-                  <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
-                    <div>LOCAL {v.local}</div><div>DATA {v.data}</div><div>HORÁRIO {v.horario}</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
+              {feed.length === 0 && <div className="text-sm text-gray-400">Nenhuma vaga publicada ainda.</div>}
             </div>
           </div>
         )}
@@ -253,9 +360,9 @@ export default function ClinicaPage() {
                   </label>
                 </div>
               )}
-              {enderecoCompleto && (
+              {enderecoParaExibir && (
                 <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700">
-                  {enderecoCompleto} — <a href={mapsLink(enderecoCompleto)} target="_blank" className="font-bold">ver no Google Maps</a>
+                  {enderecoParaExibir} — <a href={mapsLink(enderecoParaExibir)} target="_blank" className="font-bold">ver no Google Maps</a>
                 </div>
               )}
               <label className="flex flex-col gap-1.5">
@@ -275,7 +382,7 @@ export default function ClinicaPage() {
               {horaLabel && <div className="text-xs font-mono text-gray-500">{horaLabel}</div>}
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-bold">Categoria</span>
-                <select value={vagaForm.categoria} onChange={(e) => setVagaForm((f) => ({ ...f, categoria: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
+                <select value={vagaForm.categoria} onChange={(e) => setVagaForm((f) => ({ ...f, categoria: e.target.value as Categoria }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
                   <option value="">Selecione...</option>
                   {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -297,9 +404,9 @@ export default function ClinicaPage() {
                 />
               </label>
             </div>
-            <button disabled={publishDisabled} onClick={publicarVaga}
-              className={`mt-6 w-full py-3.5 rounded-lg font-bold text-sm ${publishDisabled ? 'bg-gray-200 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
-              {editingId ? 'Salvar alterações' : 'Publicar vaga'}
+            <button disabled={publishDisabled || publishing} onClick={publicarVaga}
+              className={`mt-6 w-full py-3.5 rounded-lg font-bold text-sm ${publishDisabled || publishing ? 'bg-gray-200 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
+              {publishing ? 'Publicando...' : editingId ? 'Salvar alterações' : 'Publicar vaga'}
             </button>
           </div>
         )}
@@ -310,50 +417,51 @@ export default function ClinicaPage() {
             <p className="text-sm text-gray-500 mb-6">Acompanhe suas vagas publicadas e candidatos</p>
             <div className="flex flex-col gap-4">
               {minhasVagas.map((mv) => {
-                const badge = statusBadge(mv.status);
-                const pend = mv.candidatos.filter((c) => c.status === 'pendente').length;
-                const retido = pagamentos.find((p) => p.mvId === mv.id && p.status === 'retido');
-                const hired = mv.candidatos.find((c) => c.status === 'aceito');
+                const badge = statusBadge(mv.status.toLowerCase());
+                const local = localDaVaga(mv);
+                const pend = (mv.candidaturas || []).filter((c) => c.status === 'PENDENTE').length;
+                const hired = (mv.candidaturas || []).find((c) => c.status === 'ACEITO');
                 return (
                   <div
                     key={mv.id}
-                    onClick={() => setVagaSelecionada({ categoria: mv.categoria, local: mv.local, data: mv.data, horario: mv.horario, valor: mv.valor, descricao: mv.descricao })}
+                    onClick={() => setVagaSelecionada({ categoria: CATEGORIA_LABEL[mv.categoria], local, data: formatDataBR(mv.data), horario: `${mv.horaInicio} - ${mv.horaFim}`, valor: mv.valor, descricao: mv.descricao || undefined })}
                     className="bg-white border border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div>
-                        <div className="text-xs font-bold text-primary uppercase">{mv.categoria}</div>
-                        <div className="text-lg font-extrabold mt-1">{mv.local}</div>
+                        <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[mv.categoria]}</div>
+                        <div className="text-lg font-extrabold mt-1">{local}</div>
                       </div>
                       <div className={badge.className}>{badge.label}</div>
                     </div>
                     <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
-                      <div>DATA {mv.data}</div><div>HORÁRIO {mv.horario}</div><div>R$ {mv.valor}</div>
+                      <div>DATA {formatDataBR(mv.data)}</div><div>HORÁRIO {mv.horaInicio} - {mv.horaFim}</div><div>R$ {mv.valor}</div>
                     </div>
                     {mv.descricao && <div className="text-sm text-gray-600 mt-3">{mv.descricao}</div>}
                     <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100 flex-wrap gap-2">
-                      <div className="text-sm text-gray-500">{mv.candidatos.length === 0 ? 'Nenhum candidato ainda' : `${mv.candidatos.length} candidato(s) · ${pend} pendente(s)`}</div>
+                      <div className="text-sm text-gray-500">{(mv.candidaturas || []).length === 0 ? 'Nenhum candidato ainda' : `${mv.candidaturas!.length} candidato(s) · ${pend} pendente(s)`}</div>
                       <div className="flex gap-2 flex-wrap">
-                        {mv.status === 'aberta' && (
+                        {mv.status === 'ABERTA' && (
                           <>
                             <button onClick={() => editarVaga(mv)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Editar</button>
                             <button onClick={() => cancelarVaga(mv.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold text-danger">Cancelar</button>
                           </>
                         )}
-                        {mv.status === 'preenchida' && retido && (
-                          <button onClick={() => liberarPagamento(mv.id)} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold">Confirmar presença e liberar pagamento</button>
+                        {mv.status === 'PREENCHIDA' && mv.pagamento && mv.pagamento.status === 'RETIDO' && (
+                          <button onClick={() => handleLiberarPagamento(mv.pagamento!.id)} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold">Confirmar presença e liberar pagamento</button>
                         )}
                         <button onClick={() => { setSelectedMvId(mv.id); setTab('candidatos'); }} className="px-4 py-2 rounded-lg bg-secondary text-white text-sm font-bold">Ver candidatos</button>
                       </div>
                     </div>
-                    {mv.status === 'concluida' && hired && (
+                    {mv.status === 'CONCLUIDA' && hired && (
                       <div onClick={(e) => e.stopPropagation()}>
-                        <AvaliarProfissional candId={hired.id} nome={hired.nome} avaliacoes={avaliacoesProfissional} setAvaliacoes={setAvaliacoesProfissional} />
+                        <AvaliarProfissional candidaturaId={hired.id} nome={hired.profissional?.nome || ''} />
                       </div>
                     )}
                   </div>
                 );
               })}
+              {minhasVagas.length === 0 && <div className="text-sm text-gray-400">Você ainda não publicou nenhuma vaga.</div>}
             </div>
           </div>
         )}
@@ -361,43 +469,43 @@ export default function ClinicaPage() {
         {tab === 'candidatos' && selectedMv && (
           <div className="max-w-2xl mx-auto p-8">
             <button onClick={() => setTab('painel')} className="text-sm font-bold text-gray-500 mb-4">← Voltar ao painel</button>
-            <h1 className="text-xl font-extrabold mb-1">Candidatos — {selectedMv.categoria}</h1>
-            <p className="text-sm text-gray-500 mb-6">{selectedMv.local} · {selectedMv.data}</p>
-            {selectedMv.status !== 'aberta' && (
+            <h1 className="text-xl font-extrabold mb-1">Candidatos — {CATEGORIA_LABEL[selectedMv.categoria]}</h1>
+            <p className="text-sm text-gray-500 mb-6">{localDaVaga(selectedMv)} · {formatDataBR(selectedMv.data)}</p>
+            {selectedMv.status !== 'ABERTA' && (
               <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 mb-4">
-                {selectedMv.status === 'cancelada'
+                {selectedMv.status === 'CANCELADA'
                   ? 'Esta vaga foi cancelada.'
                   : 'Esta vaga já tem um profissional aprovado — cada vaga permite apenas um aprovado por enquanto.'}
               </div>
             )}
             <div className="flex flex-col gap-3">
-              {selectedMv.candidatos.map((c) => {
-                const badge = statusBadge(c.status);
+              {candidatos.map((c) => {
+                const badge = statusBadge(c.status.toLowerCase());
                 return (
                   <div key={c.id} className="bg-white border border-gray-200 rounded-2xl p-5">
                     <div className="flex justify-between items-start gap-3">
                       <div>
-                        <div className="font-extrabold">{c.nome}</div>
-                        <div className="text-sm text-gray-500">{c.funcao} · {c.area}</div>
-                        <div className="text-xs text-gray-500 mt-1">Região: {c.regioes}</div>
+                        <div className="font-extrabold">{c.profissional?.nome}</div>
+                        <div className="text-sm text-gray-500">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · {c.profissional?.areaAtuacao}</div>
+                        <div className="text-xs text-gray-500 mt-1">Região: {c.profissional?.regioesAtendimento}</div>
                       </div>
                       <div className={badge.className}>{badge.label}</div>
                     </div>
-                    {c.status === 'pendente' && selectedMv.status === 'aberta' && (
+                    {c.status === 'PENDENTE' && selectedMv.status === 'ABERTA' && (
                       <div className="flex gap-2 mt-4">
-                        <button onClick={() => recusarCandidato(selectedMv.id, c.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Recusar</button>
+                        <button onClick={() => recusarCandidato(c.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Recusar</button>
                         <button onClick={() => aceitarCandidato(selectedMv.id, c.id)} className="px-3.5 py-2 rounded-lg bg-primary text-white text-sm font-bold">Aceitar e pagar</button>
                       </div>
                     )}
                   </div>
                 );
               })}
+              {candidatos.length === 0 && <div className="text-sm text-gray-400">Nenhum candidato ainda.</div>}
             </div>
           </div>
         )}
 
         {tab === 'pagamento' && selectedMv && (() => {
-          const cand = selectedMv.candidatos.find((c) => c.id === selectedCandId);
           const bruto = parseFloat(selectedMv.valor) || 0;
           const taxa = bruto * TAXA_PLATAFORMA;
           return (
@@ -406,8 +514,8 @@ export default function ClinicaPage() {
               <h1 className="text-2xl font-extrabold mb-6">Confirmar contratação</h1>
               <div className="bg-white border border-gray-200 rounded-2xl p-7">
                 <div className="text-sm text-gray-500">Profissional</div>
-                <div className="text-lg font-extrabold">{cand?.nome}</div>
-                <div className="text-sm text-gray-500">{selectedMv.categoria} · {selectedMv.local}</div>
+                <div className="text-lg font-extrabold">{selectedCand?.profissional?.nome}</div>
+                <div className="text-sm text-gray-500">{CATEGORIA_LABEL[selectedMv.categoria]} · {localDaVaga(selectedMv)}</div>
                 <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-2">
                   <div className="flex justify-between text-sm"><span>Valor do plantão</span><span className="font-bold">R$ {bruto.toFixed(2)}</span></div>
                   <div className="flex justify-between text-sm text-gray-500"><span>Taxa (5%)</span><span>- R$ {taxa.toFixed(2)}</span></div>
@@ -429,13 +537,16 @@ export default function ClinicaPage() {
             <div className="bg-white border border-gray-200 rounded-2xl p-7 flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-bold">Nome / Razão social</span>
-                <input value={clinica.nome} onChange={(e) => setClinica((f) => ({ ...f, nome: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                <input value={perfilForm.nome} onChange={(e) => setPerfilForm((f) => ({ ...f, nome: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-bold">CNPJ</span>
-                <input maxLength={18} value={clinica.cnpj} onChange={(e) => setClinica((f) => ({ ...f, cnpj: e.target.value }))} placeholder="00.000.000/0000-00" className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                <input disabled value={perfilForm.cnpj} className="px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500" />
               </label>
               <div className="text-sm text-gray-500">Endereço cadastrado: {buildEndereco(clinica) || '—'}</div>
+              <button onClick={salvarPerfil} disabled={savingPerfil} className="self-start px-5 py-2.5 rounded-lg bg-primary hover:bg-primaryDark text-white text-sm font-bold disabled:opacity-60">
+                {savingPerfil ? 'Salvando...' : 'Salvar alterações'}
+              </button>
             </div>
           </div>
         )}
@@ -446,14 +557,24 @@ export default function ClinicaPage() {
   );
 }
 
-function AvaliarProfissional({ candId, nome, avaliacoes, setAvaliacoes }: {
-  candId: string; nome: string; avaliacoes: Record<string, Avaliacao>; setAvaliacoes: (fn: any) => void;
-}) {
-  const done = avaliacoes[candId];
+function AvaliarProfissional({ candidaturaId, nome }: { candidaturaId: string; nome: string }) {
   const [nota, setNota] = useState(5);
   const [comentario, setComentario] = useState('');
-  if (done) {
-    return <div className="mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">Você avaliou {nome}: nota {done.nota}/5 — "{done.comentario}"</div>;
+  const [enviado, setEnviado] = useState(false);
+  const [erro, setErro] = useState('');
+
+  async function enviar() {
+    setErro('');
+    try {
+      await criarAvaliacao({ candidaturaId, nota, comentario: comentario || undefined });
+      setEnviado(true);
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível enviar a avaliação.');
+    }
+  }
+
+  if (enviado) {
+    return <div className="mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">Você avaliou {nome}: nota {nota}/5{comentario ? ` — "${comentario}"` : ''}</div>;
   }
   return (
     <div className="mt-4 pt-4 border-t border-gray-100">
@@ -462,7 +583,8 @@ function AvaliarProfissional({ candId, nome, avaliacoes, setAvaliacoes }: {
         {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} — {['', 'Péssimo', 'Ruim', 'Regular', 'Bom', 'Excelente'][n]}</option>)}
       </select>
       <textarea value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentário (opcional)" rows={2} className="w-full px-2.5 py-2 rounded-lg border border-gray-300 text-sm mb-2" />
-      <button onClick={() => setAvaliacoes((prev: any) => ({ ...prev, [candId]: { nota, comentario } }))} className="px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-bold">Enviar avaliação</button>
+      {erro && <div className="text-xs font-semibold text-danger mb-2">{erro}</div>}
+      <button onClick={enviar} className="px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-bold">Enviar avaliação</button>
     </div>
   );
 }
