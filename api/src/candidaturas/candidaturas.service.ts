@@ -107,9 +107,9 @@ export class CandidaturasService {
       throw new ConflictException('Esta candidatura já foi respondida.');
     }
 
-    const valorBruto = Number(candidatura.vaga.valor);
-    const taxa = Number((valorBruto * TAXA_PLATAFORMA).toFixed(2));
-    const valorLiquido = Number((valorBruto - taxa).toFixed(2));
+    const valorLiquido = Number(candidatura.vaga.valor);
+    const taxa = Number((valorLiquido * TAXA_PLATAFORMA).toFixed(2));
+    const valorBruto = Number((valorLiquido + taxa).toFixed(2));
 
     return this.prisma.$transaction(async (tx) => {
       await tx.candidatura.update({

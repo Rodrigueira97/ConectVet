@@ -401,10 +401,18 @@ export default function ClinicaPage() {
                 </select>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">Valor (R$)</span>
+                <span className="text-sm font-bold">Valor a pagar ao profissional (R$)</span>
                 <input type="number" value={vagaForm.valor} onChange={(e) => setVagaForm((f) => ({ ...f, valor: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
                 {minVal && <span className="text-xs text-gray-500">Mínimo para esta categoria: R$ {minVal}{!isNaN(valorNum) && valorNum < minVal ? ' — abaixo do mínimo' : ''}</span>}
-                <span className="text-xs text-gray-500">A ConectVet retém 5% como taxa de serviço.</span>
+                {!isNaN(valorNum) && valorNum > 0 ? (
+                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 flex flex-col gap-1">
+                    <div className="flex justify-between"><span>Profissional recebe</span><span className="font-bold">R$ {valorNum.toFixed(2)}</span></div>
+                    <div className="flex justify-between text-gray-500"><span>Taxa da ConectVet (5%)</span><span>+ R$ {(valorNum * TAXA_PLATAFORMA).toFixed(2)}</span></div>
+                    <div className="flex justify-between font-extrabold pt-1 border-t border-gray-200"><span>Você paga no total</span><span>R$ {(valorNum * (1 + TAXA_PLATAFORMA)).toFixed(2)}</span></div>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-500">A ConectVet soma 5% de taxa de serviço sobre este valor.</span>
+                )}
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-bold">Descrição (opcional)</span>
@@ -536,8 +544,9 @@ export default function ClinicaPage() {
         )}
 
         {tab === 'pagamento' && selectedMv && (() => {
-          const bruto = parseFloat(selectedMv.valor) || 0;
-          const taxa = bruto * TAXA_PLATAFORMA;
+          const valorProfissional = parseFloat(selectedMv.valor) || 0;
+          const taxa = valorProfissional * TAXA_PLATAFORMA;
+          const totalClinica = valorProfissional + taxa;
           return (
             <div className="max-w-lg mx-auto p-8">
               <div className="text-sm font-bold text-primary mb-1">Pagamento</div>
@@ -547,9 +556,9 @@ export default function ClinicaPage() {
                 <div className="text-lg font-extrabold">{selectedCand?.profissional?.nome}</div>
                 <div className="text-sm text-gray-500">{CATEGORIA_LABEL[selectedMv.categoria]} · {localDaVaga(selectedMv)}</div>
                 <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-2">
-                  <div className="flex justify-between text-sm"><span>Valor do plantão</span><span className="font-bold">R$ {bruto.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-sm text-gray-500"><span>Taxa (5%)</span><span>- R$ {taxa.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-base font-extrabold pt-2 border-t border-gray-200"><span>Total ao profissional</span><span>R$ {(bruto - taxa).toFixed(2)}</span></div>
+                  <div className="flex justify-between text-sm"><span>Valor ao profissional</span><span className="font-bold">R$ {valorProfissional.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-sm text-gray-500"><span>Taxa da ConectVet (5%)</span><span>+ R$ {taxa.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-base font-extrabold pt-2 border-t border-gray-200"><span>Total que você paga</span><span>R$ {totalClinica.toFixed(2)}</span></div>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-3">O valor fica retido até a clínica confirmar a presença do profissional.</p>
