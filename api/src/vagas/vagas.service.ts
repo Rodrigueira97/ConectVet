@@ -7,10 +7,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateVagaDto } from './dto/create-vaga.dto';
 import { UpdateVagaDto } from './dto/update-vaga.dto';
 import { Categoria, VagaStatus } from '../../generated/prisma/enums';
+import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
 
 @Injectable()
 export class VagasService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private avaliacoesService: AvaliacoesService,
+  ) {}
 
   async criar(clinicaUserId: string, dto: CreateVagaDto) {
     const clinica = await this.prisma.clinica.findUniqueOrThrow({
@@ -22,7 +26,7 @@ export class VagasService {
   }
 
   async feed(filtros: { categoria?: Categoria; cidade?: string }) {
-    return this.prisma.vaga.findMany({
+    const vagas = await this.prisma.vaga.findMany({
       where: {
         status: VagaStatus.ABERTA,
         categoria: filtros.categoria,
@@ -30,9 +34,20 @@ export class VagasService {
           ? { contains: filtros.cidade, mode: 'insensitive' }
           : undefined,
       },
-      include: { clinica: { select: { nome: true } } },
+      include: { clinica: { select: { id: true, nome: true } } },
       orderBy: { createdAt: 'desc' },
     });
+
+    const medias = await this.avaliacoesService.mediaPorClinicas(
+      vagas.map((v) => v.clinica.id),
+    );
+    return vagas.map((v) => ({
+      ...v,
+      clinica: {
+        ...v.clinica,
+        ...(medias.get(v.clinica.id) ?? { notaMedia: null, totalAvaliacoes: 0 }),
+      },
+    }));
   }
 
   async minhas(clinicaUserId: string) {

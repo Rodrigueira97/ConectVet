@@ -7,6 +7,7 @@ import { HomeIcon, ClockIcon, UserIcon } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
+import { RatingBadge } from '@/app/components/RatingBadge';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
@@ -201,6 +202,7 @@ export default function ProfissionalPage() {
                           {perto && <div className="bg-secondary text-white text-[10px] font-extrabold px-2 py-0.5 rounded uppercase">Perto de você</div>}
                         </div>
                         <div className="text-lg font-extrabold mt-1">{v.clinica?.nome}</div>
+                        <div className="mt-1"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
                       </div>
                       <div className="bg-green-100 text-green-700 font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
                     </div>

@@ -10,6 +10,7 @@ import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
+import { RatingBadge } from '@/app/components/RatingBadge';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE,
   Vaga, Candidatura, Clinica, Avaliacao,
@@ -297,6 +298,7 @@ export default function ClinicaPage() {
                       <div>
                         <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[v.categoria]}</div>
                         <div className="text-lg font-extrabold mt-1">{v.clinica?.nome}</div>
+                        <div className="mt-1"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
                       </div>
                       <div className="bg-green-100 text-green-700 font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
                     </div>
@@ -522,7 +524,8 @@ export default function ClinicaPage() {
                         <div className="flex justify-between items-start gap-3">
                           <div>
                             <div className="font-extrabold">{c.profissional?.nome}</div>
-                            <div className="text-sm text-gray-500">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · {c.profissional?.areaAtuacao}</div>
+                            <div className="mt-0.5"><RatingBadge notaMedia={c.profissional?.notaMedia} totalAvaliacoes={c.profissional?.totalAvaliacoes} /></div>
+                            <div className="text-sm text-gray-500 mt-1">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · {c.profissional?.areaAtuacao}</div>
                             <div className="text-xs text-gray-500 mt-1">Região: {c.profissional?.regioesAtendimento}</div>
                           </div>
                           <div className={badge.className}>{badge.label}</div>

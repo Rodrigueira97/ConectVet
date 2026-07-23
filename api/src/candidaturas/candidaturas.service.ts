@@ -11,12 +11,16 @@ import {
   PagamentoStatus,
   VagaStatus,
 } from '../../generated/prisma/enums';
+import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
 
 const TAXA_PLATAFORMA = 0.05;
 
 @Injectable()
 export class CandidaturasService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private avaliacoesService: AvaliacoesService,
+  ) {}
 
   async candidatar(profissionalUserId: string, dto: CreateCandidaturaDto) {
     const profissional = await this.prisma.profissional.findUniqueOrThrow({
@@ -68,7 +72,7 @@ export class CandidaturasService {
     if (vaga.clinicaId !== clinica.id)
       throw new ForbiddenException('Esta vaga não pertence à sua clínica.');
 
-    return this.prisma.candidatura.findMany({
+    const candidaturas = await this.prisma.candidatura.findMany({
       where: { vagaId },
       include: {
         profissional: {
@@ -83,6 +87,17 @@ export class CandidaturasService {
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    const medias = await this.avaliacoesService.mediaPorProfissionais(
+      candidaturas.map((c) => c.profissional.id),
+    );
+    return candidaturas.map((c) => ({
+      ...c,
+      profissional: {
+        ...c.profissional,
+        ...(medias.get(c.profissional.id) ?? { notaMedia: null, totalAvaliacoes: 0 }),
+      },
+    }));
   }
 
   async recusar(clinicaUserId: string, candidaturaId: string) {

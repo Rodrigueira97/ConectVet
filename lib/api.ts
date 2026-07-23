@@ -127,6 +127,8 @@ export type ProfissionalResumo = {
   funcao: Categoria;
   areaAtuacao: string;
   regioesAtendimento: string;
+  notaMedia?: number | null;
+  totalAvaliacoes?: number;
 };
 
 export type Candidatura = {
@@ -171,7 +173,7 @@ export type Vaga = {
   descricao?: string | null;
   status: 'ABERTA' | 'PREENCHIDA' | 'CONCLUIDA' | 'CANCELADA';
   createdAt: string;
-  clinica?: { id?: string; nome: string };
+  clinica?: { id?: string; nome: string; notaMedia?: number | null; totalAvaliacoes?: number };
   candidaturas?: Candidatura[];
   pagamento?: Pagamento | null;
 };

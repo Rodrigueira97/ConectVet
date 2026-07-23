@@ -71,4 +71,53 @@ export class AvaliacoesService {
   async porCandidatura(candidaturaId: string) {
     return this.prisma.avaliacao.findMany({ where: { candidaturaId } });
   }
+
+  /** Nota média (dada por clínicas) para cada profissional informado. */
+  async mediaPorProfissionais(profissionalIds: string[]) {
+    const ids = [...new Set(profissionalIds)];
+    const mapa = new Map<string, { notaMedia: number; totalAvaliacoes: number }>();
+    if (!ids.length) return mapa;
+
+    const grupos = await this.prisma.avaliacao.groupBy({
+      by: ['profissionalId'],
+      where: { profissionalId: { in: ids }, autor: AvaliacaoAutor.CLINICA },
+      _avg: { nota: true },
+      _count: true,
+    });
+    for (const g of grupos) {
+      mapa.set(g.profissionalId, {
+        notaMedia: Number((g._avg.nota ?? 0).toFixed(1)),
+        totalAvaliacoes: g._count,
+      });
+    }
+    return mapa;
+  }
+
+  /** Nota média (dada por profissionais) para cada clínica informada. */
+  async mediaPorClinicas(clinicaIds: string[]) {
+    const ids = [...new Set(clinicaIds)];
+    const mapa = new Map<string, { notaMedia: number; totalAvaliacoes: number }>();
+    if (!ids.length) return mapa;
+
+    const avaliacoes = await this.prisma.avaliacao.findMany({
+      where: {
+        autor: AvaliacaoAutor.PROFISSIONAL,
+        candidatura: { vaga: { clinicaId: { in: ids } } },
+      },
+      select: { nota: true, candidatura: { select: { vaga: { select: { clinicaId: true } } } } },
+    });
+
+    const somas = new Map<string, { soma: number; total: number }>();
+    for (const a of avaliacoes) {
+      const clinicaId = a.candidatura.vaga.clinicaId;
+      const atual = somas.get(clinicaId) || { soma: 0, total: 0 };
+      atual.soma += a.nota;
+      atual.total += 1;
+      somas.set(clinicaId, atual);
+    }
+    for (const [clinicaId, { soma, total }] of somas) {
+      mapa.set(clinicaId, { notaMedia: Number((soma / total).toFixed(1)), totalAvaliacoes: total });
+    }
+    return mapa;
+  }
 }
