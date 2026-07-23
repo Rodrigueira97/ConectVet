@@ -15,7 +15,9 @@ export class ClinicasService {
   async buscarPorId(id: string) {
     const clinica = await this.prisma.clinica.findUnique({ where: { id } });
     if (!clinica) throw new NotFoundException('Clínica não encontrada.');
-    return clinica;
+    // Endpoint público: telefone não é exposto por enquanto.
+    const { telefone, ...publico } = clinica;
+    return publico;
   }
 
   async atualizar(userId: string, dto: UpdateClinicaDto) {

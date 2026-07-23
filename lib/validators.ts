@@ -69,3 +69,14 @@ export function maskCEP(raw: string): string {
   const d = onlyDigits(raw).slice(0, 8);
   return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
 }
+
+export function maskTelefone(raw: string): string {
+  const d = onlyDigits(raw).slice(0, 11);
+  const ddd = d.slice(0, 2);
+  const resto = d.slice(2);
+  if (!ddd) return '';
+  let out = `(${ddd}`;
+  if (d.length > 2) out += `) `;
+  out += resto.length > 4 ? `${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}` : resto;
+  return out;
+}

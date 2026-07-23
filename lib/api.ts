@@ -185,6 +185,7 @@ export type Clinica = {
   cnpj: string;
   inscricaoEstadual: string;
   responsavelTecnico: string;
+  telefone?: string | null;
   cep?: string | null;
   estado: string;
   cidade: string;
@@ -205,6 +206,8 @@ export type Profissional = {
   nome: string;
   documento: string;
   funcao: Categoria;
+  telefone?: string | null;
+  dataNascimento?: string | null;
   tipoComprovacao: string;
   comprovanteUrl: string;
   idDocUrls: string[];

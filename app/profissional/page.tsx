@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { buildEndereco, statusBadge } from '@/lib/mockData';
+import { buildEndereco, onlyDigits, statusBadge } from '@/lib/mockData';
+import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, ClockIcon, UserIcon } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
@@ -33,7 +34,7 @@ export default function ProfissionalPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('home');
   const [perfil, setPerfil] = useState<Profissional | null>(null);
-  const [perfilForm, setPerfilForm] = useState({ nome: '', areaAtuacao: '', regioesAtendimento: '' });
+  const [perfilForm, setPerfilForm] = useState({ nome: '', telefone: '', dataNascimento: '', areaAtuacao: '', regioesAtendimento: '' });
   const [savingPerfil, setSavingPerfil] = useState(false);
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
@@ -50,7 +51,10 @@ export default function ProfissionalPage() {
       try {
         const [p, f, c] = await Promise.all([getProfissionalMe(), getFeed(), getMinhasCandidaturas()]);
         setPerfil(p);
-        setPerfilForm({ nome: p.nome, areaAtuacao: p.areaAtuacao, regioesAtendimento: p.regioesAtendimento });
+        setPerfilForm({
+          nome: p.nome, telefone: p.telefone || '', dataNascimento: p.dataNascimento ? p.dataNascimento.slice(0, 10) : '',
+          areaAtuacao: p.areaAtuacao, regioesAtendimento: p.regioesAtendimento,
+        });
         setFeed(f);
         setCandidaturas(c);
 
@@ -114,8 +118,12 @@ export default function ProfissionalPage() {
     setSavingPerfil(true);
     setActionError('');
     try {
-      const atualizado = await updateProfissionalMe(perfilForm);
+      const atualizado = await updateProfissionalMe({ ...perfilForm, telefone: onlyDigits(perfilForm.telefone) });
       setPerfil(atualizado);
+      setPerfilForm({
+        nome: atualizado.nome, telefone: atualizado.telefone || '', dataNascimento: atualizado.dataNascimento ? atualizado.dataNascimento.slice(0, 10) : '',
+        areaAtuacao: atualizado.areaAtuacao, regioesAtendimento: atualizado.regioesAtendimento,
+      });
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Não foi possível salvar o perfil.');
     } finally {
@@ -288,6 +296,20 @@ export default function ProfissionalPage() {
                 <input disabled value={perfil.documento} className="px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500" /></label>
               <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Função</span>
                 <input disabled value={CATEGORIA_LABEL[perfil.funcao]} className="px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500" /></label>
+              <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Telefone</span>
+                <input
+                  value={maskTelefone(perfilForm.telefone)}
+                  onChange={(e) => setPerfilForm((f) => ({ ...f, telefone: onlyDigits(e.target.value) }))}
+                  placeholder="(00) 00000-0000"
+                  className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
+                /></label>
+              <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Data de nascimento</span>
+                <input
+                  type="date"
+                  value={perfilForm.dataNascimento}
+                  onChange={(e) => setPerfilForm((f) => ({ ...f, dataNascimento: e.target.value }))}
+                  className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
+                /></label>
               <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Área de atuação</span>
                 <input value={perfilForm.areaAtuacao} onChange={(e) => setPerfilForm((f) => ({ ...f, areaAtuacao: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" /></label>
               <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Regiões de atendimento</span>

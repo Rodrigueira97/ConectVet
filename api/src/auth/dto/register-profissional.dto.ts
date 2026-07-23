@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsDateString,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -23,6 +24,12 @@ export class RegisterProfissionalDto {
 
   @IsEnum(Categoria)
   funcao: Categoria;
+
+  @IsString()
+  telefone: string;
+
+  @IsDateString()
+  dataNascimento: string;
 
   @IsString()
   tipoComprovacao: string;

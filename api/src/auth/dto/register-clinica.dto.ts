@@ -26,6 +26,9 @@ export class RegisterClinicaDto {
   @IsString()
   responsavelTecnico: string;
 
+  @IsString()
+  telefone: string;
+
   @IsOptional()
   @IsString()
   cep?: string;

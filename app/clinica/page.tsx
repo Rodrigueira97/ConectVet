@@ -5,7 +5,7 @@ import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, 
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, PlusIcon, GridIcon, UserIcon } from '@/app/components/icons';
-import { maskCEP } from '@/lib/validators';
+import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
@@ -24,6 +24,13 @@ type CepStatus = 'idle' | 'loading' | 'success' | 'error';
 
 function withCurrent(list: string[], current: string) {
   return current && !list.includes(current) ? [...list, current] : list;
+}
+
+function perfilFormFromClinica(c: Clinica) {
+  return {
+    nome: c.nome, cnpj: c.cnpj, telefone: c.telefone || '',
+    cep: c.cep || '', estado: c.estado, cidade: c.cidade, bairro: c.bairro || '', rua: c.rua, numero: c.numero, complemento: c.complemento || '',
+  };
 }
 
 function formatDataBR(iso: string) {
@@ -60,7 +67,11 @@ export default function ClinicaPage() {
   const [vagaCepStatus, setVagaCepStatus] = useState<CepStatus>('idle');
   const [publishing, setPublishing] = useState(false);
 
-  const [perfilForm, setPerfilForm] = useState({ nome: '', cnpj: '' });
+  const [perfilForm, setPerfilForm] = useState({
+    nome: '', cnpj: '', telefone: '',
+    cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '',
+  });
+  const [perfilCepStatus, setPerfilCepStatus] = useState<CepStatus>('idle');
   const [savingPerfil, setSavingPerfil] = useState(false);
 
   useEffect(() => {
@@ -69,7 +80,7 @@ export default function ClinicaPage() {
       try {
         const [c, f, mv] = await Promise.all([getClinicaMe(), getFeed(), getMinhasVagas()]);
         setClinica(c);
-        setPerfilForm({ nome: c.nome, cnpj: c.cnpj });
+        setPerfilForm(perfilFormFromClinica(c));
         setFeed(f);
         setMinhasVagas(mv);
 
@@ -121,6 +132,32 @@ export default function ClinicaPage() {
     setVagaForm((f) => ({ ...f, cep: d }));
     setVagaCepStatus('idle');
     if (d.length === 8) buscarCepVaga(d);
+  }
+
+  async function buscarCepPerfil(cep: string) {
+    setPerfilCepStatus('loading');
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json();
+      if (data.erro) { setPerfilCepStatus('error'); return; }
+      setPerfilForm((f) => ({
+        ...f,
+        rua: data.logradouro || f.rua,
+        bairro: data.bairro || f.bairro,
+        cidade: data.localidade || f.cidade,
+        estado: data.uf || f.estado,
+      }));
+      setPerfilCepStatus('success');
+    } catch {
+      setPerfilCepStatus('error');
+    }
+  }
+
+  function onPerfilCepChange(v: string) {
+    const d = onlyDigits(v).slice(0, 8);
+    setPerfilForm((f) => ({ ...f, cep: d }));
+    setPerfilCepStatus('idle');
+    if (d.length === 8) buscarCepPerfil(d);
   }
 
   const enderecoParaExibir = vagaForm.outroEndereco
@@ -238,8 +275,19 @@ export default function ClinicaPage() {
     setSavingPerfil(true);
     setActionError('');
     try {
-      const atualizado = await updateClinicaMe({ nome: perfilForm.nome });
+      const atualizado = await updateClinicaMe({
+        nome: perfilForm.nome,
+        telefone: onlyDigits(perfilForm.telefone) || undefined,
+        cep: perfilForm.cep || undefined,
+        estado: perfilForm.estado,
+        cidade: perfilForm.cidade,
+        bairro: perfilForm.bairro || undefined,
+        rua: perfilForm.rua,
+        numero: perfilForm.numero,
+        complemento: perfilForm.complemento || undefined,
+      });
       setClinica(atualizado);
+      setPerfilForm(perfilFormFromClinica(atualizado));
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Não foi possível salvar o perfil.');
     } finally {
@@ -585,7 +633,63 @@ export default function ClinicaPage() {
                 <span className="text-sm font-bold">CNPJ</span>
                 <input disabled value={perfilForm.cnpj} className="px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500" />
               </label>
-              <div className="text-sm text-gray-500">Endereço cadastrado: {buildEndereco(clinica) || '—'}</div>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-bold">Telefone</span>
+                <input
+                  value={maskTelefone(perfilForm.telefone)}
+                  onChange={(e) => setPerfilForm((f) => ({ ...f, telefone: onlyDigits(e.target.value) }))}
+                  placeholder="(00) 00000-0000"
+                  className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
+                />
+              </label>
+
+              <div className="pt-2 mt-2 border-t border-gray-100">
+                <div className="text-sm font-extrabold text-gray-800 mb-3">Endereço</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="flex flex-col gap-1.5 sm:col-span-2">
+                    <span className="text-sm font-bold">CEP</span>
+                    <input
+                      value={maskCEP(perfilForm.cep)}
+                      onChange={(e) => onPerfilCepChange(e.target.value)}
+                      placeholder="00000-000"
+                      className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm outline-none max-w-[200px]"
+                    />
+                    {perfilCepStatus === 'loading' && <span className="text-xs text-gray-400">Buscando endereço...</span>}
+                    {perfilCepStatus === 'error' && <span className="text-xs font-semibold text-danger">CEP não encontrado. Preencha o endereço manualmente.</span>}
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-bold">Estado (UF)</span>
+                    <select value={perfilForm.estado} onChange={(e) => setPerfilForm((f) => ({ ...f, estado: e.target.value, cidade: '' }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
+                      <option value="">Selecione...</option>
+                      {withCurrent(Object.keys(ESTADOS_CIDADES), perfilForm.estado).map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-bold">Cidade</span>
+                    <select disabled={!perfilForm.estado} value={perfilForm.cidade} onChange={(e) => setPerfilForm((f) => ({ ...f, cidade: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
+                      <option value="">Selecione...</option>
+                      {withCurrent(ESTADOS_CIDADES[perfilForm.estado] || [], perfilForm.cidade).map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-bold">Bairro</span>
+                    <input value={perfilForm.bairro} onChange={(e) => setPerfilForm((f) => ({ ...f, bairro: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-bold">Rua</span>
+                    <input value={perfilForm.rua} onChange={(e) => setPerfilForm((f) => ({ ...f, rua: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-bold">Número</span>
+                    <input value={perfilForm.numero} onChange={(e) => setPerfilForm((f) => ({ ...f, numero: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-bold">Complemento</span>
+                    <input value={perfilForm.complemento} onChange={(e) => setPerfilForm((f) => ({ ...f, complemento: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                  </label>
+                </div>
+              </div>
+
               <button onClick={salvarPerfil} disabled={savingPerfil} className="self-start px-5 py-2.5 rounded-lg bg-primary hover:bg-primaryDark text-white text-sm font-bold disabled:opacity-60">
                 {savingPerfil ? 'Salvando...' : 'Salvar alterações'}
               </button>

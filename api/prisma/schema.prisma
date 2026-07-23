@@ -69,6 +69,8 @@ model Clinica {
   inscricaoEstadual  String
   responsavelTecnico String
 
+  telefone String?
+
   cep         String?
   estado      String
   cidade      String
@@ -99,6 +101,9 @@ model Profissional {
   nome      String
   documento String    @unique // CPF ou CNPJ
   funcao    Categoria
+
+  telefone       String?
+  dataNascimento DateTime?
 
   tipoComprovacao String
   comprovanteUrl  String

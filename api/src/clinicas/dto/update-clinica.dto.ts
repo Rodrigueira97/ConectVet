@@ -15,6 +15,10 @@ export class UpdateClinicaDto {
 
   @IsOptional()
   @IsString()
+  telefone?: string;
+
+  @IsOptional()
+  @IsString()
   cep?: string;
 
   @IsOptional()

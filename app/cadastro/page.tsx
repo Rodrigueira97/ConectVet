@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CATEGORIAS, ESTADOS_CIDADES, onlyDigits } from '@/lib/mockData';
-import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj } from '@/lib/validators';
+import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefone } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
 import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE } from '@/lib/api';
 
@@ -14,13 +14,13 @@ function withCurrent(list: string[], current: string) {
 }
 
 const initialClinica = {
-  nome: '', cnpj: '', inscricaoEstadual: '', responsavelTecnico: '',
+  nome: '', cnpj: '', inscricaoEstadual: '', responsavelTecnico: '', telefone: '',
   cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '',
   planosSaude: '', sistemas: '', observacoes: '',
 };
 
 const initialProf = {
-  nome: '', doc: '', funcao: '' as Categoria | '',
+  nome: '', doc: '', funcao: '' as Categoria | '', telefone: '', dataNascimento: '',
   areaAtuacao: '', planoSaude: '', regioes: '', observacoes: '',
 };
 
@@ -112,6 +112,7 @@ export default function CadastroPage() {
       if (!isValidCNPJ(clinica.cnpj)) e.cnpj = 'CNPJ inválido.';
       if (onlyDigits(clinica.inscricaoEstadual).length < 8) e.inscricaoEstadual = 'Informe uma inscrição estadual válida.';
       if (!clinica.responsavelTecnico.trim()) e.responsavelTecnico = 'Informe o responsável técnico habilitado.';
+      if (onlyDigits(clinica.telefone).length < 10) e.telefone = 'Informe um telefone válido com DDD.';
       if (!clinica.estado) e.estado = 'Selecione o estado.';
       if (!clinica.cidade) e.cidade = 'Selecione a cidade.';
       if (!clinica.rua.trim()) e.rua = 'Informe a rua.';
@@ -122,6 +123,8 @@ export default function CadastroPage() {
       if (!prof.nome.trim()) e.nomeProf = 'Informe seu nome.';
       if (!isValidCpfCnpj(prof.doc)) e.doc = 'CPF ou CNPJ inválido.';
       if (!prof.funcao) e.funcao = 'Selecione a função.';
+      if (onlyDigits(prof.telefone).length < 10) e.telefoneProf = 'Informe um telefone válido com DDD.';
+      if (!prof.dataNascimento) e.dataNascimentoProf = 'Informe a data de nascimento.';
       if (prof.funcao && !comprovante) e.comprovante = `Anexe: ${COMPROVACAO_POR_FUNCAO[prof.funcao].label}.`;
       if (!idDocs || idDocs.length < 2) e.idDocs = 'Anexe as fotos de frente e verso do documento de identidade.';
       if (!curriculo) e.curriculo = 'Anexe seu currículo.';
@@ -149,6 +152,7 @@ export default function CadastroPage() {
           cnpj: onlyDigits(clinica.cnpj),
           inscricaoEstadual: clinica.inscricaoEstadual,
           responsavelTecnico: clinica.responsavelTecnico,
+          telefone: onlyDigits(clinica.telefone),
           cep: clinica.cep || undefined,
           estado: clinica.estado,
           cidade: clinica.cidade,
@@ -174,6 +178,8 @@ export default function CadastroPage() {
           nome: prof.nome,
           documento: onlyDigits(prof.doc),
           funcao: CATEGORIA_VALUE[prof.funcao as string],
+          telefone: onlyDigits(prof.telefone),
+          dataNascimento: prof.dataNascimento,
           tipoComprovacao: comprovacao?.label ?? '',
           comprovanteUrl,
           idDocUrls,
@@ -233,6 +239,7 @@ export default function CadastroPage() {
               <TextField label="CNPJ" value={clinica.cnpj} onChange={(v) => cField('cnpj', maskCNPJ(v))} error={errors.cnpj} placeholder="00.000.000/0000-00" required />
               <TextField label="Inscrição estadual" value={clinica.inscricaoEstadual} onChange={(v) => cField('inscricaoEstadual', onlyDigits(v))} error={errors.inscricaoEstadual} required />
               <TextField label="Responsável técnico habilitado" value={clinica.responsavelTecnico} onChange={(v) => cField('responsavelTecnico', v)} error={errors.responsavelTecnico} placeholder="Nome completo e CRMV" required />
+              <TextField label="Telefone" value={maskTelefone(clinica.telefone)} onChange={(v) => cField('telefone', onlyDigits(v))} error={errors.telefone} placeholder="(00) 00000-0000" required />
               <FileField label="Alvará de funcionamento" files={alvara} onChange={(fl) => setAlvara(fl?.[0] ?? null)} error={errors.alvara} accept=".pdf,.jpg,.jpeg,.png" required />
             </SectionCard>
 
@@ -289,6 +296,8 @@ export default function CadastroPage() {
                 options={CATEGORIAS}
                 onSelect={(v) => { pField('funcao', v as Categoria); setComprovante(null); }}
               />
+              <TextField label="Telefone" value={maskTelefone(prof.telefone)} onChange={(v) => pField('telefone', onlyDigits(v))} error={errors.telefoneProf} placeholder="(00) 00000-0000" required />
+              <TextField label="Data de nascimento" type="date" value={prof.dataNascimento} onChange={(v) => pField('dataNascimento', v)} error={errors.dataNascimentoProf} required />
             </SectionCard>
 
             <SectionCard title="Comprovação de função">

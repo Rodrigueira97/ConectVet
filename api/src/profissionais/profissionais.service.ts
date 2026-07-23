@@ -21,11 +21,20 @@ export class ProfissionaisService {
     });
     if (!profissional)
       throw new NotFoundException('Profissional não encontrado.');
-    return profissional;
+    // Endpoint público: telefone e data de nascimento não são expostos por enquanto.
+    const { telefone, dataNascimento, ...publico } = profissional;
+    return publico;
   }
 
   async atualizar(userId: string, dto: UpdateProfissionalDto) {
     await this.buscarPorUserId(userId);
-    return this.prisma.profissional.update({ where: { userId }, data: dto });
+    const { dataNascimento, ...resto } = dto;
+    return this.prisma.profissional.update({
+      where: { userId },
+      data: {
+        ...resto,
+        ...(dataNascimento ? { dataNascimento: new Date(dataNascimento) } : {}),
+      },
+    });
   }
 }
