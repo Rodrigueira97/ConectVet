@@ -218,9 +218,9 @@ export default function ProfissionalPage() {
                       <div>LOCAL {local}</div><div>DATA {formatDataBR(v.data)}</div><div>HORÁRIO {v.horaInicio} - {v.horaFim}</div>
                     </div>
                     <div className="flex justify-end mt-4">
-                      <button disabled={applied || !compat || candidatandoId === v.id} onClick={(e) => { e.stopPropagation(); candidatar(v); }}
+                      <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
                         className={`px-4 py-2 rounded-lg text-sm font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-secondary text-white'}`}>
-                        {applied ? 'Candidatura enviada' : compat ? (candidatandoId === v.id ? 'Enviando...' : 'Candidatar-se') : 'Perfil incompatível'}
+                        {applied ? 'Candidatura enviada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
                       </button>
                     </div>
                   </div>
