@@ -11,6 +11,31 @@ export class ApiError extends Error {
 const TOKEN_KEY = 'conectvet_token';
 const ROLE_KEY = 'conectvet_role';
 
+// Além do localStorage (usado para anexar o Bearer token nas chamadas à API),
+// mantemos uma cópia em cookie para que o middleware do Next.js (que roda no
+// servidor, antes da página carregar) consiga decidir redirecionamentos de
+// autenticação sem esperar o JS do cliente montar a página.
+function decodeJwtExpSeconds(token: string): number | null {
+  try {
+    const payload = token.split('.')[1];
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const exp = JSON.parse(json)?.exp;
+    return typeof exp === 'number' ? exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCookie(name: string, value: string, maxAgeSeconds?: number) {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  const maxAge = maxAgeSeconds !== undefined ? `; Max-Age=${maxAgeSeconds}` : '';
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; SameSite=Lax${maxAge}${secure}`;
+}
+
+function deleteCookie(name: string) {
+  document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(TOKEN_KEY);
@@ -24,11 +49,18 @@ export function getRole(): string | null {
 export function setSession(token: string, role: string) {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(ROLE_KEY, role);
+
+  const exp = decodeJwtExpSeconds(token);
+  const maxAge = exp ? Math.max(exp - Math.floor(Date.now() / 1000), 0) : undefined;
+  setCookie(TOKEN_KEY, token, maxAge);
+  setCookie(ROLE_KEY, role, maxAge);
 }
 
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ROLE_KEY);
+  deleteCookie(TOKEN_KEY);
+  deleteCookie(ROLE_KEY);
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

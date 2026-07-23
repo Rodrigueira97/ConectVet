@@ -1,6 +1,7 @@
 'use client';
 import { ReactNode, useState } from 'react';
 import { CloseIcon, LogoutIcon, MenuIcon } from './icons';
+import { clearSession } from '@/lib/api';
 
 export type SidebarItem = {
   key: string;
@@ -44,10 +45,13 @@ export function Sidebar({
           <div className="text-sm font-bold text-gray-700 truncate">{footerName}</div>
         </div>
       )}
-      <a href="/" className="flex items-center gap-2.5 px-2 py-2 rounded-xl text-sm font-semibold text-gray-400 hover:text-danger hover:bg-red-50 transition-colors duration-150">
+      <button
+        onClick={() => { clearSession(); window.location.href = '/'; }}
+        className="flex items-center gap-2.5 px-2 py-2 rounded-xl text-sm font-semibold text-gray-400 hover:text-danger hover:bg-red-50 transition-colors duration-150 text-left"
+      >
         <LogoutIcon className="w-[18px] h-[18px]" />
         Sair
-      </a>
+      </button>
     </>
   );
 
