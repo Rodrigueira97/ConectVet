@@ -1,17 +1,19 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CATEGORIAS, buildEndereco, statusBadge } from '@/lib/mockData';
+import { buildEndereco, statusBadge } from '@/lib/mockData';
 import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, ClockIcon, UserIcon } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import {
-  ApiError, getToken, clearSession, CATEGORIA_LABEL,
+  ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
   getAvaliacoesPorCandidatura,
 } from '@/lib/api';
+
+const POR_PAGINA = 10;
 
 type Tab = 'home' | 'historico' | 'perfil';
 
@@ -35,6 +37,7 @@ export default function ProfissionalPage() {
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [filtros, setFiltros] = useState({ busca: '', categoria: '', pertoDeMim: false });
+  const [pagina, setPagina] = useState(1);
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
@@ -96,6 +99,15 @@ export default function ProfissionalPage() {
     return true;
   });
 
+  const totalPaginas = Math.max(1, Math.ceil(feedFiltrado.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const feedPaginado = feedFiltrado.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
+
+  function atualizarFiltro(novo: Partial<typeof filtros>) {
+    setFiltros((f) => ({ ...f, ...novo }));
+    setPagina(1);
+  }
+
   async function salvarPerfil() {
     setSavingPerfil(true);
     setActionError('');
@@ -156,21 +168,21 @@ export default function ProfissionalPage() {
           <div className="max-w-3xl mx-auto p-8">
             <h1 className="text-2xl font-extrabold mb-1">Vagas disponíveis</h1>
             <p className="text-sm text-gray-500 mb-5">Plantões publicados por clínicas parceiras</p>
-            <input value={filtros.busca} onChange={(e) => setFiltros((f) => ({ ...f, busca: e.target.value }))} placeholder="Buscar por clínica, categoria ou local..." className="w-full px-3.5 py-3 rounded-lg border border-gray-300 text-sm mb-3" />
+            <input value={filtros.busca} onChange={(e) => atualizarFiltro({ busca: e.target.value })} placeholder="Buscar por clínica, categoria ou local..." className="w-full px-3.5 py-3 rounded-lg border border-gray-300 text-sm mb-3" />
             <div className="flex gap-3 flex-wrap mb-4">
-              <select value={filtros.categoria} onChange={(e) => setFiltros((f) => ({ ...f, categoria: e.target.value }))} className="px-3 py-2 rounded-lg border border-gray-300 text-sm">
+              <select value={filtros.categoria} onChange={(e) => atualizarFiltro({ categoria: e.target.value })} className="px-3 py-2 rounded-lg border border-gray-300 text-sm">
                 <option value="">Todas categorias</option>
-                {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+                {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
               </select>
               {regioesTokens.length > 0 && (
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                  <input type="checkbox" checked={filtros.pertoDeMim} onChange={(e) => setFiltros((f) => ({ ...f, pertoDeMim: e.target.checked }))} />
+                  <input type="checkbox" checked={filtros.pertoDeMim} onChange={(e) => atualizarFiltro({ pertoDeMim: e.target.checked })} />
                   Somente perto de mim ({perfil.regioesAtendimento})
                 </label>
               )}
             </div>
             <div className="flex flex-col gap-4">
-              {feedFiltrado.map((v) => {
+              {feedPaginado.map((v) => {
                 const compat = v.categoria === perfil.funcao;
                 const applied = hasApplied(v.id);
                 const perto = pertoDeVoce(v);
@@ -205,6 +217,25 @@ export default function ProfissionalPage() {
               })}
               {feedFiltrado.length === 0 && <div className="text-sm text-gray-400">Nenhuma vaga encontrada.</div>}
             </div>
+            {totalPaginas > 1 && (
+              <div className="flex items-center justify-between mt-6">
+                <button
+                  disabled={paginaAtual === 1}
+                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold disabled:opacity-40"
+                >
+                  ← Anterior
+                </button>
+                <span className="text-sm text-gray-500">Página {paginaAtual} de {totalPaginas}</span>
+                <button
+                  disabled={paginaAtual === totalPaginas}
+                  onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold disabled:opacity-40"
+                >
+                  Próxima →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
