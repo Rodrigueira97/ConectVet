@@ -5,11 +5,11 @@ import { CATEGORIAS, buildEndereco, statusBadge } from '@/lib/mockData';
 import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, ClockIcon, UserIcon } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
+import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL,
   Vaga, Candidatura, Profissional,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
-  criarAvaliacao,
 } from '@/lib/api';
 
 type Tab = 'home' | 'historico' | 'perfil';
@@ -219,7 +219,15 @@ export default function ProfissionalPage() {
                       </div>
                       <div className={badge.className}>{badge.label}</div>
                     </div>
-                    {c.status === 'ACEITO' && <AvaliarClinica candidaturaId={c.id} />}
+                    {c.status === 'ACEITO' && (
+                      <AvaliacaoCandidatura
+                        candidaturaId={c.id}
+                        autorProprio="PROFISSIONAL"
+                        labelPropria="Avaliar clínica"
+                        labelOutra={`${c.vaga?.clinica?.nome || 'Clínica'} avaliou você`}
+                        corBotao="bg-secondary"
+                      />
+                    )}
                   </div>
                 );
               })}
@@ -251,38 +259,6 @@ export default function ProfissionalPage() {
         </>
         )}
       </main>
-    </div>
-  );
-}
-
-function AvaliarClinica({ candidaturaId }: { candidaturaId: string }) {
-  const [nota, setNota] = useState(5);
-  const [comentario, setComentario] = useState('');
-  const [enviado, setEnviado] = useState(false);
-  const [erro, setErro] = useState('');
-
-  async function enviar() {
-    setErro('');
-    try {
-      await criarAvaliacao({ candidaturaId, nota, comentario: comentario || undefined });
-      setEnviado(true);
-    } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Não foi possível enviar a avaliação.');
-    }
-  }
-
-  if (enviado) {
-    return <div className="mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">Nota {nota}/5{comentario ? ` — "${comentario}"` : ''}</div>;
-  }
-  return (
-    <div className="mt-4 pt-4 border-t border-gray-100">
-      <div className="text-xs font-bold mb-2">Avaliar clínica</div>
-      <select value={nota} onChange={(e) => setNota(Number(e.target.value))} className="px-2.5 py-1.5 rounded-md border border-gray-300 text-sm mb-2">
-        {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} — {['', 'Péssimo', 'Ruim', 'Regular', 'Bom', 'Excelente'][n]}</option>)}
-      </select>
-      <textarea value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentário (opcional)" rows={2} className="w-full px-2.5 py-2 rounded-lg border border-gray-300 text-sm mb-2" />
-      {erro && <div className="text-xs font-semibold text-danger mb-2">{erro}</div>}
-      <button onClick={enviar} className="px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-bold">Enviar avaliação</button>
     </div>
   );
 }

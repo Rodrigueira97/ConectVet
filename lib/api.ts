@@ -298,6 +298,20 @@ export function liberarPagamento(id: string) {
 
 // ---------- Avaliações ----------
 
+export type Avaliacao = {
+  id: string;
+  candidaturaId: string;
+  profissionalId: string;
+  autor: 'CLINICA' | 'PROFISSIONAL';
+  nota: number;
+  comentario?: string | null;
+  createdAt: string;
+};
+
 export function criarAvaliacao(payload: { candidaturaId: string; nota: number; comentario?: string }) {
-  return post('/avaliacoes', payload);
+  return post<Avaliacao>('/avaliacoes', payload);
+}
+
+export function getAvaliacoesPorCandidatura(candidaturaId: string) {
+  return get<Avaliacao[]>(`/avaliacoes/candidatura/${candidaturaId}`);
 }
