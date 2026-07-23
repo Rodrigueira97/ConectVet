@@ -10,9 +10,10 @@ import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE,
-  Vaga, Candidatura, Clinica,
+  Vaga, Candidatura, Clinica, Avaliacao,
   getClinicaMe, updateClinicaMe, getFeed, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
   getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
+  getAvaliacoesPorCandidatura,
 } from '@/lib/api';
 
 type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'perfil';
@@ -44,6 +45,7 @@ export default function ClinicaPage() {
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [minhasVagas, setMinhasVagas] = useState<Vaga[]>([]);
   const [candidatos, setCandidatos] = useState<Candidatura[]>([]);
+  const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [selectedMvId, setSelectedMvId] = useState<string | null>(null);
   const [selectedCandId, setSelectedCandId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -66,6 +68,13 @@ export default function ClinicaPage() {
         setPerfilForm({ nome: c.nome, cnpj: c.cnpj });
         setFeed(f);
         setMinhasVagas(mv);
+
+        const hiredIds = mv
+          .filter((v) => v.status === 'CONCLUIDA')
+          .map((v) => v.candidaturas?.find((cand) => cand.status === 'ACEITO')?.id)
+          .filter((id): id is string => !!id);
+        const pares = await Promise.all(hiredIds.map(async (id) => [id, await getAvaliacoesPorCandidatura(id)] as const));
+        setAvaliacoesPorCandidatura(Object.fromEntries(pares));
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/'); }
       } finally {
@@ -458,9 +467,11 @@ export default function ClinicaPage() {
                         <AvaliacaoCandidatura
                           candidaturaId={hired.id}
                           autorProprio="CLINICA"
-                          labelPropria={`Avaliar ${hired.profissional?.nome || 'profissional'}`}
+                          labelForm={`Avaliar ${hired.profissional?.nome || 'profissional'}`}
+                          labelFeita={`Avaliação de ${hired.profissional?.nome || 'profissional'}`}
                           labelOutra={`${hired.profissional?.nome || 'Profissional'} avaliou você`}
                           corBotao="bg-primary"
+                          avaliacoesIniciais={avaliacoesPorCandidatura[hired.id] || []}
                         />
                       </div>
                     )}

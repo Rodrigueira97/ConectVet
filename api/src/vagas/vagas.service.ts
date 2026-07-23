@@ -31,7 +31,7 @@ export class VagasService {
           : undefined,
       },
       include: { clinica: { select: { nome: true } } },
-      orderBy: { data: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

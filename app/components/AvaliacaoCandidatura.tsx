@@ -1,31 +1,26 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { ApiError, Avaliacao, criarAvaliacao, getAvaliacoesPorCandidatura } from '@/lib/api';
+import { useState } from 'react';
+import { ApiError, Avaliacao, criarAvaliacao } from '@/lib/api';
 
 const NOTAS = [5, 4, 3, 2, 1];
 const LABEL_NOTA = ['', 'Péssimo', 'Ruim', 'Regular', 'Bom', 'Excelente'];
 
 export function AvaliacaoCandidatura({
-  candidaturaId, autorProprio, labelPropria, labelOutra, corBotao,
+  candidaturaId, autorProprio, labelForm, labelFeita, labelOutra, corBotao, avaliacoesIniciais,
 }: {
   candidaturaId: string;
   autorProprio: 'CLINICA' | 'PROFISSIONAL';
-  labelPropria: string;
+  labelForm: string;
+  labelFeita: string;
   labelOutra: string;
   corBotao: string;
+  avaliacoesIniciais: Avaliacao[];
 }) {
-  const [loading, setLoading] = useState(true);
-  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
+  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>(avaliacoesIniciais);
   const [nota, setNota] = useState(5);
   const [comentario, setComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
-
-  useEffect(() => {
-    getAvaliacoesPorCandidatura(candidaturaId)
-      .then(setAvaliacoes)
-      .finally(() => setLoading(false));
-  }, [candidaturaId]);
 
   const minha = avaliacoes.find((a) => a.autor === autorProprio);
   const daOutraParte = avaliacoes.find((a) => a.autor !== autorProprio);
@@ -43,18 +38,16 @@ export function AvaliacaoCandidatura({
     }
   }
 
-  if (loading) return null;
-
   return (
     <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-3">
       {minha ? (
         <div className="text-sm text-gray-600">
-          <span className="font-bold">{labelPropria}: </span>
+          <span className="font-bold">{labelFeita}: </span>
           Nota {minha.nota}/5{minha.comentario ? ` — "${minha.comentario}"` : ''}
         </div>
       ) : (
         <div>
-          <div className="text-xs font-bold mb-2">{labelPropria}</div>
+          <div className="text-xs font-bold mb-2">{labelForm}</div>
           <select value={nota} onChange={(e) => setNota(Number(e.target.value))} className="px-2.5 py-1.5 rounded-md border border-gray-300 text-sm mb-2">
             {NOTAS.map((n) => <option key={n} value={n}>{n} — {LABEL_NOTA[n]}</option>)}
           </select>

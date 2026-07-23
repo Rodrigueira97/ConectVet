@@ -8,8 +8,9 @@ import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL,
-  Vaga, Candidatura, Profissional,
+  Vaga, Candidatura, Profissional, Avaliacao,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
+  getAvaliacoesPorCandidatura,
 } from '@/lib/api';
 
 type Tab = 'home' | 'historico' | 'perfil';
@@ -32,6 +33,7 @@ export default function ProfissionalPage() {
   const [savingPerfil, setSavingPerfil] = useState(false);
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
+  const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [filtros, setFiltros] = useState({ busca: '', categoria: '', pertoDeMim: false });
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
@@ -46,6 +48,10 @@ export default function ProfissionalPage() {
         setPerfilForm({ nome: p.nome, areaAtuacao: p.areaAtuacao, regioesAtendimento: p.regioesAtendimento });
         setFeed(f);
         setCandidaturas(c);
+
+        const aceitas = c.filter((x) => x.status === 'ACEITO');
+        const pares = await Promise.all(aceitas.map(async (x) => [x.id, await getAvaliacoesPorCandidatura(x.id)] as const));
+        setAvaliacoesPorCandidatura(Object.fromEntries(pares));
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/'); }
       } finally {
@@ -223,9 +229,11 @@ export default function ProfissionalPage() {
                       <AvaliacaoCandidatura
                         candidaturaId={c.id}
                         autorProprio="PROFISSIONAL"
-                        labelPropria="Avaliar clínica"
+                        labelForm="Avaliar clínica"
+                        labelFeita="Avaliação da clínica"
                         labelOutra={`${c.vaga?.clinica?.nome || 'Clínica'} avaliou você`}
                         corBotao="bg-secondary"
+                        avaliacoesIniciais={avaliacoesPorCandidatura[c.id] || []}
                       />
                     )}
                   </div>
