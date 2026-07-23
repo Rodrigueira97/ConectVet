@@ -72,7 +72,10 @@ export default function ProfissionalPage() {
     }
   }
 
-  const regioesTokens = (perfil?.regioesAtendimento || '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+  const regioesTokens = (perfil?.regioesAtendimento || '')
+    .split(/[,\s]+/)
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t.length >= 3);
   function pertoDeVoce(v: Vaga) {
     if (!regioesTokens.length) return false;
     const local = `${v.bairro || ''} ${v.cidade} ${v.estado}`.toLowerCase();
