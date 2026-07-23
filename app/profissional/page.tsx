@@ -6,6 +6,7 @@ import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, ClockIcon, UserIcon } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
+import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
@@ -122,7 +123,7 @@ export default function ProfissionalPage() {
   }
 
   if (loading || !perfil) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Carregando...</div>;
+    return <FeedPageSkeleton sidebarItems={3} showFilters />;
   }
 
   return (

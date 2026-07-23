@@ -8,6 +8,8 @@ import { HomeIcon, PlusIcon, GridIcon, UserIcon } from '@/app/components/icons';
 import { maskCEP } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
+import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
+import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE,
   Vaga, Candidatura, Clinica, Avaliacao,
@@ -45,6 +47,7 @@ export default function ClinicaPage() {
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [minhasVagas, setMinhasVagas] = useState<Vaga[]>([]);
   const [candidatos, setCandidatos] = useState<Candidatura[]>([]);
+  const [candidatosLoading, setCandidatosLoading] = useState(false);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [selectedMvId, setSelectedMvId] = useState<string | null>(null);
   const [selectedCandId, setSelectedCandId] = useState<string | null>(null);
@@ -85,7 +88,8 @@ export default function ClinicaPage() {
 
   useEffect(() => {
     if (tab !== 'candidatos' || !selectedMvId) return;
-    getCandidatosDaVaga(selectedMvId).then(setCandidatos).catch(() => {});
+    setCandidatosLoading(true);
+    getCandidatosDaVaga(selectedMvId).then(setCandidatos).catch(() => {}).finally(() => setCandidatosLoading(false));
   }, [tab, selectedMvId]);
 
   async function refreshMinhasVagas() {
@@ -246,7 +250,7 @@ export default function ClinicaPage() {
   const selectedCand = candidatos.find((c) => c.id === selectedCandId) || null;
 
   if (loading || !clinica) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Carregando...</div>;
+    return <FeedPageSkeleton sidebarItems={4} />;
   }
 
   return (
@@ -496,28 +500,37 @@ export default function ClinicaPage() {
               </div>
             )}
             <div className="flex flex-col gap-3">
-              {candidatos.map((c) => {
-                const badge = statusBadge(c.status.toLowerCase());
-                return (
-                  <div key={c.id} className="bg-white border border-gray-200 rounded-2xl p-5">
-                    <div className="flex justify-between items-start gap-3">
-                      <div>
-                        <div className="font-extrabold">{c.profissional?.nome}</div>
-                        <div className="text-sm text-gray-500">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · {c.profissional?.areaAtuacao}</div>
-                        <div className="text-xs text-gray-500 mt-1">Região: {c.profissional?.regioesAtendimento}</div>
+              {candidatosLoading ? (
+                <>
+                  <CardSkeleton />
+                  <CardSkeleton />
+                </>
+              ) : (
+                <>
+                  {candidatos.map((c) => {
+                    const badge = statusBadge(c.status.toLowerCase());
+                    return (
+                      <div key={c.id} className="bg-white border border-gray-200 rounded-2xl p-5">
+                        <div className="flex justify-between items-start gap-3">
+                          <div>
+                            <div className="font-extrabold">{c.profissional?.nome}</div>
+                            <div className="text-sm text-gray-500">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · {c.profissional?.areaAtuacao}</div>
+                            <div className="text-xs text-gray-500 mt-1">Região: {c.profissional?.regioesAtendimento}</div>
+                          </div>
+                          <div className={badge.className}>{badge.label}</div>
+                        </div>
+                        {c.status === 'PENDENTE' && selectedMv.status === 'ABERTA' && (
+                          <div className="flex gap-2 mt-4">
+                            <button onClick={() => recusarCandidato(c.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Recusar</button>
+                            <button onClick={() => aceitarCandidato(selectedMv.id, c.id)} className="px-3.5 py-2 rounded-lg bg-primary text-white text-sm font-bold">Aceitar e pagar</button>
+                          </div>
+                        )}
                       </div>
-                      <div className={badge.className}>{badge.label}</div>
-                    </div>
-                    {c.status === 'PENDENTE' && selectedMv.status === 'ABERTA' && (
-                      <div className="flex gap-2 mt-4">
-                        <button onClick={() => recusarCandidato(c.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Recusar</button>
-                        <button onClick={() => aceitarCandidato(selectedMv.id, c.id)} className="px-3.5 py-2 rounded-lg bg-primary text-white text-sm font-bold">Aceitar e pagar</button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {candidatos.length === 0 && <div className="text-sm text-gray-400">Nenhum candidato ainda.</div>}
+                    );
+                  })}
+                  {candidatos.length === 0 && <div className="text-sm text-gray-400">Nenhum candidato ainda.</div>}
+                </>
+              )}
             </div>
           </div>
         )}

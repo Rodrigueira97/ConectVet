@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { buildEndereco, statusBadge } from '@/lib/mockData';
 import { Sidebar } from '@/app/components/Sidebar';
 import { GridIcon } from '@/app/components/icons';
+import { AdminPageSkeleton } from '@/app/components/skeletons/AdminPageSkeleton';
 import {
   ApiError, getToken, clearSession,
   Pagamento, listarPagamentos, liberarPagamento,
@@ -43,7 +44,7 @@ export default function AdminPage() {
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Carregando...</div>;
+    return <AdminPageSkeleton />;
   }
 
   const totalRetido = pagamentos.filter((p) => p.status === 'RETIDO').reduce((s, p) => s + Number(p.valorLiquido), 0);
