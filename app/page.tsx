@@ -5,7 +5,6 @@ import { login, setSession, ApiError } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [role, setRole] = useState<'clinica' | 'profissional'>('clinica');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [error, setError] = useState('');
@@ -48,21 +47,6 @@ export default function LoginPage() {
           <div className="text-2xl font-extrabold mb-1">Entrar</div>
           <div className="text-sm text-gray-500 mb-6">Acesse sua conta ConectVet</div>
 
-          <div className="flex gap-2 mb-5">
-            <button
-              onClick={() => setRole('clinica')}
-              className={`flex-1 py-2 rounded-lg border text-sm font-bold ${role === 'clinica' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-300'}`}
-            >
-              Sou Clínica
-            </button>
-            <button
-              onClick={() => setRole('profissional')}
-              className={`flex-1 py-2 rounded-lg border text-sm font-bold ${role === 'profissional' ? 'bg-secondary text-white border-secondary' : 'bg-white text-gray-600 border-gray-300'}`}
-            >
-              Sou Profissional
-            </button>
-          </div>
-
           <div className="flex flex-col gap-3.5">
             <input
               type="email"
@@ -92,13 +76,6 @@ export default function LoginPage() {
           <div className="text-center mt-5 text-sm text-gray-500">
             Não tem conta? <a href="/cadastro" className="font-bold">Criar conta</a>
           </div>
-
-          <a
-            href="/admin"
-            className="mt-6 block text-center py-2.5 rounded-lg border border-dashed border-gray-300 text-xs font-bold text-gray-400 hover:text-gray-600 hover:border-gray-400"
-          >
-            Acesso administrativo
-          </a>
         </div>
       </div>
     </div>
