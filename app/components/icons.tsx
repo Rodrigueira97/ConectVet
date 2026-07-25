@@ -128,10 +128,9 @@ export function FilterIcon({ className }: IconProps) {
 
 export function PinIcon({ className }: IconProps) {
   return (
-    <svg {...base} className={className}>
-      <circle cx="12" cy="12" r="7" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    <svg {...base} fill="currentColor" stroke="none" className={className}>
+      <ellipse cx="12" cy="21" rx="3.5" ry="1" opacity="0.25" />
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
     </svg>
   );
 }

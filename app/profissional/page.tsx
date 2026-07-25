@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { buildEndereco, onlyDigits, statusBadge } from '@/lib/mockData';
+import { buildEndereco, mapsLink, onlyDigits, statusBadge } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon } from '@/app/components/icons';
@@ -272,8 +272,19 @@ export default function ProfissionalPage() {
                       </div>
                       <div className="bg-primaryTint text-primaryDeep font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
                     </div>
-                    <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
-                      <div>Local <b className="font-bold text-gray-700">{local}</b></div><div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div><div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
+                    <div className="flex gap-4 flex-wrap items-center mt-3 text-sm text-gray-500">
+                      <a
+                        href={mapsLink(local)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 hover:underline"
+                      >
+                        <PinIcon className="w-3.5 h-3.5 shrink-0 text-primary" />
+                        Local <b className="font-bold text-gray-700">{local}</b>
+                      </a>
+                      <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
+                      <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
                     </div>
                     <div className="flex justify-end mt-4">
                       <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}

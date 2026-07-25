@@ -1,5 +1,6 @@
 'use client';
 import { mapsLink } from '@/lib/mockData';
+import { PinIcon } from '@/app/components/icons';
 
 export type VagaDetalheData = {
   clinica?: string;
@@ -44,8 +45,9 @@ export function VagaDetalheView({
               href={mapsLink(vaga.local)}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-bold text-primary mt-1.5 inline-block"
+              className="inline-flex items-center gap-1 text-sm font-bold text-primary mt-1.5"
             >
+              <PinIcon className="w-3.5 h-3.5 shrink-0" />
               Ver no Google Maps
             </a>
           )}

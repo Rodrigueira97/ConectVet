@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
@@ -416,8 +416,19 @@ export default function ClinicaPage() {
                       </div>
                       <div className="bg-primaryTint text-primaryDeep font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
                     </div>
-                    <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
-                      <div>Local <b className="font-bold text-gray-700">{local}</b></div><div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div><div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
+                    <div className="flex gap-4 flex-wrap items-center mt-3 text-sm text-gray-500">
+                      <a
+                        href={mapsLink(local)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 hover:underline"
+                      >
+                        <PinIcon className="w-3.5 h-3.5 shrink-0 text-primary" />
+                        Local <b className="font-bold text-gray-700">{local}</b>
+                      </a>
+                      <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
+                      <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
                     </div>
                   </div>
                 );
@@ -567,7 +578,16 @@ export default function ClinicaPage() {
                     <div className="flex justify-between items-start gap-3">
                       <div>
                         <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[mv.categoria]}</div>
-                        <div className="text-lg font-extrabold mt-1">{local}</div>
+                        <a
+                          href={mapsLink(local)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-lg font-extrabold mt-1 hover:text-primary hover:underline"
+                        >
+                          <PinIcon className="w-4 h-4 shrink-0 text-primary" />
+                          {local}
+                        </a>
                       </div>
                       <div className={badge.className}>{badge.label}</div>
                     </div>
