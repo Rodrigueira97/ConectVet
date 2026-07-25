@@ -10,6 +10,7 @@ import { Role } from '../../generated/prisma/enums';
 import { RegisterClinicaDto } from './dto/register-clinica.dto';
 import { RegisterProfissionalDto } from './dto/register-profissional.dto';
 import { LoginDto } from './dto/login.dto';
+import { Prisma } from '../../generated/prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -55,7 +56,8 @@ export class AuthService {
             nome: dto.nome,
             cnpj: dto.cnpj,
             inscricaoEstadual: dto.inscricaoEstadual,
-            responsavelTecnico: dto.responsavelTecnico,
+            responsavelTecnicoNome: dto.responsavelTecnicoNome,
+            responsavelTecnicoCrmv: dto.responsavelTecnicoCrmv,
             telefone: dto.telefone,
             cep: dto.cep,
             estado: dto.estado,
@@ -65,7 +67,8 @@ export class AuthService {
             numero: dto.numero,
             complemento: dto.complemento,
             alvaraUrl: dto.alvaraUrl,
-            fotosEstrutura: dto.fotosEstrutura,
+            fotosEstrutura: (dto.fotosEstrutura ?? []) as unknown as Prisma.InputJsonValue,
+            logoUrl: dto.logoUrl,
             planosSaude: dto.planosSaude,
             sistemas: dto.sistemas,
             observacoes: dto.observacoes,
@@ -104,8 +107,8 @@ export class AuthService {
             comprovanteUrl: dto.comprovanteUrl,
             idDocUrls: dto.idDocUrls,
             curriculoUrl: dto.curriculoUrl,
+            fotoUrl: dto.fotoUrl,
             areaAtuacao: dto.areaAtuacao,
-            planoSaude: dto.planoSaude,
             regioesAtendimento: dto.regioesAtendimento,
             observacoes: dto.observacoes,
           },

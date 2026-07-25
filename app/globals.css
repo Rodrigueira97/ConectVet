@@ -2,13 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
-body { margin: 0; background: #fafbfc; color: #1c2530; }
-a { color: #63c94e; }
-a:hover { color: #4fae3b; }
+@font-face {
+  font-family: 'Goldplay';
+  src: url('/fonts/Goldplay-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+body { margin: 0; background: #f5f8f6; color: #14201b; }
+a { color: #00a19a; }
+a:hover { color: #00847e; }
 
 /* Evita o zoom automático do Safari iOS ao focar campos com fonte < 16px */
 @media (max-width: 767px) {
   input, select, textarea {
     font-size: 16px !important;
   }
+}
+
+/* Fundo decorativo com patinhas, usado nas telas de clínica e profissional */
+.bg-paws {
+  background-color: #00a19a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280'%3E%3Cg transform='translate(18 26) rotate(-18) scale(0.62)' fill='%2300A19A' fill-opacity='0.16'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3Cg transform='translate(150 60) rotate(22) scale(0.42)' fill='%23042D4C' fill-opacity='0.09'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3Cg transform='translate(60 150) rotate(55) scale(0.5)' fill='%2300A19A' fill-opacity='0.12'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3Cg transform='translate(195 175) rotate(-35) scale(0.68)' fill='%2300A19A' fill-opacity='0.17'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3Cg transform='translate(225 40) rotate(8) scale(0.36)' fill='%23042D4C' fill-opacity='0.08'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3Cg transform='translate(105 205) rotate(-8) scale(0.4)' fill='%2300A19A' fill-opacity='0.11'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 280px 280px;
 }

@@ -59,29 +59,28 @@ export default function AdminPage() {
         items={[{ key: 'painel', label: 'Painel administrativo', icon: <GridIcon /> }]}
         activeKey="painel"
         onSelect={() => {}}
+        footerName="Admin ConectVet"
+        footerSubtitle="Conta administrador"
       />
 
       <main className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-extrabold mb-1">Painel administrativo</h1>
-            <p className="text-sm text-gray-500 mb-6">Controle dos pagamentos retidos e liberados na plataforma</p>
-          </div>
-          <button onClick={() => { clearSession(); router.push('/'); }} className="text-sm font-bold text-gray-400 hover:text-danger">Sair</button>
+        <div>
+          <h1 className="text-2xl font-extrabold mb-1">Painel administrativo</h1>
+          <p className="text-sm text-gray-500 mb-6">Controle dos pagamentos retidos e liberados na plataforma</p>
         </div>
 
         {error && <div className="text-sm font-semibold text-danger bg-red-50 rounded-lg p-3 mb-4">{error}</div>}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
-          <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
             <div className="text-xs font-bold text-gray-500">Retido com a plataforma</div>
             <div className="text-xl font-extrabold mt-1.5">R$ {totalRetido.toFixed(2)}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
             <div className="text-xs font-bold text-gray-500">Já liberado a profissionais</div>
             <div className="text-xl font-extrabold mt-1.5">R$ {totalLiberado.toFixed(2)}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
             <div className="text-xs font-bold text-gray-500">Taxa arrecadada (5%)</div>
             <div className="text-xl font-extrabold mt-1.5">R$ {totalTaxa.toFixed(2)}</div>
           </div>
@@ -93,11 +92,13 @@ export default function AdminPage() {
             const badge = statusBadge(p.status.toLowerCase());
             const local = p.vaga ? buildEndereco(p.vaga) : '';
             return (
-              <div key={p.id} className="bg-white border border-gray-200 rounded-2xl p-5 flex justify-between items-center gap-3 flex-wrap">
+              <div key={p.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 flex justify-between items-center gap-3 flex-wrap">
                 <div>
                   <div className="text-xs font-bold text-primary uppercase">{p.vaga?.categoria}</div>
                   <div className="font-extrabold mt-1">{p.candidatura?.profissional.nome}</div>
-                  <div className="text-sm text-gray-500 mt-1">{local} · bruto R$ {Number(p.valorBruto).toFixed(2)} · taxa R$ {Number(p.taxa).toFixed(2)} · repasse R$ {Number(p.valorLiquido).toFixed(2)}</div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {local} · bruto <b className="font-bold text-gray-700">R$ {Number(p.valorBruto).toFixed(2)}</b> · taxa <b className="font-bold text-gray-700">R$ {Number(p.taxa).toFixed(2)}</b> · repasse <b className="font-bold text-gray-700">R$ {Number(p.valorLiquido).toFixed(2)}</b>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className={badge.className}>{badge.label}</div>

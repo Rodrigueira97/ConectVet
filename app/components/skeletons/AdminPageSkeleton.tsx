@@ -11,7 +11,7 @@ export function AdminPageSkeleton() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-2xl p-5">
+            <div key={i} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
               <Skeleton className="w-32 h-3 mb-2.5" />
               <Skeleton className="w-20 h-6" />
             </div>
@@ -21,7 +21,7 @@ export function AdminPageSkeleton() {
         <Skeleton className="w-28 h-4 mb-3" />
         <div className="flex flex-col gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-2xl p-5 flex justify-between items-center gap-3 flex-wrap">
+            <div key={i} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 flex justify-between items-center gap-3 flex-wrap">
               <div className="flex flex-col gap-2">
                 <Skeleton className="w-16 h-2.5" />
                 <Skeleton className="w-36 h-4" />

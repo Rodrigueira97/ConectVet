@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
@@ -16,7 +16,7 @@ import {
   Vaga, Candidatura, Clinica, Avaliacao,
   getClinicaMe, updateClinicaMe, getFeed, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
   getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
-  getAvaliacoesPorCandidatura,
+  getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos,
 } from '@/lib/api';
 
 type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'perfil';
@@ -73,6 +73,8 @@ export default function ClinicaPage() {
   });
   const [perfilCepStatus, setPerfilCepStatus] = useState<CepStatus>('idle');
   const [savingPerfil, setSavingPerfil] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingFotos, setUploadingFotos] = useState(false);
 
   useEffect(() => {
     if (!getToken()) { router.push('/'); return; }
@@ -295,8 +297,69 @@ export default function ClinicaPage() {
     }
   }
 
+  async function handleLogoChange(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    setActionError('');
+    try {
+      const logoUrl = await uploadArquivo(file);
+      const atualizado = await updateClinicaMe({ logoUrl });
+      setClinica(atualizado);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível enviar a logo.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  async function handleFotosAdd(files: FileList | null) {
+    if (!files || !files.length || !clinica) return;
+    const vagas = 3 - clinica.fotosEstrutura.length;
+    if (vagas <= 0) return;
+    setUploadingFotos(true);
+    setActionError('');
+    try {
+      const novasUrls = await uploadArquivos(Array.from(files).slice(0, vagas));
+      const fotosEstrutura = [...clinica.fotosEstrutura, ...novasUrls.map((url) => ({ url, descricao: '' }))];
+      const atualizado = await updateClinicaMe({ fotosEstrutura });
+      setClinica(atualizado);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível enviar as fotos.');
+    } finally {
+      setUploadingFotos(false);
+    }
+  }
+
+  async function handleFotoRemover(url: string) {
+    if (!clinica) return;
+    const fotosEstrutura = clinica.fotosEstrutura.filter((f) => f.url !== url);
+    try {
+      const atualizado = await updateClinicaMe({ fotosEstrutura });
+      setClinica(atualizado);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível remover a foto.');
+    }
+  }
+
+  function handleFotoDescricaoChange(url: string, descricao: string) {
+    if (!clinica) return;
+    setClinica({ ...clinica, fotosEstrutura: clinica.fotosEstrutura.map((f) => (f.url === url ? { ...f, descricao } : f)) });
+  }
+
+  async function handleFotoDescricaoSalvar(url: string) {
+    if (!clinica) return;
+    try {
+      const atualizado = await updateClinicaMe({ fotosEstrutura: clinica.fotosEstrutura });
+      setClinica(atualizado);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível salvar a descrição.');
+    }
+  }
+
   const selectedMv = minhasVagas.find((m) => m.id === selectedMvId) || null;
   const selectedCand = candidatos.find((c) => c.id === selectedCandId) || null;
+  const pendingTotal = minhasVagas.reduce((sum, mv) => sum + (mv.candidaturas || []).filter((c) => c.status === 'PENDENTE').length, 0);
 
   if (loading || !clinica) {
     return <FeedPageSkeleton sidebarItems={4} />;
@@ -310,17 +373,20 @@ export default function ClinicaPage() {
         items={[
           { key: 'home', label: 'Home', icon: <HomeIcon /> },
           { key: 'criar-vaga', label: 'Criar vaga', icon: <PlusIcon /> },
-          { key: 'painel', label: 'Painel', icon: <GridIcon /> },
+          { key: 'painel', label: 'Painel', icon: <GridIcon />, count: pendingTotal },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
         ]}
         activeKey={tab}
         onSelect={(key) => setTab(key as Tab)}
         footerName={clinica.nome}
+        footerSubtitle="Conta clínica"
+        footerPhotoUrl={clinica.logoUrl}
+        footerIcon="building"
       />
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-paws">
         {vagaSelecionada ? (
-          <VagaDetalheView vaga={vagaSelecionada} onBack={() => setVagaSelecionada(null)} accentClass="text-primary" />
+          <VagaDetalheView vaga={vagaSelecionada} onBack={() => setVagaSelecionada(null)} />
         ) : (
         <>
         {actionError && (
@@ -331,8 +397,8 @@ export default function ClinicaPage() {
 
         {tab === 'home' && (
           <div className="max-w-3xl mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-1">Vagas no feed</h1>
-            <p className="text-sm text-gray-500 mb-6">Visão geral das vagas publicadas na plataforma</p>
+            <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas no feed</h1>
+            <p className="text-sm text-white/85 mb-6">Visão geral das vagas publicadas na plataforma</p>
             <div className="flex flex-col gap-4">
               {feed.map((v) => {
                 const local = localDaVaga(v);
@@ -340,7 +406,7 @@ export default function ClinicaPage() {
                   <div
                     key={v.id}
                     onClick={() => setVagaSelecionada({ clinica: v.clinica?.nome, categoria: CATEGORIA_LABEL[v.categoria], local, data: formatDataBR(v.data), horario: `${v.horaInicio} - ${v.horaFim}`, valor: v.valor, descricao: v.descricao || undefined })}
-                    className="bg-white border border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
+                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div>
@@ -348,10 +414,10 @@ export default function ClinicaPage() {
                         <div className="text-lg font-extrabold mt-1">{v.clinica?.nome}</div>
                         <div className="mt-1"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
                       </div>
-                      <div className="bg-green-100 text-green-700 font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
+                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
                     </div>
                     <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
-                      <div>LOCAL {local}</div><div>DATA {formatDataBR(v.data)}</div><div>HORÁRIO {v.horaInicio} - {v.horaFim}</div>
+                      <div>Local <b className="font-bold text-gray-700">{local}</b></div><div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div><div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
                     </div>
                   </div>
                 );
@@ -363,9 +429,9 @@ export default function ClinicaPage() {
 
         {tab === 'criar-vaga' && (
           <div className="max-w-xl mx-auto p-8">
-            <div className="text-sm font-bold text-primary mb-1">{editingId ? 'Editar vaga' : 'Nova vaga'}</div>
-            <h1 className="text-2xl font-extrabold mb-6">{editingId ? 'Editar vaga' : 'Nova vaga'}</h1>
-            <div className="bg-white border border-gray-200 rounded-2xl p-7 flex flex-col gap-5">
+            <div className="text-sm font-bold text-primaryTint mb-1">{editingId ? 'Editar vaga' : 'Nova vaga'}</div>
+            <h1 className="text-2xl font-extrabold mb-6 text-white">{editingId ? 'Editar vaga' : 'Nova vaga'}</h1>
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 flex flex-col gap-5">
               <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
                 <input type="checkbox" checked={vagaForm.outroEndereco} onChange={(e) => setVagaForm((f) => ({ ...f, outroEndereco: e.target.checked }))} />
                 Usar um endereço diferente do cadastro da clínica
@@ -476,7 +542,7 @@ export default function ClinicaPage() {
               </label>
             </div>
             <button disabled={publishDisabled || publishing} onClick={publicarVaga}
-              className={`mt-6 w-full py-3.5 rounded-lg font-bold text-sm ${publishDisabled || publishing ? 'bg-gray-200 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
+              className={`mt-6 w-full py-3.5 rounded-lg font-bold text-sm shadow-sm ${publishDisabled || publishing ? 'bg-gray-200 text-gray-400' : 'bg-ink text-white'}`}>
               {publishing ? 'Publicando...' : editingId ? 'Salvar alterações' : 'Publicar vaga'}
             </button>
           </div>
@@ -484,8 +550,8 @@ export default function ClinicaPage() {
 
         {tab === 'painel' && (
           <div className="max-w-3xl mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-1">Painel da clínica</h1>
-            <p className="text-sm text-gray-500 mb-6">Acompanhe suas vagas publicadas e candidatos</p>
+            <h1 className="text-2xl font-extrabold mb-1 text-white">Painel da clínica</h1>
+            <p className="text-sm text-white/85 mb-6">Acompanhe suas vagas publicadas e candidatos</p>
             <div className="flex flex-col gap-4">
               {minhasVagas.map((mv) => {
                 const badge = statusBadge(mv.status.toLowerCase());
@@ -496,7 +562,7 @@ export default function ClinicaPage() {
                   <div
                     key={mv.id}
                     onClick={() => setVagaSelecionada({ categoria: CATEGORIA_LABEL[mv.categoria], local, data: formatDataBR(mv.data), horario: `${mv.horaInicio} - ${mv.horaFim}`, valor: mv.valor, descricao: mv.descricao || undefined })}
-                    className="bg-white border border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
+                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div>
@@ -506,7 +572,7 @@ export default function ClinicaPage() {
                       <div className={badge.className}>{badge.label}</div>
                     </div>
                     <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
-                      <div>DATA {formatDataBR(mv.data)}</div><div>HORÁRIO {mv.horaInicio} - {mv.horaFim}</div><div>R$ {mv.valor}</div>
+                      <div>Data <b className="font-bold text-gray-700">{formatDataBR(mv.data)}</b></div><div>Horário <b className="font-bold text-gray-700">{mv.horaInicio} - {mv.horaFim}</b></div><div>R$ {mv.valor}</div>
                     </div>
                     {mv.descricao && <div className="text-sm text-gray-600 mt-3">{mv.descricao}</div>}
                     <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100 flex-wrap gap-2">
@@ -547,9 +613,9 @@ export default function ClinicaPage() {
 
         {tab === 'candidatos' && selectedMv && (
           <div className="max-w-2xl mx-auto p-8">
-            <button onClick={() => setTab('painel')} className="text-sm font-bold text-gray-500 mb-4">← Voltar ao painel</button>
-            <h1 className="text-xl font-extrabold mb-1">Candidatos — {CATEGORIA_LABEL[selectedMv.categoria]}</h1>
-            <p className="text-sm text-gray-500 mb-6">{localDaVaga(selectedMv)} · {formatDataBR(selectedMv.data)}</p>
+            <button onClick={() => setTab('painel')} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar ao painel</button>
+            <h1 className="text-xl font-extrabold mb-1 text-white">Candidatos — {CATEGORIA_LABEL[selectedMv.categoria]}</h1>
+            <p className="text-sm text-white/85 mb-6">{localDaVaga(selectedMv)} · {formatDataBR(selectedMv.data)}</p>
             {selectedMv.status !== 'ABERTA' && (
               <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 mb-4">
                 {selectedMv.status === 'CANCELADA'
@@ -568,7 +634,7 @@ export default function ClinicaPage() {
                   {candidatos.map((c) => {
                     const badge = statusBadge(c.status.toLowerCase());
                     return (
-                      <div key={c.id} className="bg-white border border-gray-200 rounded-2xl p-5">
+                      <div key={c.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
                         <div className="flex justify-between items-start gap-3">
                           <div>
                             <div className="font-extrabold">{c.profissional?.nome}</div>
@@ -600,9 +666,9 @@ export default function ClinicaPage() {
           const totalClinica = valorProfissional + taxa;
           return (
             <div className="max-w-lg mx-auto p-8">
-              <div className="text-sm font-bold text-primary mb-1">Pagamento</div>
-              <h1 className="text-2xl font-extrabold mb-6">Confirmar contratação</h1>
-              <div className="bg-white border border-gray-200 rounded-2xl p-7">
+              <div className="text-sm font-bold text-primaryTint mb-1">Pagamento</div>
+              <h1 className="text-2xl font-extrabold mb-6 text-white">Confirmar contratação</h1>
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7">
                 <div className="text-sm text-gray-500">Profissional</div>
                 <div className="text-lg font-extrabold">{selectedCand?.profissional?.nome}</div>
                 <div className="text-sm text-gray-500">{CATEGORIA_LABEL[selectedMv.categoria]} · {localDaVaga(selectedMv)}</div>
@@ -612,10 +678,10 @@ export default function ClinicaPage() {
                   <div className="flex justify-between text-base font-extrabold pt-2 border-t border-gray-200"><span>Total que você paga</span><span>R$ {totalClinica.toFixed(2)}</span></div>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-3">O valor fica retido até a clínica confirmar a presença do profissional.</p>
+              <p className="text-xs text-white/85 mt-3">O valor fica retido até a clínica confirmar a presença do profissional.</p>
               <div className="flex justify-end gap-3 mt-6">
-                <button onClick={() => setTab('painel')} className="px-5 py-3 rounded-lg border border-gray-300 text-sm font-bold">Cancelar</button>
-                <button onClick={confirmarPagamento} className="px-6 py-3 rounded-lg bg-primary text-white text-sm font-bold">Confirmar pagamento</button>
+                <button onClick={() => setTab('painel')} className="px-5 py-3 rounded-lg border border-gray-300 bg-white text-sm font-bold">Cancelar</button>
+                <button onClick={confirmarPagamento} className="px-6 py-3 rounded-lg bg-ink text-white text-sm font-bold shadow-sm">Confirmar pagamento</button>
               </div>
             </div>
           );
@@ -623,8 +689,21 @@ export default function ClinicaPage() {
 
         {tab === 'perfil' && (
           <div className="max-w-2xl mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-6">Perfil da clínica</h1>
-            <div className="bg-white border border-gray-200 rounded-2xl p-7 flex flex-col gap-4">
+            <h1 className="text-2xl font-extrabold mb-6 text-white">Perfil da clínica</h1>
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 flex flex-col gap-4">
+              <div className="flex items-center gap-4 pb-2">
+                <div className="w-20 h-20 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden shrink-0">
+                  {clinica.logoUrl ? (
+                    <img src={clinica.logoUrl} alt={clinica.nome} className="w-full h-full object-cover" />
+                  ) : (
+                    <BuildingIcon className="w-9 h-9" />
+                  )}
+                </div>
+                <label className="cursor-pointer px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                  {uploadingLogo ? 'Enviando...' : 'Trocar logo'}
+                  <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={(e) => handleLogoChange(e.target.files)} />
+                </label>
+              </div>
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-bold">Nome / Razão social</span>
                 <input value={perfilForm.nome} onChange={(e) => setPerfilForm((f) => ({ ...f, nome: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
@@ -690,9 +769,46 @@ export default function ClinicaPage() {
                 </div>
               </div>
 
-              <button onClick={salvarPerfil} disabled={savingPerfil} className="self-start px-5 py-2.5 rounded-lg bg-primary hover:bg-primaryDark text-white text-sm font-bold disabled:opacity-60">
+              <button onClick={salvarPerfil} disabled={savingPerfil} className="self-start px-5 py-2.5 rounded-lg bg-ink text-white text-sm font-bold shadow-sm disabled:opacity-60">
                 {savingPerfil ? 'Salvando...' : 'Salvar alterações'}
               </button>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 mt-6 flex flex-col gap-4">
+              <div>
+                <div className="text-sm font-extrabold text-gray-800">Fotos da clínica</div>
+                <div className="text-xs text-gray-400 mt-0.5">Opcional, até 3 fotos ({clinica.fotosEstrutura.length}/3)</div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {clinica.fotosEstrutura.map((foto) => (
+                  <div key={foto.url} className="flex flex-col gap-1.5">
+                    <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 group">
+                      <img src={foto.url} alt={foto.descricao || 'Foto da clínica'} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => handleFotoRemover(foto.url)}
+                        aria-label="Remover foto"
+                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                      >
+                        <CloseIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <input
+                      value={foto.descricao || ''}
+                      onChange={(e) => handleFotoDescricaoChange(foto.url, e.target.value)}
+                      onBlur={() => handleFotoDescricaoSalvar(foto.url)}
+                      placeholder="Descrição (opcional)"
+                      className="px-2 py-1 rounded-md border border-gray-200 text-xs outline-none"
+                    />
+                  </div>
+                ))}
+                {clinica.fotosEstrutura.length < 3 && (
+                  <label className="cursor-pointer aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-400 hover:bg-gray-50 hover:text-gray-500">
+                    <PlusIcon className="w-5 h-5" />
+                    <span className="text-xs font-bold">{uploadingFotos ? 'Enviando...' : 'Adicionar'}</span>
+                    <input type="file" accept="image/*" multiple className="hidden" disabled={uploadingFotos} onChange={(e) => handleFotosAdd(e.target.files)} />
+                  </label>
+                )}
+              </div>
             </div>
           </div>
         )}

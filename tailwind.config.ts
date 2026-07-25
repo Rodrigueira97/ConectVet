@@ -5,13 +5,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: '#63c94e',
-        primaryDark: '#4fae3b',
+        primary: '#00a19a',
+        primaryDark: '#00847e',
+        primaryDeep: '#00706b',
+        primaryTint: '#dcf4f2',
         secondary: '#2e8cad',
         danger: '#c0392b',
+        ink: '#042d4c',
       },
       fontFamily: {
-        sans: ['Manrope', 'sans-serif'],
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        brand: ['Goldplay', '-apple-system', 'sans-serif'],
       },
     },
   },

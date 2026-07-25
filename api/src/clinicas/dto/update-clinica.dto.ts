@@ -1,4 +1,12 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { FotoEstruturaDto } from './foto-estrutura.dto';
 
 export class UpdateClinicaDto {
   @IsOptional()
@@ -11,7 +19,11 @@ export class UpdateClinicaDto {
 
   @IsOptional()
   @IsString()
-  responsavelTecnico?: string;
+  responsavelTecnicoNome?: string;
+
+  @IsOptional()
+  @IsString()
+  responsavelTecnicoCrmv?: string;
 
   @IsOptional()
   @IsString()
@@ -47,8 +59,14 @@ export class UpdateClinicaDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  fotosEstrutura?: string[];
+  @ArrayMaxSize(3)
+  @ValidateNested({ each: true })
+  @Type(() => FotoEstruturaDto)
+  fotosEstrutura?: FotoEstruturaDto[];
+
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
 
   @IsOptional()
   @IsString()

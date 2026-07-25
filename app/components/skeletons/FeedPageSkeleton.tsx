@@ -10,10 +10,10 @@ export function FeedPageSkeleton({ sidebarItems = 4, showFilters = false, cards 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <SidebarSkeleton items={sidebarItems} />
-      <main className="flex-1 overflow-y-auto p-8">
+      <main className="flex-1 overflow-y-auto p-8 bg-paws">
         <div className="max-w-3xl mx-auto">
-          <Skeleton className="w-52 h-7 mb-2" />
-          <Skeleton className="w-72 h-4 mb-5" />
+          <Skeleton light className="w-52 h-7 mb-2" />
+          <Skeleton light className="w-72 h-4 mb-5" />
           {showFilters && (
             <>
               <Skeleton className="w-full h-11 rounded-lg mb-3" />

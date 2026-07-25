@@ -13,7 +13,7 @@ export type VagaDetalheData = {
 };
 
 export function VagaDetalheView({
-  vaga, onBack, accentClass = 'text-primary', actionLabel, onAction, actionDisabled, actionButtonClass = 'bg-primary hover:bg-primaryDark text-white',
+  vaga, onBack, accentClass = 'text-primaryTint', actionLabel, onAction, actionDisabled, actionButtonClass = 'bg-ink text-white',
 }: {
   vaga: VagaDetalheData;
   onBack: () => void;
@@ -25,17 +25,17 @@ export function VagaDetalheView({
 }) {
   return (
     <div className="max-w-2xl mx-auto p-6 md:p-8">
-      <button onClick={onBack} className="text-sm font-bold text-gray-500 mb-4">← Voltar</button>
+      <button onClick={onBack} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar</button>
 
       <div className={`text-xs font-bold uppercase ${accentClass}`}>
         {vaga.categoria}{vaga.turno ? ` · ${vaga.turno}` : ''}
       </div>
-      <h1 className="text-2xl font-extrabold mt-1 mb-3">{vaga.clinica || 'Detalhes da vaga'}</h1>
-      <div className="inline-block bg-green-100 text-green-700 font-extrabold text-sm px-3 py-1.5 rounded-lg mb-6">
+      <h1 className="text-2xl font-extrabold mt-1 mb-3 text-white">{vaga.clinica || 'Detalhes da vaga'}</h1>
+      <div className="inline-block bg-primaryTint text-primaryDeep font-extrabold text-sm px-3 py-1.5 rounded-lg mb-6">
         R$ {vaga.valor}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 flex flex-col gap-5">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 flex flex-col gap-5">
         <div>
           <div className="text-xs font-bold text-gray-400 uppercase mb-1">Endereço</div>
           <div className="text-sm text-gray-700">{vaga.local || '—'}</div>

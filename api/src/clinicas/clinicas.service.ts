@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateClinicaDto } from './dto/update-clinica.dto';
+import { Prisma } from '../../generated/prisma/client';
 
 @Injectable()
 export class ClinicasService {
@@ -22,6 +23,12 @@ export class ClinicasService {
 
   async atualizar(userId: string, dto: UpdateClinicaDto) {
     await this.buscarPorUserId(userId);
-    return this.prisma.clinica.update({ where: { userId }, data: dto });
+    return this.prisma.clinica.update({
+      where: { userId },
+      data: {
+        ...dto,
+        fotosEstrutura: dto.fotosEstrutura as unknown as Prisma.InputJsonValue,
+      },
+    });
   }
 }

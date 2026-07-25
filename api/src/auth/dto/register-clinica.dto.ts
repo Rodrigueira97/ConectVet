@@ -1,11 +1,14 @@
 import {
-  ArrayMinSize,
+  ArrayMaxSize,
   IsArray,
   IsEmail,
   IsOptional,
   IsString,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { FotoEstruturaDto } from '../../clinicas/dto/foto-estrutura.dto';
 
 export class RegisterClinicaDto {
   @IsEmail()
@@ -24,7 +27,10 @@ export class RegisterClinicaDto {
   inscricaoEstadual: string;
 
   @IsString()
-  responsavelTecnico: string;
+  responsavelTecnicoNome: string;
+
+  @IsString()
+  responsavelTecnicoCrmv: string;
 
   @IsString()
   telefone: string;
@@ -56,10 +62,16 @@ export class RegisterClinicaDto {
   @IsString()
   alvaraUrl: string;
 
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
-  @IsString({ each: true })
-  fotosEstrutura: string[];
+  @ArrayMaxSize(3)
+  @ValidateNested({ each: true })
+  @Type(() => FotoEstruturaDto)
+  fotosEstrutura?: FotoEstruturaDto[];
+
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
 
   @IsOptional()
   @IsString()

@@ -41,14 +41,14 @@ export function mapsLink(endereco: string) {
 export function statusBadge(status: string) {
   const map: Record<string, [string, string, string]> = {
     cancelada: ['bg-gray-100', 'text-gray-500', 'Cancelada'],
-    aberta: ['bg-sky-100', 'text-sky-700', 'Aberta'],
-    preenchida: ['bg-amber-100', 'text-amber-700', 'Aguardando presença'],
-    concluida: ['bg-green-100', 'text-green-700', 'Concluída'],
+    aberta: ['bg-primaryTint', 'text-primaryDeep', 'Aberta'],
+    preenchida: ['bg-secondary/10', 'text-secondary', 'Aguardando presença'],
+    concluida: ['bg-gray-100', 'text-gray-500', 'Concluída'],
     pendente: ['bg-amber-100', 'text-amber-700', 'Pendente'],
-    aceito: ['bg-green-100', 'text-green-700', 'Aceito'],
-    recusado: ['bg-red-100', 'text-red-700', 'Recusado'],
+    aceito: ['bg-primaryTint', 'text-primaryDeep', 'Aceito'],
+    recusado: ['bg-danger/10', 'text-danger', 'Recusado'],
     retido: ['bg-amber-100', 'text-amber-700', 'Retido'],
-    liberado: ['bg-green-100', 'text-green-700', 'Liberado'],
+    liberado: ['bg-primaryTint', 'text-primaryDeep', 'Liberado'],
   };
   const [bg, fg, label] = map[status] || map.pendente;
   return { className: `${bg} ${fg} font-bold text-xs px-2.5 py-1 rounded-lg whitespace-nowrap`, label };

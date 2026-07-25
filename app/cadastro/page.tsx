@@ -5,6 +5,7 @@ import { CATEGORIAS, ESTADOS_CIDADES, onlyDigits } from '@/lib/mockData';
 import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefone } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
 import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE } from '@/lib/api';
+import { FileField } from '@/app/components/FileField';
 
 type Role = 'clinica' | 'profissional';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -13,15 +14,23 @@ function withCurrent(list: string[], current: string) {
   return current && !list.includes(current) ? [...list, current] : list;
 }
 
+const HOJE_ISO = new Date().toISOString().slice(0, 10);
+const DATA_NASCIMENTO_MIN = '1900-01-01';
+
+function dataNascimentoValida(iso: string) {
+  const [ano] = iso.split('-');
+  return ano.length === 4 && iso >= DATA_NASCIMENTO_MIN && iso <= HOJE_ISO;
+}
+
 const initialClinica = {
-  nome: '', cnpj: '', inscricaoEstadual: '', responsavelTecnico: '', telefone: '',
+  nome: '', cnpj: '', inscricaoEstadual: '', responsavelTecnicoNome: '', responsavelTecnicoCrmv: '', telefone: '',
   cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '',
-  planosSaude: '', sistemas: '', observacoes: '',
+  sistemas: '', observacoes: '',
 };
 
 const initialProf = {
   nome: '', doc: '', funcao: '' as Categoria | '', telefone: '', dataNascimento: '',
-  areaAtuacao: '', planoSaude: '', regioes: '', observacoes: '',
+  areaAtuacao: '', regioes: '', observacoes: '',
 };
 
 const COMPROVACAO_POR_FUNCAO: Record<Categoria, { label: string; accept: string; hint: string }> = {
@@ -55,12 +64,15 @@ export default function CadastroPage() {
 
   const [clinica, setClinica] = useState(initialClinica);
   const [alvara, setAlvara] = useState<File | null>(null);
-  const [fotos, setFotos] = useState<FileList | null>(null);
+  const [fotos, setFotos] = useState<{ file: File; descricao: string }[]>([]);
+  const [logo, setLogo] = useState<File | null>(null);
 
   const [prof, setProf] = useState(initialProf);
   const [comprovante, setComprovante] = useState<File | null>(null);
-  const [idDocs, setIdDocs] = useState<FileList | null>(null);
+  const [idDocFrente, setIdDocFrente] = useState<File | null>(null);
+  const [idDocVerso, setIdDocVerso] = useState<File | null>(null);
   const [curriculo, setCurriculo] = useState<File | null>(null);
+  const [fotoPerfil, setFotoPerfil] = useState<File | null>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [cepStatus, setCepStatus] = useState<CepStatus>('idle');
@@ -100,6 +112,21 @@ export default function CadastroPage() {
     setProf((f) => ({ ...f, [key]: value }));
   }
 
+  function adicionarFotos(files: FileList | null) {
+    if (!files || !files.length) return;
+    const vagas = 3 - fotos.length;
+    const novas = Array.from(files).slice(0, vagas).map((file) => ({ file, descricao: '' }));
+    setFotos((f) => [...f, ...novas]);
+  }
+
+  function removerFoto(index: number) {
+    setFotos((f) => f.filter((_, i) => i !== index));
+  }
+
+  function atualizarDescricaoFoto(index: number, descricao: string) {
+    setFotos((f) => f.map((item, i) => (i === index ? { ...item, descricao } : item)));
+  }
+
   const comprovacao = prof.funcao ? COMPROVACAO_POR_FUNCAO[prof.funcao] : null;
 
   function validate(): Record<string, string> {
@@ -111,23 +138,25 @@ export default function CadastroPage() {
       if (!clinica.nome.trim()) e.nome = 'Informe o nome ou razão social.';
       if (!isValidCNPJ(clinica.cnpj)) e.cnpj = 'CNPJ inválido.';
       if (onlyDigits(clinica.inscricaoEstadual).length < 8) e.inscricaoEstadual = 'Informe uma inscrição estadual válida.';
-      if (!clinica.responsavelTecnico.trim()) e.responsavelTecnico = 'Informe o responsável técnico habilitado.';
+      if (!clinica.responsavelTecnicoNome.trim()) e.responsavelTecnicoNome = 'Informe o nome completo do responsável técnico.';
+      if (!clinica.responsavelTecnicoCrmv.trim()) e.responsavelTecnicoCrmv = 'Informe o CRMV do responsável técnico.';
       if (onlyDigits(clinica.telefone).length < 10) e.telefone = 'Informe um telefone válido com DDD.';
       if (!clinica.estado) e.estado = 'Selecione o estado.';
       if (!clinica.cidade) e.cidade = 'Selecione a cidade.';
       if (!clinica.rua.trim()) e.rua = 'Informe a rua.';
       if (!clinica.numero.trim()) e.numero = 'Informe o número.';
       if (!alvara) e.alvara = 'Anexe o alvará de funcionamento.';
-      if (!fotos || fotos.length === 0) e.fotos = 'Anexe ao menos uma foto da estrutura.';
+      if (fotos.length > 3) e.fotos = 'Envie no máximo 3 fotos da estrutura.';
     } else {
       if (!prof.nome.trim()) e.nomeProf = 'Informe seu nome.';
       if (!isValidCpfCnpj(prof.doc)) e.doc = 'CPF ou CNPJ inválido.';
       if (!prof.funcao) e.funcao = 'Selecione a função.';
       if (onlyDigits(prof.telefone).length < 10) e.telefoneProf = 'Informe um telefone válido com DDD.';
       if (!prof.dataNascimento) e.dataNascimentoProf = 'Informe a data de nascimento.';
+      else if (!dataNascimentoValida(prof.dataNascimento)) e.dataNascimentoProf = 'Informe uma data de nascimento válida.';
       if (prof.funcao && !comprovante) e.comprovante = `Anexe: ${COMPROVACAO_POR_FUNCAO[prof.funcao].label}.`;
-      if (!idDocs || idDocs.length < 2) e.idDocs = 'Anexe as fotos de frente e verso do documento de identidade.';
-      if (!curriculo) e.curriculo = 'Anexe seu currículo.';
+      if (!idDocFrente) e.idDocFrente = 'Anexe a foto da frente do documento de identidade.';
+      if (!idDocVerso) e.idDocVerso = 'Anexe a foto do verso do documento de identidade.';
       if (!prof.areaAtuacao.trim()) e.areaAtuacao = 'Informe sua área de atuação.';
       if (!prof.regioes.trim()) e.regioes = 'Informe as regiões de atendimento.';
     }
@@ -144,14 +173,17 @@ export default function CadastroPage() {
     try {
       if (role === 'clinica') {
         const [alvaraUrl] = await uploadArquivos([alvara as File]);
-        const fotosEstrutura = await uploadArquivos(Array.from(fotos as FileList));
+        const urlsFotos = fotos.length > 0 ? await uploadArquivos(fotos.map((f) => f.file)) : [];
+        const fotosEstrutura = urlsFotos.map((url, i) => ({ url, descricao: fotos[i].descricao || undefined }));
+        const logoUrl = logo ? (await uploadArquivos([logo]))[0] : undefined;
 
         const { accessToken, role: contaRole } = await registrarClinica({
           email, senha,
           nome: clinica.nome,
           cnpj: onlyDigits(clinica.cnpj),
           inscricaoEstadual: clinica.inscricaoEstadual,
-          responsavelTecnico: clinica.responsavelTecnico,
+          responsavelTecnicoNome: clinica.responsavelTecnicoNome,
+          responsavelTecnicoCrmv: clinica.responsavelTecnicoCrmv,
           telefone: onlyDigits(clinica.telefone),
           cep: clinica.cep || undefined,
           estado: clinica.estado,
@@ -162,7 +194,7 @@ export default function CadastroPage() {
           complemento: clinica.complemento || undefined,
           alvaraUrl,
           fotosEstrutura,
-          planosSaude: clinica.planosSaude || undefined,
+          logoUrl,
           sistemas: clinica.sistemas || undefined,
           observacoes: clinica.observacoes || undefined,
         });
@@ -170,8 +202,9 @@ export default function CadastroPage() {
         router.push('/clinica');
       } else {
         const [comprovanteUrl] = await uploadArquivos([comprovante as File]);
-        const idDocUrls = await uploadArquivos(Array.from(idDocs as FileList));
-        const [curriculoUrl] = await uploadArquivos([curriculo as File]);
+        const idDocUrls = await uploadArquivos([idDocFrente as File, idDocVerso as File]);
+        const curriculoUrl = curriculo ? (await uploadArquivos([curriculo]))[0] : undefined;
+        const fotoUrl = fotoPerfil ? (await uploadArquivos([fotoPerfil]))[0] : undefined;
 
         const { accessToken, role: contaRole } = await registrarProfissional({
           email, senha,
@@ -184,8 +217,8 @@ export default function CadastroPage() {
           comprovanteUrl,
           idDocUrls,
           curriculoUrl,
+          fotoUrl,
           areaAtuacao: prof.areaAtuacao,
-          planoSaude: prof.planoSaude || undefined,
           regioesAtendimento: prof.regioes,
           observacoes: prof.observacoes || undefined,
         });
@@ -238,7 +271,8 @@ export default function CadastroPage() {
               <TextField label="Nome / Razão social" value={clinica.nome} onChange={(v) => cField('nome', v)} error={errors.nome} required />
               <TextField label="CNPJ" value={clinica.cnpj} onChange={(v) => cField('cnpj', maskCNPJ(v))} error={errors.cnpj} placeholder="00.000.000/0000-00" required />
               <TextField label="Inscrição estadual" value={clinica.inscricaoEstadual} onChange={(v) => cField('inscricaoEstadual', onlyDigits(v))} error={errors.inscricaoEstadual} required />
-              <TextField label="Responsável técnico habilitado" value={clinica.responsavelTecnico} onChange={(v) => cField('responsavelTecnico', v)} error={errors.responsavelTecnico} placeholder="Nome completo e CRMV" required />
+              <TextField label="Nome completo do responsável técnico" value={clinica.responsavelTecnicoNome} onChange={(v) => cField('responsavelTecnicoNome', v)} error={errors.responsavelTecnicoNome} required />
+              <TextField label="CRMV do responsável técnico" value={clinica.responsavelTecnicoCrmv} onChange={(v) => cField('responsavelTecnicoCrmv', v)} error={errors.responsavelTecnicoCrmv} required />
               <TextField label="Telefone" value={maskTelefone(clinica.telefone)} onChange={(v) => cField('telefone', onlyDigits(v))} error={errors.telefone} placeholder="(00) 00000-0000" required />
               <FileField label="Alvará de funcionamento" files={alvara} onChange={(fl) => setAlvara(fl?.[0] ?? null)} error={errors.alvara} accept=".pdf,.jpg,.jpeg,.png" required />
             </SectionCard>
@@ -281,9 +315,39 @@ export default function CadastroPage() {
             </SectionCard>
 
             <SectionCard title="Estrutura e informações complementares">
-              <FileField label="Fotos da estrutura" files={fotos} onChange={setFotos} error={errors.fotos} accept="image/*" multiple required hint="Envie uma ou mais fotos." />
-              <TextField label="Planos de saúde aceitos" value={clinica.planosSaude} onChange={(v) => cField('planosSaude', v)} placeholder="Ex.: Petlove Saúde, Sasy, Vetpay..." />
-              <TextField label="Sistemas" value={clinica.sistemas} onChange={(v) => cField('sistemas', v)} placeholder="Sistema de gestão utilizado pela clínica" />
+              <FileField label="Logomarca da clínica (opcional)" files={logo} onChange={(fl) => setLogo(fl?.[0] ?? null)} accept="image/*" hint="Você também pode adicionar depois em Perfil." />
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-bold">Fotos da estrutura (opcional)</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={fotos.length >= 3}
+                  onChange={(e) => { adicionarFotos(e.target.files); e.target.value = ''; }}
+                  className="text-sm border rounded-lg px-3 py-2.5 file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs file:font-bold cursor-pointer border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                {errors.fotos && <span className="text-xs font-semibold text-danger">{errors.fotos}</span>}
+                <span className="text-xs text-gray-400">Envie até 3 fotos ({fotos.length}/3). Você também pode adicionar depois em Perfil.</span>
+                {fotos.length > 0 && (
+                  <div className="flex flex-col gap-2 mt-1">
+                    {fotos.map((f, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+                        <span className="text-xs font-semibold text-gray-600 truncate max-w-[140px] shrink-0">{f.file.name}</span>
+                        <input
+                          value={f.descricao}
+                          onChange={(e) => atualizarDescricaoFoto(i, e.target.value)}
+                          placeholder="Descrição do ambiente (opcional)"
+                          className="flex-1 px-2.5 py-1.5 rounded-md border border-gray-300 text-xs outline-none min-w-0"
+                        />
+                        <button type="button" onClick={() => removerFoto(i)} className="text-xs font-bold text-danger shrink-0">Remover</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <TextField label="Sistemas de gestão" value={clinica.sistemas} onChange={(v) => cField('sistemas', v)} placeholder="Ex.: Simples Vet, Vet Smart..." />
               <TextArea label="Peculiaridades / observações" value={clinica.observacoes} onChange={(v) => cField('observacoes', v)} />
             </SectionCard>
           </>
@@ -297,7 +361,8 @@ export default function CadastroPage() {
                 onSelect={(v) => { pField('funcao', v as Categoria); setComprovante(null); }}
               />
               <TextField label="Telefone" value={maskTelefone(prof.telefone)} onChange={(v) => pField('telefone', onlyDigits(v))} error={errors.telefoneProf} placeholder="(00) 00000-0000" required />
-              <TextField label="Data de nascimento" type="date" value={prof.dataNascimento} onChange={(v) => pField('dataNascimento', v)} error={errors.dataNascimentoProf} required />
+              <TextField label="Data de nascimento" type="date" value={prof.dataNascimento} onChange={(v) => pField('dataNascimento', v)} error={errors.dataNascimentoProf} min={DATA_NASCIMENTO_MIN} max={HOJE_ISO} required />
+              <FileField label="Foto de perfil (opcional)" files={fotoPerfil} onChange={(fl) => setFotoPerfil(fl?.[0] ?? null)} accept="image/*" hint="Você também pode adicionar depois em Perfil." />
             </SectionCard>
 
             <SectionCard title="Comprovação de função">
@@ -317,13 +382,13 @@ export default function CadastroPage() {
             </SectionCard>
 
             <SectionCard title="Documentos">
-              <FileField label="Foto do documento de identidade (frente e verso)" files={idDocs} onChange={setIdDocs} error={errors.idDocs} accept="image/*" multiple required hint="Selecione as duas fotos juntas: frente e verso." />
-              <FileField label="Currículo" files={curriculo} onChange={(fl) => setCurriculo(fl?.[0] ?? null)} error={errors.curriculo} accept=".pdf" required />
+              <FileField label="Foto do documento de identidade (frente)" files={idDocFrente} onChange={(fl) => setIdDocFrente(fl?.[0] ?? null)} error={errors.idDocFrente} accept="image/*" required />
+              <FileField label="Foto do documento de identidade (verso)" files={idDocVerso} onChange={(fl) => setIdDocVerso(fl?.[0] ?? null)} error={errors.idDocVerso} accept="image/*" required />
+              <FileField label="Currículo (opcional)" files={curriculo} onChange={(fl) => setCurriculo(fl?.[0] ?? null)} accept=".pdf" />
             </SectionCard>
 
             <SectionCard title="Atuação">
               <TextField label="Área de atuação" value={prof.areaAtuacao} onChange={(v) => pField('areaAtuacao', v)} error={errors.areaAtuacao} placeholder="Ex.: Clínica geral, cirurgia, dermatologia" required />
-              <TextField label="Plano de saúde" value={prof.planoSaude} onChange={(v) => pField('planoSaude', v)} placeholder="Opcional" />
               <TextField label="Regiões de atendimento" value={prof.regioes} onChange={(v) => pField('regioes', v)} error={errors.regioes} placeholder="Ex.: Pinheiros, Zona Oeste - SP" required />
               <TextArea label="Observações e demais informações" value={prof.observacoes} onChange={(v) => pField('observacoes', v)} />
             </SectionCard>
@@ -361,7 +426,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 function TextField({
-  label, value, onChange, error, placeholder, type = 'text', required, maxLength, select, options, onSelect, disabled,
+  label, value, onChange, error, placeholder, type = 'text', required, maxLength, min, max, select, options, onSelect, disabled,
 }: {
   label: string;
   value: string;
@@ -371,6 +436,8 @@ function TextField({
   type?: string;
   required?: boolean;
   maxLength?: number;
+  min?: string;
+  max?: string;
   select?: boolean;
   options?: string[];
   onSelect?: (v: string) => void;
@@ -390,6 +457,8 @@ function TextField({
           type={type}
           value={value}
           maxLength={maxLength}
+          min={min}
+          max={max}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           className={inputClass}
@@ -409,32 +478,3 @@ function TextArea({ label, value, onChange }: { label: string; value: string; on
   );
 }
 
-function FileField({
-  label, files, onChange, error, required, multiple, accept, hint,
-}: {
-  label: string;
-  files: FileList | File | null;
-  onChange: (files: FileList | null) => void;
-  error?: string;
-  required?: boolean;
-  multiple?: boolean;
-  accept?: string;
-  hint?: string;
-}) {
-  const names = files ? (files instanceof FileList ? Array.from(files).map((f) => f.name) : [files.name]) : [];
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-bold">{label}{required && <span className="text-danger"> *</span>}</span>
-      <input
-        type="file"
-        multiple={multiple}
-        accept={accept}
-        onChange={(e) => onChange(e.target.files)}
-        className={`text-sm border rounded-lg px-3 py-2.5 file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs file:font-bold cursor-pointer ${error ? 'border-danger' : 'border-gray-300'}`}
-      />
-      {names.length > 0 && <span className="text-xs text-gray-500">{names.join(', ')}</span>}
-      {hint && !error && <span className="text-xs text-gray-400">{hint}</span>}
-      {error && <span className="text-xs font-semibold text-danger">{error}</span>}
-    </label>
-  );
-}

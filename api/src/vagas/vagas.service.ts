@@ -25,7 +25,7 @@ export class VagasService {
     });
   }
 
-  async feed(filtros: { categoria?: Categoria; cidade?: string }) {
+  async feed(filtros: { categoria?: Categoria; cidade?: string; data?: string }) {
     const vagas = await this.prisma.vaga.findMany({
       where: {
         status: VagaStatus.ABERTA,
@@ -33,6 +33,7 @@ export class VagasService {
         cidade: filtros.cidade
           ? { contains: filtros.cidade, mode: 'insensitive' }
           : undefined,
+        data: filtros.data ? new Date(filtros.data) : undefined,
       },
       include: { clinica: { select: { id: true, nome: true } } },
       orderBy: { createdAt: 'desc' },

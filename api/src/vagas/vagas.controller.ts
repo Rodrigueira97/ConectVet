@@ -35,8 +35,9 @@ export class VagasController {
   feed(
     @Query('categoria') categoria?: Categoria,
     @Query('cidade') cidade?: string,
+    @Query('data') data?: string,
   ) {
-    return this.vagasService.feed({ categoria, cidade });
+    return this.vagasService.feed({ categoria, cidade, data });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

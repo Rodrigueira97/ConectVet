@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildEndereco, onlyDigits, statusBadge } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, ClockIcon, UserIcon } from '@/app/components/icons';
+import { HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
@@ -13,7 +13,7 @@ import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
-  getAvaliacoesPorCandidatura,
+  getAvaliacoesPorCandidatura, uploadArquivo,
 } from '@/lib/api';
 
 const POR_PAGINA = 10;
@@ -36,10 +36,11 @@ export default function ProfissionalPage() {
   const [perfil, setPerfil] = useState<Profissional | null>(null);
   const [perfilForm, setPerfilForm] = useState({ nome: '', telefone: '', dataNascimento: '', areaAtuacao: '', regioesAtendimento: '' });
   const [savingPerfil, setSavingPerfil] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
-  const [filtros, setFiltros] = useState({ busca: '', categoria: '', pertoDeMim: false });
+  const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
   const [pagina, setPagina] = useState(1);
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
@@ -68,6 +69,14 @@ export default function ProfissionalPage() {
       }
     })();
   }, [router]);
+
+  const jaCarregouFeed = useRef(false);
+  useEffect(() => {
+    if (!jaCarregouFeed.current) { jaCarregouFeed.current = true; return; }
+    getFeed({ cidade: filtros.cidade || undefined, data: filtros.data || undefined })
+      .then(setFeed)
+      .catch(() => {});
+  }, [filtros.cidade, filtros.data]);
 
   function hasApplied(vagaId: string) {
     return candidaturas.some((c) => c.vagaId === vagaId);
@@ -131,6 +140,22 @@ export default function ProfissionalPage() {
     }
   }
 
+  async function handleFotoChange(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setUploadingFoto(true);
+    setActionError('');
+    try {
+      const fotoUrl = await uploadArquivo(file);
+      const atualizado = await updateProfissionalMe({ fotoUrl });
+      setPerfil(atualizado);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível enviar a foto.');
+    } finally {
+      setUploadingFoto(false);
+    }
+  }
+
   if (loading || !perfil) {
     return <FeedPageSkeleton sidebarItems={3} showFilters />;
   }
@@ -138,7 +163,7 @@ export default function ProfissionalPage() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <Sidebar
-        accent="secondary"
+        accent="primary"
         subtitle="Profissional"
         items={[
           { key: 'home', label: 'Home', icon: <HomeIcon /> },
@@ -148,9 +173,11 @@ export default function ProfissionalPage() {
         activeKey={tab}
         onSelect={(key) => setTab(key as Tab)}
         footerName={perfil.nome || 'Profissional'}
+        footerSubtitle="Conta profissional"
+        footerPhotoUrl={perfil.fotoUrl}
       />
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-paws">
         {vagaSelecionada ? (() => {
           const compat = vagaSelecionada.categoria === perfil.funcao;
           const applied = hasApplied(vagaSelecionada.id);
@@ -159,10 +186,8 @@ export default function ProfissionalPage() {
             <VagaDetalheView
               vaga={{ clinica: vagaSelecionada.clinica?.nome, categoria: CATEGORIA_LABEL[vagaSelecionada.categoria], local, data: formatDataBR(vagaSelecionada.data), horario: `${vagaSelecionada.horaInicio} - ${vagaSelecionada.horaFim}`, valor: vagaSelecionada.valor, descricao: vagaSelecionada.descricao || undefined }}
               onBack={() => setVagaSelecionada(null)}
-              accentClass="text-secondary"
               actionLabel={applied ? 'Candidatura enviada' : compat ? 'Candidatar-se' : 'Perfil incompatível'}
               actionDisabled={applied || !compat || candidatandoId === vagaSelecionada.id}
-              actionButtonClass="bg-secondary text-white"
               onAction={() => candidatar(vagaSelecionada)}
             />
           );
@@ -176,16 +201,49 @@ export default function ProfissionalPage() {
 
         {tab === 'home' && (
           <div className="max-w-3xl mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-1">Vagas disponíveis</h1>
-            <p className="text-sm text-gray-500 mb-5">Plantões publicados por clínicas parceiras</p>
-            <input value={filtros.busca} onChange={(e) => atualizarFiltro({ busca: e.target.value })} placeholder="Buscar por clínica, categoria ou local..." className="w-full px-3.5 py-3 rounded-lg border border-gray-300 text-sm mb-3" />
-            <div className="flex gap-3 flex-wrap mb-4">
-              <select value={filtros.categoria} onChange={(e) => atualizarFiltro({ categoria: e.target.value })} className="px-3 py-2 rounded-lg border border-gray-300 text-sm">
-                <option value="">Todas categorias</option>
-                {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
-              </select>
+            <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas disponíveis</h1>
+            <p className="text-sm text-white/85 mb-5">Plantões publicados por clínicas parceiras</p>
+            <div className="relative mb-3">
+              <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                value={filtros.busca}
+                onChange={(e) => atualizarFiltro({ busca: e.target.value })}
+                placeholder="Buscar por clínica, categoria ou local..."
+                className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-gray-300 text-sm bg-white"
+              />
+            </div>
+            <div className="flex gap-2.5 flex-wrap items-center mb-4">
+              <div className="relative">
+                <PinIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  value={filtros.cidade}
+                  onChange={(e) => atualizarFiltro({ cidade: e.target.value })}
+                  placeholder="Cidade"
+                  className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white w-32"
+                />
+              </div>
+              <div className="relative">
+                <CalendarIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="date"
+                  value={filtros.data}
+                  onChange={(e) => atualizarFiltro({ data: e.target.value })}
+                  className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white"
+                />
+              </div>
+              <div className="relative">
+                <FilterIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <select
+                  value={filtros.categoria}
+                  onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
+                  className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white appearance-none"
+                >
+                  <option value="">Todas categorias</option>
+                  {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
+                </select>
+              </div>
               {regioesTokens.length > 0 && (
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <label className="flex items-center gap-2 text-sm font-semibold text-white/90 ml-1">
                   <input type="checkbox" checked={filtros.pertoDeMim} onChange={(e) => atualizarFiltro({ pertoDeMim: e.target.checked })} />
                   Somente perto de mim ({perfil.regioesAtendimento})
                 </label>
@@ -201,7 +259,7 @@ export default function ProfissionalPage() {
                   <div
                     key={v.id}
                     onClick={() => setVagaSelecionada(v)}
-                    className="bg-white border border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-secondary/40 transition-colors duration-150"
+                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-secondary/40 transition-colors duration-150"
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div>
@@ -212,14 +270,14 @@ export default function ProfissionalPage() {
                         <div className="text-lg font-extrabold mt-1">{v.clinica?.nome}</div>
                         <div className="mt-1"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
                       </div>
-                      <div className="bg-green-100 text-green-700 font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
+                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
                     </div>
                     <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
-                      <div>LOCAL {local}</div><div>DATA {formatDataBR(v.data)}</div><div>HORÁRIO {v.horaInicio} - {v.horaFim}</div>
+                      <div>Local <b className="font-bold text-gray-700">{local}</b></div><div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div><div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
                     </div>
                     <div className="flex justify-end mt-4">
                       <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-secondary text-white'}`}>
+                        className={`px-4 py-2 rounded-lg text-sm font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
                         {applied ? 'Candidatura enviada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
                       </button>
                     </div>
@@ -233,15 +291,15 @@ export default function ProfissionalPage() {
                 <button
                   disabled={paginaAtual === 1}
                   onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold disabled:opacity-40"
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-bold disabled:opacity-40"
                 >
                   ← Anterior
                 </button>
-                <span className="text-sm text-gray-500">Página {paginaAtual} de {totalPaginas}</span>
+                <span className="text-sm text-white/85 font-semibold">Página {paginaAtual} de {totalPaginas}</span>
                 <button
                   disabled={paginaAtual === totalPaginas}
                   onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold disabled:opacity-40"
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-bold disabled:opacity-40"
                 >
                   Próxima →
                 </button>
@@ -252,18 +310,18 @@ export default function ProfissionalPage() {
 
         {tab === 'historico' && (
           <div className="max-w-2xl mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-1">Minhas candidaturas</h1>
-            <p className="text-sm text-gray-500 mb-6">Acompanhe o status das vagas que você se candidatou</p>
+            <h1 className="text-2xl font-extrabold mb-1 text-white">Minhas candidaturas</h1>
+            <p className="text-sm text-white/85 mb-6">Acompanhe o status das vagas que você se candidatou</p>
             <div className="flex flex-col gap-3">
               {candidaturas.map((c) => {
                 const badge = statusBadge(c.status.toLowerCase());
                 return (
-                  <div key={c.id} className="bg-white border border-gray-200 rounded-2xl p-5">
+                  <div key={c.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
                     <div className="flex justify-between items-center gap-3">
                       <div>
                         <div className="text-xs font-bold text-primary uppercase">{c.vaga && CATEGORIA_LABEL[c.vaga.categoria]}</div>
                         <div className="font-extrabold mt-1">{c.vaga?.clinica?.nome}</div>
-                        <div className="text-sm text-gray-500 mt-1">DATA {c.vaga && formatDataBR(c.vaga.data)} · R$ {c.vaga?.valor}</div>
+                        <div className="text-sm text-gray-500 mt-1">Data <b className="font-bold text-gray-700">{c.vaga && formatDataBR(c.vaga.data)}</b> · <b className="font-bold text-gray-700">R$ {c.vaga?.valor}</b></div>
                       </div>
                       <div className={badge.className}>{badge.label}</div>
                     </div>
@@ -274,7 +332,7 @@ export default function ProfissionalPage() {
                         labelForm="Avaliar clínica"
                         labelFeita="Avaliação da clínica"
                         labelOutra={`${c.vaga?.clinica?.nome || 'Clínica'} avaliou você`}
-                        corBotao="bg-secondary"
+                        corBotao="bg-primary"
                         avaliacoesIniciais={avaliacoesPorCandidatura[c.id] || []}
                       />
                     )}
@@ -288,8 +346,21 @@ export default function ProfissionalPage() {
 
         {tab === 'perfil' && (
           <div className="max-w-2xl mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-6">Perfil</h1>
-            <div className="bg-white border border-gray-200 rounded-2xl p-7 flex flex-col gap-4">
+            <h1 className="text-2xl font-extrabold mb-6 text-white">Perfil</h1>
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 flex flex-col gap-4">
+              <div className="flex items-center gap-4 pb-2">
+                <div className="w-20 h-20 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden shrink-0">
+                  {perfil.fotoUrl ? (
+                    <img src={perfil.fotoUrl} alt={perfil.nome} className="w-full h-full object-cover" />
+                  ) : (
+                    <UserIcon className="w-9 h-9" />
+                  )}
+                </div>
+                <label className="cursor-pointer px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                  {uploadingFoto ? 'Enviando...' : 'Trocar foto'}
+                  <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto} onChange={(e) => handleFotoChange(e.target.files)} />
+                </label>
+              </div>
               <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Nome</span>
                 <input value={perfilForm.nome} onChange={(e) => setPerfilForm((f) => ({ ...f, nome: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" /></label>
               <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">CPF/CNPJ</span>
@@ -308,13 +379,15 @@ export default function ProfissionalPage() {
                   type="date"
                   value={perfilForm.dataNascimento}
                   onChange={(e) => setPerfilForm((f) => ({ ...f, dataNascimento: e.target.value }))}
+                  min="1900-01-01"
+                  max={new Date().toISOString().slice(0, 10)}
                   className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
                 /></label>
               <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Área de atuação</span>
                 <input value={perfilForm.areaAtuacao} onChange={(e) => setPerfilForm((f) => ({ ...f, areaAtuacao: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" /></label>
               <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Regiões de atendimento</span>
                 <input value={perfilForm.regioesAtendimento} onChange={(e) => setPerfilForm((f) => ({ ...f, regioesAtendimento: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" /></label>
-              <button onClick={salvarPerfil} disabled={savingPerfil} className="self-start px-5 py-2.5 rounded-lg bg-secondary text-white text-sm font-bold disabled:opacity-60">
+              <button onClick={salvarPerfil} disabled={savingPerfil} className="self-start px-5 py-2.5 rounded-lg bg-ink text-white text-sm font-bold shadow-sm disabled:opacity-60">
                 {savingPerfil ? 'Salvando...' : 'Salvar alterações'}
               </button>
             </div>

@@ -178,13 +178,19 @@ export type Vaga = {
   pagamento?: Pagamento | null;
 };
 
+export type FotoEstrutura = {
+  url: string;
+  descricao?: string | null;
+};
+
 export type Clinica = {
   id: string;
   userId: string;
   nome: string;
   cnpj: string;
   inscricaoEstadual: string;
-  responsavelTecnico: string;
+  responsavelTecnicoNome?: string | null;
+  responsavelTecnicoCrmv?: string | null;
   telefone?: string | null;
   cep?: string | null;
   estado: string;
@@ -194,7 +200,8 @@ export type Clinica = {
   numero: string;
   complemento?: string | null;
   alvaraUrl: string;
-  fotosEstrutura: string[];
+  fotosEstrutura: FotoEstrutura[];
+  logoUrl?: string | null;
   planosSaude?: string | null;
   sistemas?: string | null;
   observacoes?: string | null;
@@ -211,10 +218,9 @@ export type Profissional = {
   tipoComprovacao: string;
   comprovanteUrl: string;
   idDocUrls: string[];
-  crmvDocUrls: string[];
-  curriculoUrl: string;
+  curriculoUrl?: string | null;
+  fotoUrl?: string | null;
   areaAtuacao: string;
-  planoSaude?: string | null;
   regioesAtendimento: string;
   observacoes?: string | null;
 };
@@ -273,10 +279,11 @@ export function updateProfissionalMe(payload: Partial<Profissional>) {
 
 // ---------- Vagas ----------
 
-export function getFeed(filtros?: { categoria?: Categoria; cidade?: string }) {
+export function getFeed(filtros?: { categoria?: Categoria; cidade?: string; data?: string }) {
   const params = new URLSearchParams();
   if (filtros?.categoria) params.set('categoria', filtros.categoria);
   if (filtros?.cidade) params.set('cidade', filtros.cidade);
+  if (filtros?.data) params.set('data', filtros.data);
   const qs = params.toString();
   return get<Vaga[]>(`/vagas${qs ? `?${qs}` : ''}`);
 }

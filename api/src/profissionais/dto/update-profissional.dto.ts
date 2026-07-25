@@ -19,13 +19,13 @@ export class UpdateProfissionalDto {
 
   @IsOptional()
   @IsString()
-  planoSaude?: string;
-
-  @IsOptional()
-  @IsString()
   regioesAtendimento?: string;
 
   @IsOptional()
   @IsString()
   observacoes?: string;
+
+  @IsOptional()
+  @IsString()
+  fotoUrl?: string;
 }

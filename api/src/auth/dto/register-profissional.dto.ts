@@ -41,15 +41,16 @@ export class RegisterProfissionalDto {
   @IsString({ each: true })
   idDocUrls: string[];
 
+  @IsOptional()
   @IsString()
-  curriculoUrl: string;
-
-  @IsString()
-  areaAtuacao: string;
+  curriculoUrl?: string;
 
   @IsOptional()
   @IsString()
-  planoSaude?: string;
+  fotoUrl?: string;
+
+  @IsString()
+  areaAtuacao: string;
 
   @IsString()
   regioesAtendimento: string;

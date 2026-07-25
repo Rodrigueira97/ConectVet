@@ -64,10 +64,11 @@ model Clinica {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  nome               String
-  cnpj               String @unique
-  inscricaoEstadual  String
-  responsavelTecnico String
+  nome                   String
+  cnpj                   String @unique
+  inscricaoEstadual      String
+  responsavelTecnicoNome String?
+  responsavelTecnicoCrmv String?
 
   telefone String?
 
@@ -80,7 +81,8 @@ model Clinica {
   complemento String?
 
   alvaraUrl      String
-  fotosEstrutura String[]
+  fotosEstrutura Json    @default("[]")
+  logoUrl        String?
   planosSaude    String?
   sistemas       String?
   observacoes    String?
@@ -108,10 +110,10 @@ model Profissional {
   tipoComprovacao String
   comprovanteUrl  String
   idDocUrls       String[]
-  curriculoUrl    String
+  curriculoUrl    String?
+  fotoUrl         String?
 
   areaAtuacao        String
-  planoSaude         String?
   regioesAtendimento String
   observacoes        String?
 
