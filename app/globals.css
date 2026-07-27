@@ -28,3 +28,19 @@ a:hover { color: #00847e; }
   background-repeat: repeat;
   background-size: 280px 280px;
 }
+
+/* Tela de login: acima de 1600px o painel de marca fica alto demais e o conteúdo
+   (fixo no topo) sobra vazio até o rodapé — recentraliza o bloco logo+texto
+   verticalmente, mantendo o rodapé grudado embaixo. */
+@media (min-width: 1600px) {
+  .login-brand-inner { display: grid; grid-template-rows: 1fr auto; gap: 0; }
+  .login-copy-group { align-self: center; }
+}
+
+/* Variante mais sutil, para banners compactos (ex.: topo do cadastro) */
+.bg-paws-header {
+  background-color: #00a19a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg transform='translate(14 20) rotate(-18) scale(0.5)' fill='%23ffffff' fill-opacity='0.07'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3Cg transform='translate(120 110) rotate(24) scale(0.4)' fill='%23ffffff' fill-opacity='0.06'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 220px 220px;
+}

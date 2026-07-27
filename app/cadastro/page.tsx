@@ -1,11 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CATEGORIAS, ESTADOS_CIDADES, onlyDigits } from '@/lib/mockData';
 import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefone } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
 import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE } from '@/lib/api';
 import { FileField } from '@/app/components/FileField';
+import { BuildingIcon, CheckIcon, CloseIcon, PlusIcon, UserIcon } from '@/app/components/icons';
 
 type Role = 'clinica' | 'profissional';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -56,15 +57,56 @@ const COMPROVACAO_POR_FUNCAO: Record<Categoria, { label: string; accept: string;
   },
 };
 
+type Secao = { id: string; label: string };
+
+const SECOES_CLINICA: Secao[] = [
+  { id: 'acesso', label: 'Acesso' },
+  { id: 'dados-clinica', label: 'Dados da clínica' },
+  { id: 'endereco', label: 'Endereço' },
+  { id: 'estrutura', label: 'Estrutura' },
+];
+
+const SECOES_PROFISSIONAL: Secao[] = [
+  { id: 'acesso', label: 'Acesso' },
+  { id: 'dados-profissional', label: 'Dados do contratado' },
+  { id: 'comprovacao', label: 'Comprovação' },
+  { id: 'documentos', label: 'Documentos' },
+  { id: 'atuacao', label: 'Atuação' },
+];
+
+// Associa cada chave de erro de validate() à seção correspondente, pra calcular
+// o progresso sem duplicar a lógica de obrigatoriedade.
+const FIELD_SECTION_MAP: Record<string, string> = {
+  email: 'acesso', senha: 'acesso',
+  nome: 'dados-clinica', cnpj: 'dados-clinica', inscricaoEstadual: 'dados-clinica',
+  responsavelTecnicoNome: 'dados-clinica', responsavelTecnicoCrmv: 'dados-clinica',
+  telefone: 'dados-clinica', alvara: 'dados-clinica',
+  estado: 'endereco', cidade: 'endereco', rua: 'endereco', numero: 'endereco',
+  nomeProf: 'dados-profissional', doc: 'dados-profissional', funcao: 'dados-profissional',
+  telefoneProf: 'dados-profissional', dataNascimentoProf: 'dados-profissional',
+  comprovante: 'comprovacao',
+  idDocFrente: 'documentos', idDocVerso: 'documentos',
+  areaAtuacao: 'atuacao', regioes: 'atuacao',
+};
+
 export default function CadastroPage() {
   const router = useRouter();
   const [role, setRole] = useState<Role>('clinica');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
 
+  const secoesAtivas = role === 'clinica' ? SECOES_CLINICA : SECOES_PROFISSIONAL;
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [currentSection, setCurrentSection] = useState<string>('acesso');
+
+  function handleRoleChange(novoRole: Role) {
+    setRole(novoRole);
+    setCurrentSection((novoRole === 'clinica' ? SECOES_CLINICA : SECOES_PROFISSIONAL)[0].id);
+  }
+
   const [clinica, setClinica] = useState(initialClinica);
   const [alvara, setAlvara] = useState<File | null>(null);
-  const [fotos, setFotos] = useState<{ file: File; descricao: string }[]>([]);
+  const [fotos, setFotos] = useState<{ file: File; url: string; descricao: string }[]>([]);
   const [logo, setLogo] = useState<File | null>(null);
 
   const [prof, setProf] = useState(initialProf);
@@ -115,17 +157,44 @@ export default function CadastroPage() {
   function adicionarFotos(files: FileList | null) {
     if (!files || !files.length) return;
     const vagas = 3 - fotos.length;
-    const novas = Array.from(files).slice(0, vagas).map((file) => ({ file, descricao: '' }));
+    const novas = Array.from(files).slice(0, vagas).map((file) => ({ file, url: URL.createObjectURL(file), descricao: '' }));
     setFotos((f) => [...f, ...novas]);
   }
 
   function removerFoto(index: number) {
-    setFotos((f) => f.filter((_, i) => i !== index));
+    setFotos((f) => {
+      URL.revokeObjectURL(f[index].url);
+      return f.filter((_, i) => i !== index);
+    });
   }
 
   function atualizarDescricaoFoto(index: number, descricao: string) {
     setFotos((f) => f.map((item, i) => (i === index ? { ...item, descricao } : item)));
   }
+
+  const fotosRef = useRef(fotos);
+  useEffect(() => { fotosRef.current = fotos; }, [fotos]);
+  useEffect(() => () => { fotosRef.current.forEach((f) => URL.revokeObjectURL(f.url)); }, []);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = entry.target.getAttribute('data-secao-id');
+            if (id) setCurrentSection(id);
+          }
+        });
+      },
+      { rootMargin: '-20% 0px -70% 0px' },
+    );
+    secoesAtivas.forEach((s) => {
+      const el = sectionRefs.current[s.id];
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
 
   const comprovacao = prof.funcao ? COMPROVACAO_POR_FUNCAO[prof.funcao] : null;
 
@@ -232,52 +301,117 @@ export default function CadastroPage() {
     }
   }
 
+  const liveErrors = validate();
+  const secaoStats = secoesAtivas.map((s) => {
+    const total = Object.values(FIELD_SECTION_MAP).filter((id) => id === s.id).length;
+    // "comprovante" só vira erro depois que uma função é escolhida (validate() é condicional),
+    // então aqui é calculado à parte pra não marcar a seção como concluída antes da hora.
+    const filled = s.id === 'comprovacao'
+      ? (comprovante ? 1 : 0)
+      : total - Object.keys(liveErrors).filter((k) => FIELD_SECTION_MAP[k] === s.id).length;
+    return { ...s, total, filled };
+  });
+  const totalGeral = secaoStats.reduce((sum, s) => sum + s.total, 0);
+  const filledGeral = secaoStats.reduce((sum, s) => sum + s.filled, 0);
+  const pctGeral = totalGeral ? Math.round((filledGeral / totalGeral) * 100) : 0;
+  const secaoAtualLabel = secaoStats.find((s) => s.id === currentSection)?.label ?? '';
+
+  function scrollToSecao(id: string) {
+    sectionRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-primary text-white px-6 py-6 md:px-10 md:py-8">
-        <div className="max-w-2xl mx-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="bg-primary text-white px-6 py-6 md:px-10 md:py-8 bg-paws-header">
+        <div className="max-w-5xl mx-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-lg font-extrabold">ConectVet</div>
+            <a href="/" className="text-xl font-extrabold">
+              <span className="text-ink">conect</span> <span className="text-[#003531]">vet</span>
+            </a>
             <div className="text-sm text-white/85 mt-0.5">Crie sua conta para começar a usar a plataforma</div>
           </div>
           <a href="/" className="text-sm font-bold text-white/90 whitespace-nowrap">Já tem conta? Entrar</a>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto p-6 md:p-8">
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setRole('clinica')}
-            className={`flex-1 py-2.5 rounded-lg border text-sm font-bold ${role === 'clinica' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-300'}`}
-          >
-            Sou Clínica
-          </button>
-          <button
-            onClick={() => setRole('profissional')}
-            className={`flex-1 py-2.5 rounded-lg border text-sm font-bold ${role === 'profissional' ? 'bg-secondary text-white border-secondary' : 'bg-white text-gray-600 border-gray-300'}`}
-          >
-            Sou Profissional
-          </button>
+      <div className="max-w-5xl mx-auto px-4 md:px-8">
+        <div className="flex mt-5 mb-2">
+          <div className="inline-flex p-1 gap-1 bg-gray-100 border border-gray-200 rounded-xl">
+            <button
+              onClick={() => handleRoleChange('clinica')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${role === 'clinica' ? 'bg-white text-primaryDeep shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <BuildingIcon className="w-4 h-4" /> Sou Clínica
+            </button>
+            <button
+              onClick={() => handleRoleChange('profissional')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${role === 'profissional' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <UserIcon className="w-4 h-4" /> Sou Profissional
+            </button>
+          </div>
         </div>
 
-        <SectionCard title="Dados de acesso">
+        <div className="md:hidden sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pt-3 pb-3">
+          <div className="flex items-center justify-between text-xs font-extrabold text-ink mb-1.5">
+            <span>{secaoAtualLabel}</span>
+            <span className="text-gray-400 font-bold tabular-nums">{filledGeral}/{totalGeral}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pctGeral}%` }} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-7 py-6 md:py-8 items-start">
+          <nav className="hidden md:flex md:flex-col md:gap-0.5 md:sticky md:top-6 bg-white border border-gray-200 rounded-2xl p-2.5">
+            <div className="px-2.5 pt-1.5 pb-1 text-[11px] font-extrabold text-gray-400 uppercase tracking-wide">Progresso</div>
+            {secaoStats.map((s) => {
+              const done = s.total > 0 && s.filled === s.total;
+              const atual = currentSection === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => scrollToSecao(s.id)}
+                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-bold text-left ${atual ? 'bg-primaryTint text-primaryDeep' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  <span className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center shrink-0 ${done ? 'bg-primary border-primary text-white' : atual ? 'border-primaryDeep' : 'border-gray-300'}`}>
+                    {done && <CheckIcon className="w-2.5 h-2.5" />}
+                  </span>
+                  {s.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="min-w-0 flex flex-col">
+
+        <SectionCard id="acesso" sectionRef={(el) => { sectionRefs.current.acesso = el; }} title="Dados de acesso">
           <TextField label="E-mail" type="email" value={email} onChange={setEmail} error={errors.email} required />
           <TextField label="Senha" type="password" value={senha} onChange={setSenha} error={errors.senha} required />
         </SectionCard>
 
         {role === 'clinica' ? (
           <>
-            <SectionCard title="Dados da clínica">
-              <TextField label="Nome / Razão social" value={clinica.nome} onChange={(v) => cField('nome', v)} error={errors.nome} required />
-              <TextField label="CNPJ" value={clinica.cnpj} onChange={(v) => cField('cnpj', maskCNPJ(v))} error={errors.cnpj} placeholder="00.000.000/0000-00" required />
-              <TextField label="Inscrição estadual" value={clinica.inscricaoEstadual} onChange={(v) => cField('inscricaoEstadual', onlyDigits(v))} error={errors.inscricaoEstadual} required />
+            <SectionCard id="dados-clinica" sectionRef={(el) => { sectionRefs.current['dados-clinica'] = el; }} title="Dados da clínica">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="self-center sm:self-start">
+                  <AvatarPickerField label="Logo" file={logo} onChange={setLogo} shape="square" icon={<BuildingIcon className="w-8 h-8" />} />
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-4">
+                  <TextField label="Nome / Razão social" value={clinica.nome} onChange={(v) => cField('nome', v)} error={errors.nome} required />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <TextField label="CNPJ" value={clinica.cnpj} onChange={(v) => cField('cnpj', maskCNPJ(v))} error={errors.cnpj} placeholder="00.000.000/0000-00" required />
+                    <TextField label="Inscrição estadual" value={clinica.inscricaoEstadual} onChange={(v) => cField('inscricaoEstadual', onlyDigits(v))} error={errors.inscricaoEstadual} required />
+                  </div>
+                </div>
+              </div>
               <TextField label="Nome completo do responsável técnico" value={clinica.responsavelTecnicoNome} onChange={(v) => cField('responsavelTecnicoNome', v)} error={errors.responsavelTecnicoNome} required />
               <TextField label="CRMV do responsável técnico" value={clinica.responsavelTecnicoCrmv} onChange={(v) => cField('responsavelTecnicoCrmv', v)} error={errors.responsavelTecnicoCrmv} required />
               <TextField label="Telefone" value={maskTelefone(clinica.telefone)} onChange={(v) => cField('telefone', onlyDigits(v))} error={errors.telefone} placeholder="(00) 00000-0000" required />
               <FileField label="Alvará de funcionamento" files={alvara} onChange={(fl) => setAlvara(fl?.[0] ?? null)} error={errors.alvara} accept=".pdf,.jpg,.jpeg,.png" required />
             </SectionCard>
 
-            <SectionCard title="Endereço">
+            <SectionCard id="endereco" sectionRef={(el) => { sectionRefs.current.endereco = el; }} title="Endereço">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="flex flex-col gap-1.5 sm:col-span-2">
                   <span className="text-sm font-bold">CEP</span>
@@ -314,37 +448,41 @@ export default function CadastroPage() {
               </div>
             </SectionCard>
 
-            <SectionCard title="Estrutura e informações complementares">
-              <FileField label="Logomarca da clínica (opcional)" files={logo} onChange={(fl) => setLogo(fl?.[0] ?? null)} accept="image/*" hint="Você também pode adicionar depois em Perfil." />
-
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">Fotos da estrutura (opcional)</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  disabled={fotos.length >= 3}
-                  onChange={(e) => { adicionarFotos(e.target.files); e.target.value = ''; }}
-                  className="text-sm border rounded-lg px-3 py-2.5 file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs file:font-bold cursor-pointer border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
+            <SectionCard id="estrutura" sectionRef={(el) => { sectionRefs.current.estrutura = el; }} title="Estrutura e informações complementares">
+              <div>
+                <span className="text-sm font-bold">Fotos da estrutura <span className="text-gray-400 font-semibold text-xs">Opcional</span></span>
+                <div className="text-xs text-gray-400 mt-0.5">Até 3 fotos ({fotos.length}/3). Você também pode adicionar depois em Perfil.</div>
                 {errors.fotos && <span className="text-xs font-semibold text-danger">{errors.fotos}</span>}
-                <span className="text-xs text-gray-400">Envie até 3 fotos ({fotos.length}/3). Você também pode adicionar depois em Perfil.</span>
-                {fotos.length > 0 && (
-                  <div className="flex flex-col gap-2 mt-1">
-                    {fotos.map((f, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2.5">
-                        <span className="text-xs font-semibold text-gray-600 truncate max-w-[140px] shrink-0">{f.file.name}</span>
-                        <input
-                          value={f.descricao}
-                          onChange={(e) => atualizarDescricaoFoto(i, e.target.value)}
-                          placeholder="Descrição do ambiente (opcional)"
-                          className="flex-1 px-2.5 py-1.5 rounded-md border border-gray-300 text-xs outline-none min-w-0"
-                        />
-                        <button type="button" onClick={() => removerFoto(i)} className="text-xs font-bold text-danger shrink-0">Remover</button>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+                  {fotos.map((f, i) => (
+                    <div key={f.url} className="flex flex-col gap-1.5">
+                      <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                        <img src={f.url} alt={f.descricao || 'Foto da estrutura'} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removerFoto(i)}
+                          aria-label="Remover foto"
+                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                        >
+                          <CloseIcon className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <input
+                        value={f.descricao}
+                        onChange={(e) => atualizarDescricaoFoto(i, e.target.value)}
+                        placeholder="Descrição (opcional)"
+                        className="px-2 py-1 rounded-md border border-gray-200 text-xs outline-none"
+                      />
+                    </div>
+                  ))}
+                  {fotos.length < 3 && (
+                    <label className="cursor-pointer aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-400 hover:bg-gray-50 hover:text-gray-500">
+                      <PlusIcon className="w-5 h-5" />
+                      <span className="text-xs font-bold">Adicionar</span>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { adicionarFotos(e.target.files); e.target.value = ''; }} />
+                    </label>
+                  )}
+                </div>
               </div>
 
               <TextField label="Sistemas de gestão" value={clinica.sistemas} onChange={(v) => cField('sistemas', v)} placeholder="Ex.: Simples Vet, Vet Smart..." />
@@ -353,19 +491,27 @@ export default function CadastroPage() {
           </>
         ) : (
           <>
-            <SectionCard title="Dados do contratado">
-              <TextField label="Nome" value={prof.nome} onChange={(v) => pField('nome', v)} error={errors.nomeProf} required />
-              <TextField label="CNPJ/CPF" value={prof.doc} onChange={(v) => pField('doc', maskCpfCnpj(v))} error={errors.doc} placeholder="000.000.000-00" required />
-              <TextField label="Escolha da função" value={prof.funcao} onChange={() => {}} error={errors.funcao} required select
-                options={CATEGORIAS}
-                onSelect={(v) => { pField('funcao', v as Categoria); setComprovante(null); }}
-              />
+            <SectionCard id="dados-profissional" sectionRef={(el) => { sectionRefs.current['dados-profissional'] = el; }} title="Dados do contratado">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="self-center sm:self-start">
+                  <AvatarPickerField label="Foto" file={fotoPerfil} onChange={setFotoPerfil} shape="circle" icon={<UserIcon className="w-8 h-8" />} />
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-4">
+                  <TextField label="Nome" value={prof.nome} onChange={(v) => pField('nome', v)} error={errors.nomeProf} required />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <TextField label="CNPJ/CPF" value={prof.doc} onChange={(v) => pField('doc', maskCpfCnpj(v))} error={errors.doc} placeholder="000.000.000-00" required />
+                    <TextField label="Escolha da função" value={prof.funcao} onChange={() => {}} error={errors.funcao} required select
+                      options={CATEGORIAS}
+                      onSelect={(v) => { pField('funcao', v as Categoria); setComprovante(null); }}
+                    />
+                  </div>
+                </div>
+              </div>
               <TextField label="Telefone" value={maskTelefone(prof.telefone)} onChange={(v) => pField('telefone', onlyDigits(v))} error={errors.telefoneProf} placeholder="(00) 00000-0000" required />
               <TextField label="Data de nascimento" type="date" value={prof.dataNascimento} onChange={(v) => pField('dataNascimento', v)} error={errors.dataNascimentoProf} min={DATA_NASCIMENTO_MIN} max={HOJE_ISO} required />
-              <FileField label="Foto de perfil (opcional)" files={fotoPerfil} onChange={(fl) => setFotoPerfil(fl?.[0] ?? null)} accept="image/*" hint="Você também pode adicionar depois em Perfil." />
             </SectionCard>
 
-            <SectionCard title="Comprovação de função">
+            <SectionCard id="comprovacao" sectionRef={(el) => { sectionRefs.current.comprovacao = el; }} title="Comprovação de função">
               {comprovacao ? (
                 <FileField
                   label={comprovacao.label}
@@ -381,13 +527,15 @@ export default function CadastroPage() {
               )}
             </SectionCard>
 
-            <SectionCard title="Documentos">
-              <FileField label="Foto do documento de identidade (frente)" files={idDocFrente} onChange={(fl) => setIdDocFrente(fl?.[0] ?? null)} error={errors.idDocFrente} accept="image/*" required />
-              <FileField label="Foto do documento de identidade (verso)" files={idDocVerso} onChange={(fl) => setIdDocVerso(fl?.[0] ?? null)} error={errors.idDocVerso} accept="image/*" required />
+            <SectionCard id="documentos" sectionRef={(el) => { sectionRefs.current.documentos = el; }} title="Documentos">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FileField label="Foto do documento de identidade (frente)" files={idDocFrente} onChange={(fl) => setIdDocFrente(fl?.[0] ?? null)} error={errors.idDocFrente} accept="image/*" required />
+                <FileField label="Foto do documento de identidade (verso)" files={idDocVerso} onChange={(fl) => setIdDocVerso(fl?.[0] ?? null)} error={errors.idDocVerso} accept="image/*" required />
+              </div>
               <FileField label="Currículo (opcional)" files={curriculo} onChange={(fl) => setCurriculo(fl?.[0] ?? null)} accept=".pdf" />
             </SectionCard>
 
-            <SectionCard title="Atuação">
+            <SectionCard id="atuacao" sectionRef={(el) => { sectionRefs.current.atuacao = el; }} title="Atuação">
               <TextField label="Área de atuação" value={prof.areaAtuacao} onChange={(v) => pField('areaAtuacao', v)} error={errors.areaAtuacao} placeholder="Ex.: Clínica geral, cirurgia, dermatologia" required />
               <TextField label="Regiões de atendimento" value={prof.regioes} onChange={(v) => pField('regioes', v)} error={errors.regioes} placeholder="Ex.: Pinheiros, Zona Oeste - SP" required />
               <TextArea label="Observações e demais informações" value={prof.observacoes} onChange={(v) => pField('observacoes', v)} />
@@ -400,15 +548,17 @@ export default function CadastroPage() {
         )}
         {apiError && <div className="text-sm font-semibold text-danger mb-3">{apiError}</div>}
 
-        <button
-          onClick={cadastrar}
-          disabled={submitting}
-          className="w-full py-3.5 rounded-lg bg-primary hover:bg-primaryDark text-white font-bold text-sm disabled:opacity-60"
-        >
-          {submitting ? 'Enviando...' : 'Criar conta'}
-        </button>
+            <button
+              onClick={cadastrar}
+              disabled={submitting}
+              className="w-full py-3.5 rounded-lg bg-primary hover:bg-primaryDark text-white font-bold text-sm disabled:opacity-60"
+            >
+              {submitting ? 'Enviando...' : 'Criar conta'}
+            </button>
+          </div>
+        </div>
 
-        <div className="text-center mt-5 mb-8 text-sm text-gray-500">
+        <div className="text-center mt-1 mb-8 text-sm text-gray-500">
           Já tem conta? <a href="/" className="font-bold">Entrar</a>
         </div>
       </div>
@@ -416,9 +566,21 @@ export default function CadastroPage() {
   );
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({
+  id, sectionRef, title, children,
+}: {
+  id?: string;
+  sectionRef?: (el: HTMLDivElement | null) => void;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-7 flex flex-col gap-4 mb-5">
+    <div
+      id={id}
+      data-secao-id={id}
+      ref={sectionRef}
+      className="bg-white border border-gray-200 rounded-2xl p-6 md:p-7 flex flex-col gap-4 mb-5 scroll-mt-6"
+    >
       <div className="text-sm font-extrabold text-gray-800">{title}</div>
       {children}
     </div>
@@ -475,6 +637,38 @@ function TextArea({ label, value, onChange }: { label: string; value: string; on
       <span className="text-sm font-bold">{label}</span>
       <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm outline-none" />
     </label>
+  );
+}
+
+function AvatarPickerField({
+  label, file, onChange, shape, icon,
+}: {
+  label: string;
+  file: File | null;
+  onChange: (file: File | null) => void;
+  shape: 'circle' | 'square';
+  icon: React.ReactNode;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) { setPreviewUrl(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const shapeClass = shape === 'circle' ? 'rounded-full' : 'rounded-2xl';
+  return (
+    <div className="flex items-center gap-4">
+      <div className={`w-20 h-20 ${shapeClass} bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden shrink-0`}>
+        {previewUrl ? <img src={previewUrl} alt={label} className="w-full h-full object-cover" /> : icon}
+      </div>
+      <label className="cursor-pointer px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-50">
+        {file ? 'Trocar' : 'Adicionar'} {label.toLowerCase()}
+        <input type="file" accept="image/*" className="hidden" onChange={(e) => onChange(e.target.files?.[0] ?? null)} />
+      </label>
+    </div>
   );
 }
 

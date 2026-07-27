@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { buildEndereco, mapsLink, onlyDigits, statusBadge } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon } from '@/app/components/icons';
+import { HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
@@ -41,6 +41,7 @@ export default function ProfissionalPage() {
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [pagina, setPagina] = useState(1);
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
@@ -122,6 +123,13 @@ export default function ProfissionalPage() {
     setFiltros((f) => ({ ...f, ...novo }));
     setPagina(1);
   }
+
+  function limparFiltros() {
+    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
+  }
+
+  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria, filtros.pertoDeMim].filter(Boolean).length;
+  const algumFiltroAtivo = filtrosAtivos > 0 || !!filtros.busca;
 
   async function salvarPerfil() {
     setSavingPerfil(true);
@@ -212,7 +220,8 @@ export default function ProfissionalPage() {
                 className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-gray-300 text-sm bg-white"
               />
             </div>
-            <div className="flex gap-2.5 flex-wrap items-center mb-4">
+            {/* Filtros: linha inline no desktop */}
+            <div className="hidden md:flex gap-2.5 flex-wrap items-center mb-4">
               <div className="relative">
                 <PinIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -247,6 +256,84 @@ export default function ProfissionalPage() {
                   <input type="checkbox" checked={filtros.pertoDeMim} onChange={(e) => atualizarFiltro({ pertoDeMim: e.target.checked })} />
                   Somente perto de mim ({perfil.regioesAtendimento})
                 </label>
+              )}
+              <button
+                onClick={limparFiltros}
+                disabled={!algumFiltroAtivo}
+                className="flex items-center gap-1.5 text-sm font-bold text-white/90 ml-auto px-2.5 py-2 rounded-full hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <CloseIcon className="w-3 h-3" /> Limpar filtros
+              </button>
+            </div>
+
+            {/* Filtros: botão + painel no mobile */}
+            <div className="md:hidden mb-4">
+              <button
+                onClick={() => setFiltrosAbertos((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-sm font-bold text-white bg-white/15 px-3.5 py-2.5 rounded-full"
+              >
+                <FilterIcon className="w-3.5 h-3.5" /> Filtros
+                {filtrosAtivos > 0 && (
+                  <span className="bg-white text-primaryDeep text-[11px] font-extrabold rounded-full min-w-[17px] h-[17px] flex items-center justify-center px-1">
+                    {filtrosAtivos}
+                  </span>
+                )}
+              </button>
+              {filtrosAbertos && (
+                <div className="flex flex-col gap-3 bg-white rounded-2xl p-3.5 mt-2.5 shadow-sm">
+                  <div>
+                    <div className="text-xs font-bold text-gray-500 mb-1">Cidade</div>
+                    <div className="relative">
+                      <PinIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        value={filtros.cidade}
+                        onChange={(e) => atualizarFiltro({ cidade: e.target.value })}
+                        placeholder="Qualquer cidade"
+                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-gray-500 mb-1">Data</div>
+                    <div className="relative">
+                      <CalendarIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="date"
+                        value={filtros.data}
+                        onChange={(e) => atualizarFiltro({ data: e.target.value })}
+                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-gray-500 mb-1">Categoria</div>
+                    <div className="relative">
+                      <FilterIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <select
+                        value={filtros.categoria}
+                        onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
+                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm bg-white appearance-none"
+                      >
+                        <option value="">Todas categorias</option>
+                        {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {regioesTokens.length > 0 && (
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                      <input type="checkbox" checked={filtros.pertoDeMim} onChange={(e) => atualizarFiltro({ pertoDeMim: e.target.checked })} />
+                      Somente perto de mim ({perfil.regioesAtendimento})
+                    </label>
+                  )}
+                  {algumFiltroAtivo && (
+                    <button
+                      onClick={limparFiltros}
+                      className="flex items-center justify-center gap-1.5 text-sm font-bold text-danger bg-red-50 rounded-lg py-2.5"
+                    >
+                      <CloseIcon className="w-3 h-3" /> Limpar filtros
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex flex-col gap-4">
@@ -286,6 +373,12 @@ export default function ProfissionalPage() {
                       <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
                       <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
                     </div>
+                    {v.descricao && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <div className="text-[11px] font-bold text-gray-400 uppercase mb-1">Descrição</div>
+                        <div className="text-sm text-gray-700 whitespace-pre-line">{v.descricao}</div>
+                      </div>
+                    )}
                     <div className="flex justify-end mt-4">
                       <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
                         className={`px-4 py-2 rounded-lg text-sm font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>

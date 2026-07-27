@@ -112,7 +112,7 @@ export function Sidebar({
       {/* Mobile: top bar with hamburger menu */}
       <div className="md:hidden sticky top-0 z-20 bg-white border-b border-gray-100">
         <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2.5">
+          <a href="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
               <img src="/logo.svg" alt="ConectVet" className="w-[70%] h-[70%] object-contain" />
             </div>
@@ -122,7 +122,7 @@ export function Sidebar({
               </div>
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{subtitle}</div>
             </div>
-          </div>
+          </a>
           <button
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? 'Fechar menu' : 'Abrir menu'}
@@ -146,25 +146,40 @@ export function Sidebar({
           collapsed ? 'md:w-[76px]' : 'md:w-64'
         }`}
       >
-        <div className="flex items-center gap-2.5 px-2 pb-6 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
-            <img src="/logo.svg" alt="ConectVet" className="w-[70%] h-[70%] object-contain" />
-          </div>
-          {!collapsed && (
-            <div className="leading-tight min-w-0 overflow-hidden">
-              <div className="text-base font-bold font-brand whitespace-nowrap">
-                <span className="text-ink">conect</span> <span className="text-primaryDeep">vet</span>
+        <div className={`flex items-center gap-2.5 px-2 pb-6 min-w-0 ${collapsed ? 'flex-col' : ''}`}>
+          <div className={`flex items-center gap-2.5 min-w-0 w-full ${collapsed ? 'justify-center' : ''}`}>
+            <a href="/" className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+                <img src="/logo.svg" alt="ConectVet" className="w-[70%] h-[70%] object-contain" />
               </div>
-              <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{subtitle}</div>
-            </div>
+              {!collapsed && (
+                <div className="leading-tight min-w-0 overflow-hidden">
+                  <div className="text-base font-bold font-brand whitespace-nowrap">
+                    <span className="text-ink">conect</span> <span className="text-primaryDeep">vet</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{subtitle}</div>
+                </div>
+              )}
+            </a>
+            {!collapsed && (
+              <button
+                onClick={toggleCollapsed}
+                aria-label="Recolher menu"
+                className="ml-auto shrink-0 w-6 h-6 rounded-md bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+              >
+                <ChevronLeftIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {collapsed && (
+            <button
+              onClick={toggleCollapsed}
+              aria-label="Expandir menu"
+              className="shrink-0 w-6 h-6 rounded-md bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+            >
+              <ChevronLeftIcon className="w-3.5 h-3.5 rotate-180" />
+            </button>
           )}
-          <button
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-            className="ml-auto shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-50 hover:text-gray-600"
-          >
-            <ChevronLeftIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`} />
-          </button>
         </div>
 
         <nav className="flex flex-col gap-1">
