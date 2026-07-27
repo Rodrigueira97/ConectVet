@@ -41,14 +41,14 @@ export default function LoginPage() {
                          md:h-full md:max-w-[460px] md:min-[1600px]:max-w-[520px] md:items-start md:flex-1 md:gap-0">
           <div className="login-copy-group flex flex-col gap-4 items-center md:items-start md:gap-[26px]">
             <div className="flex flex-col items-center gap-4 md:items-start md:gap-3.5">
-              <div className="w-[136px] h-[136px] md:w-[68px] md:h-[68px] md:min-[1600px]:w-20 md:min-[1600px]:h-20 shrink-0 flex items-center justify-center">
+              <div className="w-[136px] h-[136px] md:w-[84px] md:h-[84px] md:min-[1600px]:w-24 md:min-[1600px]:h-24 shrink-0 flex items-center justify-center">
                 <img
                   src="/logo.svg"
                   alt="ConectVet"
                   className="w-full h-full object-contain drop-shadow-[0_6px_16px_rgba(4,45,76,0.35)] md:drop-shadow-none"
                 />
               </div>
-              <div className="text-[40px] md:text-[30px] md:min-[1600px]:text-[34px] font-extrabold tracking-tight font-brand">
+              <div className="text-[40px] md:text-[36px] md:min-[1600px]:text-[40px] font-extrabold tracking-tight font-brand">
                 <span className="text-ink">conect</span> <span className="text-[#83F9E8]">vet</span>
               </div>
             </div>
