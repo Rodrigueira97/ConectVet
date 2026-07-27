@@ -29,10 +29,10 @@ a:hover { color: #00847e; }
   background-size: 280px 280px;
 }
 
-/* Tela de login: acima de 1600px o painel de marca fica alto demais e o conteúdo
-   (fixo no topo) sobra vazio até o rodapé — recentraliza o bloco logo+texto
+/* Tela de login: no desktop o painel de marca fica alto e o conteúdo (fixo no
+   topo) sobra vazio até o rodapé — recentraliza o bloco logo+texto
    verticalmente, mantendo o rodapé grudado embaixo. */
-@media (min-width: 1600px) {
+@media (min-width: 768px) {
   .login-brand-inner { display: grid; grid-template-rows: 1fr auto; gap: 0; }
   .login-copy-group { align-self: center; }
 }
