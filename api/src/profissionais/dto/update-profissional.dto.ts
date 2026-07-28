@@ -28,4 +28,8 @@ export class UpdateProfissionalDto {
   @IsOptional()
   @IsString()
   fotoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  curriculoUrl?: string | null;
 }

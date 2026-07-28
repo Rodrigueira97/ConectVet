@@ -396,12 +396,13 @@ export default function ClinicaPage() {
         )}
 
         {tab === 'home' && (
-          <div className="max-w-3xl mx-auto p-8">
+          <div className="max-w-[880px] mx-auto p-8">
             <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas no feed</h1>
             <p className="text-sm text-white/85 mb-6">Visão geral das vagas publicadas na plataforma</p>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-[14px]">
               {feed.map((v) => {
                 const local = localDaVaga(v);
+                const localCurto = [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ');
                 return (
                   <div
                     key={v.id}
@@ -411,17 +412,17 @@ export default function ClinicaPage() {
                       data: v.data, horaInicio: v.horaInicio, horaFim: v.horaFim,
                       valor: v.valor, descricao: v.descricao,
                     })}
-                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
+                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-primary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150"
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div>
-                        <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[v.categoria]}</div>
-                        <div className="text-lg font-extrabold mt-1">{v.clinica?.nome}</div>
-                        <div className="mt-1"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+                        <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{CATEGORIA_LABEL[v.categoria]}</div>
+                        <div className="text-[17px] font-extrabold mt-[3px]">{v.clinica?.nome}</div>
+                        <div className="mt-1.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
                       </div>
-                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
+                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap">R$ {v.valor}</div>
                     </div>
-                    <div className="flex gap-4 flex-wrap items-center mt-3 text-sm text-gray-500">
+                    <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
                       <a
                         href={mapsLink(local)}
                         target="_blank"
@@ -430,11 +431,17 @@ export default function ClinicaPage() {
                         className="inline-flex items-center gap-1 hover:underline"
                       >
                         <PinIcon className="w-3.5 h-3.5 shrink-0 text-primary" />
-                        Local <b className="font-bold text-gray-700">{local}</b>
+                        Local <b className="font-bold text-gray-700">{localCurto}</b>
                       </a>
                       <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
                       <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
                     </div>
+                    {v.descricao && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 text-[13.5px] leading-relaxed text-gray-700">
+                        <div className="text-[11px] font-extrabold text-gray-400 uppercase tracking-[0.02em] mb-1">Descrição</div>
+                        <div className="whitespace-pre-line">{v.descricao}</div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

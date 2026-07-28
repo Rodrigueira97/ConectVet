@@ -223,6 +223,7 @@ export type Profissional = {
   areaAtuacao: string;
   regioesAtendimento: string;
   observacoes?: string | null;
+  createdAt: string;
 };
 
 // ---------- Auth ----------
