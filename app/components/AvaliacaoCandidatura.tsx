@@ -2,18 +2,14 @@
 import { useState } from 'react';
 import { ApiError, Avaliacao, criarAvaliacao } from '@/lib/api';
 
-const NOTAS = [5, 4, 3, 2, 1];
-const LABEL_NOTA = ['', 'Péssimo', 'Ruim', 'Regular', 'Bom', 'Excelente'];
-
 export function AvaliacaoCandidatura({
-  candidaturaId, autorProprio, labelForm, labelFeita, labelOutra, corBotao, avaliacoesIniciais,
+  candidaturaId, autorProprio, labelForm, labelFeita, labelOutra, avaliacoesIniciais,
 }: {
   candidaturaId: string;
   autorProprio: 'CLINICA' | 'PROFISSIONAL';
   labelForm: string;
   labelFeita: string;
   labelOutra: string;
-  corBotao: string;
   avaliacoesIniciais: Avaliacao[];
 }) {
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>(avaliacoesIniciais);
@@ -39,31 +35,57 @@ export function AvaliacaoCandidatura({
   }
 
   return (
-    <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-3">
+    <div className="mt-3.5 pt-3.5 border-t border-gray-100">
+      <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-2.5">Avaliação do plantão</div>
+
       {minha ? (
-        <div className="text-sm text-gray-600">
-          <span className="font-bold">{labelFeita}: </span>
-          Nota {minha.nota}/5{minha.comentario ? ` — "${minha.comentario}"` : ''}
+        <div className="bg-gray-50 rounded-xl px-3.5 py-3 mb-2.5">
+          <div className="flex items-center justify-between gap-2.5 mb-1">
+            <span className="text-[12.5px] font-extrabold text-ink">{labelFeita}</span>
+            <span className="text-amber-500 text-sm tracking-widest">{'★'.repeat(minha.nota)}{'☆'.repeat(5 - minha.nota)}</span>
+          </div>
+          {minha.comentario && <div className="text-[13px] text-gray-700 leading-relaxed">{minha.comentario}</div>}
         </div>
       ) : (
-        <div>
-          <div className="text-xs font-bold mb-2">{labelForm}</div>
-          <select value={nota} onChange={(e) => setNota(Number(e.target.value))} className="px-2.5 py-1.5 rounded-md border border-gray-300 text-sm mb-2">
-            {NOTAS.map((n) => <option key={n} value={n}>{n} — {LABEL_NOTA[n]}</option>)}
-          </select>
-          <textarea value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentário (opcional)" rows={2} className="w-full px-2.5 py-2 rounded-lg border border-gray-300 text-sm mb-2" />
+        <div className="mb-2.5">
+          <div className="text-xs font-bold text-gray-700 mb-2">{labelForm}</div>
+          <div className="flex gap-1 mb-2">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setNota(n)}
+                aria-label={`${n} estrela${n > 1 ? 's' : ''}`}
+                className={`text-2xl leading-none ${n <= nota ? 'text-amber-500' : 'text-gray-200'} hover:scale-110 transition-transform`}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={comentario}
+            onChange={(e) => setComentario(e.target.value)}
+            placeholder="Como foi o plantão? (opcional)"
+            rows={2}
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm mb-2 outline-none focus:border-primary focus:ring-4 focus:ring-primaryTint"
+          />
           {erro && <div className="text-xs font-semibold text-danger mb-2">{erro}</div>}
-          <button onClick={enviar} disabled={enviando} className={`px-3.5 py-2 rounded-lg ${corBotao} text-white text-xs font-bold disabled:opacity-60`}>
+          <button onClick={enviar} disabled={enviando} className="px-4 py-2 rounded-lg bg-primary hover:bg-primaryDark text-white text-xs font-bold disabled:opacity-60">
             {enviando ? 'Enviando...' : 'Enviar avaliação'}
           </button>
         </div>
       )}
 
-      {daOutraParte && (
-        <div className="text-sm text-gray-600">
-          <span className="font-bold">{labelOutra}: </span>
-          Nota {daOutraParte.nota}/5{daOutraParte.comentario ? ` — "${daOutraParte.comentario}"` : ''}
+      {daOutraParte ? (
+        <div className="bg-gray-50 rounded-xl px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2.5 mb-1">
+            <span className="text-[12.5px] font-extrabold text-ink">{labelOutra}</span>
+            <span className="text-amber-500 text-sm tracking-widest">{'★'.repeat(daOutraParte.nota)}{'☆'.repeat(5 - daOutraParte.nota)}</span>
+          </div>
+          {daOutraParte.comentario && <div className="text-[13px] text-gray-700 leading-relaxed">{daOutraParte.comentario}</div>}
         </div>
+      ) : (
+        <div className="text-xs text-gray-400 italic">Aguardando avaliação {autorProprio === 'PROFISSIONAL' ? 'da clínica' : 'do profissional'}.</div>
       )}
     </div>
   );

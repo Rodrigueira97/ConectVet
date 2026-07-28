@@ -635,7 +635,6 @@ export default function ClinicaPage() {
                           labelForm={`Avaliar ${hired.profissional?.nome || 'profissional'}`}
                           labelFeita={`Avaliação de ${hired.profissional?.nome || 'profissional'}`}
                           labelOutra={`${hired.profissional?.nome || 'Profissional'} avaliou você`}
-                          corBotao="bg-primary"
                           avaliacoesIniciais={avaliacoesPorCandidatura[hired.id] || []}
                         />
                       </div>

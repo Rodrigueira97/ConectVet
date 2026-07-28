@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { buildEndereco, mapsLink, onlyDigits, statusBadge } from '@/lib/mockData';
+import { buildEndereco, mapsLink, onlyDigits } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
+  CheckCircleIcon, XCircleIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { FileField } from '@/app/components/FileField';
@@ -41,6 +42,32 @@ function tempoNaPlataforma(createdAt: string) {
   return `${anos} ${anos === 1 ? 'ano' : 'anos'}`;
 }
 
+function calcDuracaoHoras(inicio: string, fim: string) {
+  const [h1, m1] = inicio.split(':').map(Number);
+  const [h2, m2] = fim.split(':').map(Number);
+  let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (mins <= 0) mins += 24 * 60;
+  return mins / 60;
+}
+
+type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'RECUSADO';
+
+function statusDaCandidatura(c: Candidatura): StatusCandidatura {
+  if (c.status === 'ACEITO') return c.vaga?.status === 'CONCLUIDA' ? 'CONCLUIDA' : 'ACEITO';
+  return c.status;
+}
+
+const STATUS_LABEL: Record<StatusCandidatura, string> = {
+  PENDENTE: 'Pendente', ACEITO: 'Aceito', CONCLUIDA: 'Concluído', RECUSADO: 'Recusado',
+};
+
+const STATUS_PILL_CLASS: Record<StatusCandidatura, string> = {
+  PENDENTE: 'bg-amber-100 text-amber-700',
+  ACEITO: 'bg-primaryTint text-primaryDeep',
+  CONCLUIDA: 'bg-secondary/10 text-secondary',
+  RECUSADO: 'bg-gray-100 text-gray-500',
+};
+
 export default function ProfissionalPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -59,6 +86,9 @@ export default function ProfissionalPage() {
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [visiveis, setVisiveis] = useState(POR_PAGINA);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [filtroCandidaturas, setFiltroCandidaturas] = useState<'TODAS' | StatusCandidatura>('TODAS');
+  const [visiveisCandidaturas, setVisiveisCandidaturas] = useState(POR_PAGINA);
+  const sentinelCandRef = useRef<HTMLDivElement | null>(null);
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
@@ -134,10 +164,10 @@ export default function ProfissionalPage() {
   const feedPaginado = feedFiltrado.slice(0, visiveis);
   const temMaisVagas = visiveis < feedFiltrado.length;
 
-  const plantaoConcluidos = candidaturas.filter((c) => c.status === 'ACEITO').length;
+  const plantaoConcluidos = candidaturas.filter((c) => statusDaCandidatura(c) === 'CONCLUIDA').length;
   const regioesCount = (perfil?.regioesAtendimento || '').split(',').map((r) => r.trim()).filter(Boolean).length;
   const avaliacoesRecebidas = candidaturas
-    .filter((c) => c.status === 'ACEITO')
+    .filter((c) => statusDaCandidatura(c) === 'CONCLUIDA')
     .flatMap((c) => (avaliacoesPorCandidatura[c.id] || [])
       .filter((a) => a.autor === 'CLINICA')
       .map((a) => ({ ...a, clinicaNome: c.vaga?.clinica?.nome || 'Clínica', data: c.vaga?.data })))
@@ -145,6 +175,25 @@ export default function ProfissionalPage() {
   const notaMediaRecebida = avaliacoesRecebidas.length
     ? avaliacoesRecebidas.reduce((soma, a) => soma + a.nota, 0) / avaliacoesRecebidas.length
     : null;
+
+  const candidaturasComStatus = candidaturas.map((c) => ({ ...c, statusExibido: statusDaCandidatura(c) }));
+  const candidaturasFiltradas = filtroCandidaturas === 'TODAS'
+    ? candidaturasComStatus
+    : candidaturasComStatus.filter((c) => c.statusExibido === filtroCandidaturas);
+  const candidaturasPaginadas = candidaturasFiltradas.slice(0, visiveisCandidaturas);
+  const temMaisCandidaturas = visiveisCandidaturas < candidaturasFiltradas.length;
+  const contagemStatus: Record<'TODAS' | StatusCandidatura, number> = {
+    TODAS: candidaturas.length,
+    PENDENTE: candidaturasComStatus.filter((c) => c.statusExibido === 'PENDENTE').length,
+    ACEITO: candidaturasComStatus.filter((c) => c.statusExibido === 'ACEITO').length,
+    CONCLUIDA: candidaturasComStatus.filter((c) => c.statusExibido === 'CONCLUIDA').length,
+    RECUSADO: candidaturasComStatus.filter((c) => c.statusExibido === 'RECUSADO').length,
+  };
+
+  function selecionarFiltroCandidaturas(f: 'TODAS' | StatusCandidatura) {
+    setFiltroCandidaturas(f);
+    setVisiveisCandidaturas(POR_PAGINA);
+  }
 
   useEffect(() => {
     if (tab !== 'home') return;
@@ -161,6 +210,22 @@ export default function ProfissionalPage() {
     observer.observe(el);
     return () => observer.disconnect();
   }, [tab, feedFiltrado.length]);
+
+  useEffect(() => {
+    if (tab !== 'historico') return;
+    const el = sentinelCandRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisiveisCandidaturas((v) => Math.min(v + POR_PAGINA, candidaturasFiltradas.length));
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [tab, candidaturasFiltradas.length]);
 
   function atualizarFiltro(novo: Partial<typeof filtros>) {
     setFiltros((f) => ({ ...f, ...novo }));
@@ -464,38 +529,106 @@ export default function ProfissionalPage() {
         )}
 
         {tab === 'historico' && (
-          <div className="max-w-2xl mx-auto p-8">
+          <div className="max-w-[880px] mx-auto p-8">
             <h1 className="text-2xl font-extrabold mb-1 text-white">Minhas candidaturas</h1>
-            <p className="text-sm text-white/85 mb-6">Acompanhe o status das vagas que você se candidatou</p>
-            <div className="flex flex-col gap-3">
-              {candidaturas.map((c) => {
-                const badge = statusBadge(c.status.toLowerCase());
+            <p className="text-sm text-white/85 mb-5">Acompanhe o status das vagas que você se candidatou</p>
+
+            <div className="flex gap-2 flex-wrap mb-5">
+              {([
+                ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['RECUSADO', 'Recusadas'],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => selecionarFiltroCandidaturas(key)}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap ${
+                    filtroCandidaturas === key ? 'bg-white text-primaryDeep' : 'bg-white/15 text-white hover:bg-white/25'
+                  }`}
+                >
+                  {label}
+                  <span className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-full ${filtroCandidaturas === key ? 'bg-primaryTint text-primaryDeep' : 'bg-white/25 text-white'}`}>
+                    {contagemStatus[key]}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-[14px]">
+              {candidaturasPaginadas.map((c) => {
+                const status = c.statusExibido;
+                const v = c.vaga;
+                const local = v ? [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ') : '';
+                const horas = v ? calcDuracaoHoras(v.horaInicio, v.horaFim) : 0;
+                const horasLabel = horas % 1 === 0 ? `${horas}h` : `${horas.toFixed(1)}h`;
                 return (
-                  <div key={c.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
-                    <div className="flex justify-between items-center gap-3">
+                  <div key={c.id} className={`bg-white border border-gray-200 rounded-2xl p-[18px] ${status === 'RECUSADO' ? 'opacity-70' : ''}`}>
+                    <div className="flex justify-between items-start gap-3">
                       <div>
-                        <div className="text-xs font-bold text-primary uppercase">{c.vaga && CATEGORIA_LABEL[c.vaga.categoria]}</div>
-                        <div className="font-extrabold mt-1">{c.vaga?.clinica?.nome}</div>
-                        <div className="text-sm text-gray-500 mt-1">Data <b className="font-bold text-gray-700">{c.vaga && formatDataBR(c.vaga.data)}</b> · <b className="font-bold text-gray-700">R$ {c.vaga?.valor}</b></div>
+                        <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{v && CATEGORIA_LABEL[v.categoria]}</div>
+                        <div className="text-[17px] font-extrabold mt-[3px]">{v?.clinica?.nome}</div>
                       </div>
-                      <div className={badge.className}>{badge.label}</div>
+                      <span className={`text-[11px] font-extrabold uppercase tracking-wide px-[11px] py-1 rounded-full whitespace-nowrap shrink-0 ${STATUS_PILL_CLASS[status]}`}>
+                        {STATUS_LABEL[status]}
+                      </span>
                     </div>
-                    {c.status === 'ACEITO' && (
+                    {v && (
+                      <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
+                        <span className="bg-primaryTint text-primaryDeep font-extrabold text-[13px] px-2.5 py-1 rounded-lg">R$ {v.valor}</span>
+                        <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
+                        <div>{v.horaInicio} – {v.horaFim} · {horasLabel}</div>
+                        <div>{local}</div>
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-400 mt-2.5">Candidatura enviada em {formatDataBR(c.createdAt)}</div>
+
+                    {status === 'PENDENTE' && (
+                      <div className="flex items-start gap-2 mt-3 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-amber-50 text-amber-800">
+                        <ClockIcon className="w-4 h-4 shrink-0 mt-px" />
+                        <div>Aguardando resposta da clínica.</div>
+                      </div>
+                    )}
+                    {status === 'ACEITO' && (
+                      <div className="flex items-start gap-2 mt-3 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-primaryTint text-primaryDeep">
+                        <CheckCircleIcon className="w-4 h-4 shrink-0 mt-px" />
+                        <div>Plantão confirmado! Fique de olho na data — ainda faltam alguns dias.</div>
+                      </div>
+                    )}
+                    {status === 'CONCLUIDA' && v && (
+                      <div className="flex items-start gap-2 mt-3 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-secondary/10 text-secondary">
+                        <CheckCircleIcon className="w-4 h-4 shrink-0 mt-px" />
+                        <div>Plantão realizado em {formatDataBR(v.data)}.</div>
+                      </div>
+                    )}
+                    {status === 'RECUSADO' && (
+                      <div className="flex items-start gap-2 mt-3 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-gray-50 text-gray-500">
+                        <XCircleIcon className="w-4 h-4 shrink-0 mt-px" />
+                        <div>A clínica optou por outro profissional desta vez. Continue de olho em novas vagas na Home.</div>
+                      </div>
+                    )}
+
+                    {status === 'CONCLUIDA' && (
                       <AvaliacaoCandidatura
                         candidaturaId={c.id}
                         autorProprio="PROFISSIONAL"
                         labelForm="Avaliar clínica"
-                        labelFeita="Avaliação da clínica"
-                        labelOutra={`${c.vaga?.clinica?.nome || 'Clínica'} avaliou você`}
-                        corBotao="bg-primary"
+                        labelFeita="Sua avaliação"
+                        labelOutra={`${v?.clinica?.nome || 'Clínica'} avaliou você`}
                         avaliacoesIniciais={avaliacoesPorCandidatura[c.id] || []}
                       />
                     )}
                   </div>
                 );
               })}
-              {candidaturas.length === 0 && <div className="text-sm text-gray-400">Você ainda não se candidatou a nenhuma vaga.</div>}
+              {candidaturasFiltradas.length === 0 && (
+                <div className="text-sm text-white/85 text-center py-10">
+                  {candidaturas.length === 0 ? 'Você ainda não se candidatou a nenhuma vaga.' : 'Nenhuma candidatura encontrada com esse filtro.'}
+                </div>
+              )}
             </div>
+            {temMaisCandidaturas && (
+              <div ref={sentinelCandRef} className="flex items-center justify-center py-6 text-xs font-semibold text-white/70">
+                Carregando mais candidaturas...
+              </div>
+            )}
           </div>
         )}
 
