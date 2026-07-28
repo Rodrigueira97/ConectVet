@@ -21,7 +21,8 @@ import {
   getAvaliacoesPorCandidatura, uploadArquivo,
 } from '@/lib/api';
 
-const POR_PAGINA = 10;
+const VAGAS_POR_PAGINA = 6;
+const CANDIDATURAS_POR_PAGINA = 10;
 
 type Tab = 'home' | 'historico' | 'perfil';
 
@@ -48,6 +49,12 @@ function calcDuracaoHoras(inicio: string, fim: string) {
   let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
   if (mins <= 0) mins += 24 * 60;
   return mins / 60;
+}
+
+function vagaEncerrada(v: { data: string; status: string }) {
+  if (v.status !== 'ABERTA') return true;
+  const hojeStr = new Date().toISOString().slice(0, 10);
+  return v.data.slice(0, 10) <= hojeStr;
 }
 
 type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'RECUSADO';
@@ -84,10 +91,10 @@ export default function ProfissionalPage() {
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
-  const [visiveis, setVisiveis] = useState(POR_PAGINA);
+  const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [filtroCandidaturas, setFiltroCandidaturas] = useState<'TODAS' | StatusCandidatura>('TODAS');
-  const [visiveisCandidaturas, setVisiveisCandidaturas] = useState(POR_PAGINA);
+  const [visiveisCandidaturas, setVisiveisCandidaturas] = useState(CANDIDATURAS_POR_PAGINA);
   const sentinelCandRef = useRef<HTMLDivElement | null>(null);
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
@@ -192,7 +199,7 @@ export default function ProfissionalPage() {
 
   function selecionarFiltroCandidaturas(f: 'TODAS' | StatusCandidatura) {
     setFiltroCandidaturas(f);
-    setVisiveisCandidaturas(POR_PAGINA);
+    setVisiveisCandidaturas(CANDIDATURAS_POR_PAGINA);
   }
 
   useEffect(() => {
@@ -202,7 +209,7 @@ export default function ProfissionalPage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisiveis((v) => Math.min(v + POR_PAGINA, feedFiltrado.length));
+          setVisiveis((v) => Math.min(v + VAGAS_POR_PAGINA, feedFiltrado.length));
         }
       },
       { rootMargin: '200px' },
@@ -218,7 +225,7 @@ export default function ProfissionalPage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisiveisCandidaturas((v) => Math.min(v + POR_PAGINA, candidaturasFiltradas.length));
+          setVisiveisCandidaturas((v) => Math.min(v + CANDIDATURAS_POR_PAGINA, candidaturasFiltradas.length));
         }
       },
       { rootMargin: '200px' },
@@ -229,7 +236,7 @@ export default function ProfissionalPage() {
 
   function atualizarFiltro(novo: Partial<typeof filtros>) {
     setFiltros((f) => ({ ...f, ...novo }));
-    setVisiveis(POR_PAGINA);
+    setVisiveis(VAGAS_POR_PAGINA);
   }
 
   function limparFiltros() {
@@ -308,6 +315,7 @@ export default function ProfissionalPage() {
           const compat = vagaSelecionada.categoria === perfil.funcao;
           const applied = hasApplied(vagaSelecionada.id);
           const perto = pertoDeVoce(vagaSelecionada);
+          const encerrada = vagaEncerrada(vagaSelecionada);
           return (
             <VagaDetalheView
               vaga={{
@@ -321,10 +329,10 @@ export default function ProfissionalPage() {
                 perto,
               }}
               onBack={() => setVagaSelecionada(null)}
-              actionLabel={applied ? 'Candidatura enviada' : compat ? 'Candidatar-se' : 'Perfil incompatível'}
-              actionDisabled={applied || !compat || candidatandoId === vagaSelecionada.id}
+              actionLabel={applied ? 'Candidatura enviada' : encerrada ? 'Vaga encerrada' : compat ? 'Candidatar-se' : 'Perfil incompatível'}
+              actionDisabled={applied || encerrada || !compat || candidatandoId === vagaSelecionada.id}
               onAction={() => candidatar(vagaSelecionada)}
-              compatStatus={applied ? 'aplicada' : compat ? 'compativel' : 'incompativel'}
+              compatStatus={applied ? 'aplicada' : encerrada ? 'encerrada' : compat ? 'compativel' : 'incompativel'}
               perfilFuncao={CATEGORIA_LABEL[perfil.funcao]}
             />
           );
@@ -374,10 +382,10 @@ export default function ProfissionalPage() {
                 <select
                   value={filtros.categoria}
                   onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
-                  className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white appearance-none"
+                  className={`pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white appearance-none ${filtros.categoria ? 'text-ink' : 'text-gray-400'}`}
                 >
                   <option value="">Todas categorias</option>
-                  {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
+                  {CATEGORIAS.map((c) => <option key={c} value={c} className="text-ink">{CATEGORIA_LABEL[c]}</option>)}
                 </select>
               </div>
               {regioesTokens.length > 0 && (
@@ -422,15 +430,15 @@ export default function ProfissionalPage() {
                       />
                     </div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-xs font-bold text-gray-500 mb-1">Data</div>
-                    <div className="relative">
+                    <div className="relative min-w-0">
                       <CalendarIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="date"
                         value={filtros.data}
                         onChange={(e) => atualizarFiltro({ data: e.target.value })}
-                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm"
+                        className="w-full min-w-0 pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm"
                       />
                     </div>
                   </div>
@@ -441,10 +449,10 @@ export default function ProfissionalPage() {
                       <select
                         value={filtros.categoria}
                         onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
-                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm bg-white appearance-none"
+                        className={`w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm bg-white appearance-none ${filtros.categoria ? 'text-ink' : 'text-gray-400'}`}
                       >
                         <option value="">Todas categorias</option>
-                        {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
+                        {CATEGORIAS.map((c) => <option key={c} value={c} className="text-ink">{CATEGORIA_LABEL[c]}</option>)}
                       </select>
                     </div>
                   </div>
@@ -470,19 +478,24 @@ export default function ProfissionalPage() {
                 const compat = v.categoria === perfil.funcao;
                 const applied = hasApplied(v.id);
                 const perto = pertoDeVoce(v);
+                const encerrada = vagaEncerrada(v);
                 const local = localDaVaga(v);
                 const localCurto = [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ');
                 return (
                   <div
                     key={v.id}
                     onClick={() => setVagaSelecionada(v)}
-                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150"
+                    className={`bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow,opacity] duration-150 ${encerrada ? 'opacity-70' : ''}`}
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div>
                         <div className="flex gap-2 items-center flex-wrap">
                           <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{CATEGORIA_LABEL[v.categoria]}</div>
-                          {perto && <div className="bg-secondary text-white text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Perto de você</div>}
+                          {encerrada ? (
+                            <div className="bg-gray-200 text-gray-500 text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Encerrada</div>
+                          ) : perto && (
+                            <div className="bg-secondary text-white text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Perto de você</div>
+                          )}
                         </div>
                         <div className="text-[17px] font-extrabold mt-[3px]">{v.clinica?.nome}</div>
                         <div className="mt-1.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
@@ -510,9 +523,9 @@ export default function ProfissionalPage() {
                       </div>
                     )}
                     <div className="flex justify-end mt-[14px]">
-                      <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
-                        className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
-                        {applied ? 'Candidatura enviada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
+                      <button disabled={applied || encerrada || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
+                        className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || encerrada || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
+                        {applied ? 'Candidatura enviada' : encerrada ? 'Vaga encerrada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
                       </button>
                     </div>
                   </div>

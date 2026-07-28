@@ -28,7 +28,6 @@ export class VagasService {
   async feed(filtros: { categoria?: Categoria; cidade?: string; data?: string }) {
     const vagas = await this.prisma.vaga.findMany({
       where: {
-        status: VagaStatus.ABERTA,
         categoria: filtros.categoria,
         cidade: filtros.cidade
           ? { contains: filtros.cidade, mode: 'insensitive' }

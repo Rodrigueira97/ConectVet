@@ -1,6 +1,6 @@
 'use client';
 import { buildEndereco, mapsLink } from '@/lib/mockData';
-import { CalendarIcon, ChevronLeftIcon, CheckCircleIcon, MoneyIcon, PinIcon, WarningIcon } from '@/app/components/icons';
+import { CalendarIcon, ChevronLeftIcon, CheckCircleIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
 
 export type VagaDetalheData = {
   clinica?: string;
@@ -44,7 +44,7 @@ export function VagaDetalheView({
   actionLabel?: string;
   onAction?: () => void;
   actionDisabled?: boolean;
-  compatStatus?: 'compativel' | 'incompativel' | 'aplicada';
+  compatStatus?: 'compativel' | 'incompativel' | 'aplicada' | 'encerrada';
   perfilFuncao?: string;
 }) {
   const local = buildEndereco(vaga);
@@ -109,10 +109,12 @@ export function VagaDetalheView({
 
       {compatStatus && (
         <div className={`flex items-start gap-2.5 rounded-2xl px-4 py-3.5 text-sm font-semibold leading-relaxed mb-5 ${
-          compatStatus === 'incompativel' ? 'bg-red-50 text-[#8C2E20]' : 'bg-primaryTint text-primaryDeep'
+          compatStatus === 'incompativel' ? 'bg-red-50 text-[#8C2E20]' : compatStatus === 'encerrada' ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'
         }`}>
           {compatStatus === 'incompativel' ? (
             <WarningIcon className="w-[18px] h-[18px] shrink-0 mt-px text-danger" />
+          ) : compatStatus === 'encerrada' ? (
+            <XCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-gray-400" />
           ) : (
             <CheckCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-primaryDeep" />
           )}
@@ -120,6 +122,7 @@ export function VagaDetalheView({
             {compatStatus === 'compativel' && <>Sua função (<b>{perfilFuncao}</b>) é compatível com esta vaga.</>}
             {compatStatus === 'incompativel' && <>Esta vaga é para <b>{vaga.categoria}</b>. Seu perfil está cadastrado como <b>{perfilFuncao}</b>.</>}
             {compatStatus === 'aplicada' && <>Você já se candidatou para esta vaga. Acompanhe o status em Minhas candidaturas.</>}
+            {compatStatus === 'encerrada' && <>Esta vaga já encerrou e não aceita mais candidaturas.</>}
           </div>
         </div>
       )}
