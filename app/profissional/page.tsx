@@ -42,7 +42,8 @@ export default function ProfissionalPage() {
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
-  const [pagina, setPagina] = useState(1);
+  const [visiveis, setVisiveis] = useState(POR_PAGINA);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
@@ -115,13 +116,28 @@ export default function ProfissionalPage() {
     return true;
   });
 
-  const totalPaginas = Math.max(1, Math.ceil(feedFiltrado.length / POR_PAGINA));
-  const paginaAtual = Math.min(pagina, totalPaginas);
-  const feedPaginado = feedFiltrado.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
+  const feedPaginado = feedFiltrado.slice(0, visiveis);
+  const temMaisVagas = visiveis < feedFiltrado.length;
+
+  useEffect(() => {
+    if (tab !== 'home') return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisiveis((v) => Math.min(v + POR_PAGINA, feedFiltrado.length));
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [tab, feedFiltrado.length]);
 
   function atualizarFiltro(novo: Partial<typeof filtros>) {
     setFiltros((f) => ({ ...f, ...novo }));
-    setPagina(1);
+    setVisiveis(POR_PAGINA);
   }
 
   function limparFiltros() {
@@ -189,14 +205,25 @@ export default function ProfissionalPage() {
         {vagaSelecionada ? (() => {
           const compat = vagaSelecionada.categoria === perfil.funcao;
           const applied = hasApplied(vagaSelecionada.id);
-          const local = localDaVaga(vagaSelecionada);
+          const perto = pertoDeVoce(vagaSelecionada);
           return (
             <VagaDetalheView
-              vaga={{ clinica: vagaSelecionada.clinica?.nome, categoria: CATEGORIA_LABEL[vagaSelecionada.categoria], local, data: formatDataBR(vagaSelecionada.data), horario: `${vagaSelecionada.horaInicio} - ${vagaSelecionada.horaFim}`, valor: vagaSelecionada.valor, descricao: vagaSelecionada.descricao || undefined }}
+              vaga={{
+                clinica: vagaSelecionada.clinica?.nome,
+                categoria: CATEGORIA_LABEL[vagaSelecionada.categoria],
+                rua: vagaSelecionada.rua, numero: vagaSelecionada.numero, complemento: vagaSelecionada.complemento,
+                bairro: vagaSelecionada.bairro, cidade: vagaSelecionada.cidade, estado: vagaSelecionada.estado,
+                data: vagaSelecionada.data, horaInicio: vagaSelecionada.horaInicio, horaFim: vagaSelecionada.horaFim,
+                valor: vagaSelecionada.valor, descricao: vagaSelecionada.descricao,
+                notaMedia: vagaSelecionada.clinica?.notaMedia, totalAvaliacoes: vagaSelecionada.clinica?.totalAvaliacoes,
+                perto,
+              }}
               onBack={() => setVagaSelecionada(null)}
               actionLabel={applied ? 'Candidatura enviada' : compat ? 'Candidatar-se' : 'Perfil incompatível'}
               actionDisabled={applied || !compat || candidatandoId === vagaSelecionada.id}
               onAction={() => candidatar(vagaSelecionada)}
+              compatStatus={applied ? 'aplicada' : compat ? 'compativel' : 'incompativel'}
+              perfilFuncao={CATEGORIA_LABEL[perfil.funcao]}
             />
           );
         })() : (
@@ -208,7 +235,7 @@ export default function ProfissionalPage() {
         )}
 
         {tab === 'home' && (
-          <div className="max-w-3xl mx-auto p-8">
+          <div className="max-w-[880px] mx-auto p-8">
             <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas disponíveis</h1>
             <p className="text-sm text-white/85 mb-5">Plantões publicados por clínicas parceiras</p>
             <div className="relative mb-3">
@@ -336,7 +363,7 @@ export default function ProfissionalPage() {
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-[14px]">
               {feedPaginado.map((v) => {
                 const compat = v.categoria === perfil.funcao;
                 const applied = hasApplied(v.id);
@@ -346,20 +373,20 @@ export default function ProfissionalPage() {
                   <div
                     key={v.id}
                     onClick={() => setVagaSelecionada(v)}
-                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-secondary/40 transition-colors duration-150"
+                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150"
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div>
-                        <div className="flex gap-2 items-center">
-                          <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[v.categoria]}</div>
-                          {perto && <div className="bg-secondary text-white text-[10px] font-extrabold px-2 py-0.5 rounded uppercase">Perto de você</div>}
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{CATEGORIA_LABEL[v.categoria]}</div>
+                          {perto && <div className="bg-secondary text-white text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Perto de você</div>}
                         </div>
-                        <div className="text-lg font-extrabold mt-1">{v.clinica?.nome}</div>
-                        <div className="mt-1"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+                        <div className="text-[17px] font-extrabold mt-[3px]">{v.clinica?.nome}</div>
+                        <div className="mt-1.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
                       </div>
-                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-sm px-3 py-1.5 rounded-lg whitespace-nowrap">R$ {v.valor}</div>
+                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap">R$ {v.valor}</div>
                     </div>
-                    <div className="flex gap-4 flex-wrap items-center mt-3 text-sm text-gray-500">
+                    <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
                       <a
                         href={mapsLink(local)}
                         target="_blank"
@@ -374,14 +401,14 @@ export default function ProfissionalPage() {
                       <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
                     </div>
                     {v.descricao && (
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <div className="text-[11px] font-bold text-gray-400 uppercase mb-1">Descrição</div>
-                        <div className="text-sm text-gray-700 whitespace-pre-line">{v.descricao}</div>
+                      <div className="mt-3 pt-3 border-t border-gray-100 text-[13.5px] leading-relaxed text-gray-700">
+                        <div className="text-[11px] font-extrabold text-gray-400 uppercase tracking-[0.02em] mb-1">Descrição</div>
+                        <div className="whitespace-pre-line">{v.descricao}</div>
                       </div>
                     )}
-                    <div className="flex justify-end mt-4">
+                    <div className="flex justify-end mt-[14px]">
                       <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
+                        className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
                         {applied ? 'Candidatura enviada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
                       </button>
                     </div>
@@ -390,23 +417,9 @@ export default function ProfissionalPage() {
               })}
               {feedFiltrado.length === 0 && <div className="text-sm text-gray-400">Nenhuma vaga encontrada.</div>}
             </div>
-            {totalPaginas > 1 && (
-              <div className="flex items-center justify-between mt-6">
-                <button
-                  disabled={paginaAtual === 1}
-                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-bold disabled:opacity-40"
-                >
-                  ← Anterior
-                </button>
-                <span className="text-sm text-white/85 font-semibold">Página {paginaAtual} de {totalPaginas}</span>
-                <button
-                  disabled={paginaAtual === totalPaginas}
-                  onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-bold disabled:opacity-40"
-                >
-                  Próxima →
-                </button>
+            {temMaisVagas && (
+              <div ref={sentinelRef} className="flex items-center justify-center py-6 text-xs font-semibold text-white/70">
+                Carregando mais vagas...
               </div>
             )}
           </div>

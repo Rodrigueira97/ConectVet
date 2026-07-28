@@ -405,7 +405,12 @@ export default function ClinicaPage() {
                 return (
                   <div
                     key={v.id}
-                    onClick={() => setVagaSelecionada({ clinica: v.clinica?.nome, categoria: CATEGORIA_LABEL[v.categoria], local, data: formatDataBR(v.data), horario: `${v.horaInicio} - ${v.horaFim}`, valor: v.valor, descricao: v.descricao || undefined })}
+                    onClick={() => setVagaSelecionada({
+                      clinica: v.clinica?.nome, categoria: CATEGORIA_LABEL[v.categoria],
+                      rua: v.rua, numero: v.numero, complemento: v.complemento, bairro: v.bairro, cidade: v.cidade, estado: v.estado,
+                      data: v.data, horaInicio: v.horaInicio, horaFim: v.horaFim,
+                      valor: v.valor, descricao: v.descricao,
+                    })}
                     className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
                   >
                     <div className="flex justify-between items-start gap-3">
@@ -572,7 +577,12 @@ export default function ClinicaPage() {
                 return (
                   <div
                     key={mv.id}
-                    onClick={() => setVagaSelecionada({ categoria: CATEGORIA_LABEL[mv.categoria], local, data: formatDataBR(mv.data), horario: `${mv.horaInicio} - ${mv.horaFim}`, valor: mv.valor, descricao: mv.descricao || undefined })}
+                    onClick={() => setVagaSelecionada({
+                      categoria: CATEGORIA_LABEL[mv.categoria],
+                      rua: mv.rua, numero: mv.numero, complemento: mv.complemento, bairro: mv.bairro, cidade: mv.cidade, estado: mv.estado,
+                      data: mv.data, horaInicio: mv.horaInicio, horaFim: mv.horaFim,
+                      valor: mv.valor, descricao: mv.descricao,
+                    })}
                     className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
                   >
                     <div className="flex justify-between items-start gap-3">

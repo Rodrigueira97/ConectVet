@@ -208,3 +208,22 @@ export function WarningIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function CheckCircleIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l2.5 2.5L16 9.5" />
+    </svg>
+  );
+}
+
+export function MoneyIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="2" y="6" width="20" height="12" rx="2.5" />
+      <circle cx="12" cy="12" r="2.4" />
+      <path d="M6 10v.01M18 14v.01" />
+    </svg>
+  );
+}
