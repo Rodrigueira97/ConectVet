@@ -92,10 +92,9 @@ export default function ProfissionalPage() {
   const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [filtroCandidaturas, setFiltroCandidaturas] = useState<'TODAS' | StatusCandidatura>('TODAS');
   const [visiveisCandidaturas, setVisiveisCandidaturas] = useState(CANDIDATURAS_POR_PAGINA);
-  const sentinelCandRef = useRef<HTMLDivElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
@@ -203,36 +202,38 @@ export default function ProfissionalPage() {
   }
 
   useEffect(() => {
-    if (tab !== 'home') return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisiveis((v) => Math.min(v + VAGAS_POR_PAGINA, feedFiltrado.length));
-        }
-      },
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [tab, feedFiltrado.length]);
+    if (tab !== 'home' && tab !== 'historico') return;
+    const el = mainRef.current;
 
-  useEffect(() => {
-    if (tab !== 'historico') return;
-    const el = sentinelCandRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisiveisCandidaturas((v) => Math.min(v + CANDIDATURAS_POR_PAGINA, candidaturasFiltradas.length));
-        }
-      },
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [tab, candidaturasFiltradas.length]);
+    // O <main> só tem overflow próprio quando seu conteúdo excede a altura que o
+    // layout reserva pra ele; caso contrário (mais comum) é a janela que rola.
+    // Checar os dois cobre ambos os casos sem depender de qual é o verdadeiro.
+    function faltamParaFim() {
+      if (el) {
+        const elRolavel = el.scrollHeight > el.clientHeight + 1;
+        if (elRolavel) return el.scrollHeight - el.scrollTop - el.clientHeight;
+      }
+      return document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+    }
+
+    function verificarScroll() {
+      if (faltamParaFim() > 200) return;
+      if (tab === 'home') {
+        setVisiveis((v) => (v < feedFiltrado.length ? Math.min(v + VAGAS_POR_PAGINA, feedFiltrado.length) : v));
+      } else {
+        setVisiveisCandidaturas((v) => (v < candidaturasFiltradas.length ? Math.min(v + CANDIDATURAS_POR_PAGINA, candidaturasFiltradas.length) : v));
+      }
+    }
+
+    el?.addEventListener('scroll', verificarScroll, { passive: true });
+    window.addEventListener('scroll', verificarScroll, { passive: true });
+    window.addEventListener('resize', verificarScroll);
+    return () => {
+      el?.removeEventListener('scroll', verificarScroll);
+      window.removeEventListener('scroll', verificarScroll);
+      window.removeEventListener('resize', verificarScroll);
+    };
+  }, [tab, feedFiltrado.length, candidaturasFiltradas.length]);
 
   function atualizarFiltro(novo: Partial<typeof filtros>) {
     setFiltros((f) => ({ ...f, ...novo }));
@@ -310,7 +311,7 @@ export default function ProfissionalPage() {
         footerPhotoUrl={perfil.fotoUrl}
       />
 
-      <main className="flex-1 overflow-y-auto bg-paws">
+      <main ref={mainRef} className="flex-1 overflow-y-auto bg-paws">
         {vagaSelecionada ? (() => {
           const compat = vagaSelecionada.categoria === perfil.funcao;
           const applied = hasApplied(vagaSelecionada.id);
@@ -534,7 +535,7 @@ export default function ProfissionalPage() {
               {feedFiltrado.length === 0 && <div className="text-sm text-gray-400">Nenhuma vaga encontrada.</div>}
             </div>
             {temMaisVagas && (
-              <div ref={sentinelRef} className="flex items-center justify-center py-6 text-xs font-semibold text-white/70">
+              <div className="flex items-center justify-center py-6 text-xs font-semibold text-white/70">
                 Carregando mais vagas...
               </div>
             )}
@@ -638,7 +639,7 @@ export default function ProfissionalPage() {
               )}
             </div>
             {temMaisCandidaturas && (
-              <div ref={sentinelCandRef} className="flex items-center justify-center py-6 text-xs font-semibold text-white/70">
+              <div className="flex items-center justify-center py-6 text-xs font-semibold text-white/70">
                 Carregando mais candidaturas...
               </div>
             )}
