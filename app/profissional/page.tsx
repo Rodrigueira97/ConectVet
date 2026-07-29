@@ -12,6 +12,7 @@ import {
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { FileField } from '@/app/components/FileField';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
+import { PawTrailLoader } from '@/app/components/PawTrailLoader';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import {
@@ -535,8 +536,8 @@ export default function ProfissionalPage() {
               {feedFiltrado.length === 0 && <div className="text-sm text-gray-400">Nenhuma vaga encontrada.</div>}
             </div>
             {temMaisVagas && (
-              <div className="flex items-center justify-center py-6 text-xs font-semibold text-white/70">
-                Carregando mais vagas...
+              <div className="flex items-center justify-center py-6">
+                <PawTrailLoader label="Carregando mais vagas..." />
               </div>
             )}
           </div>
@@ -639,8 +640,8 @@ export default function ProfissionalPage() {
               )}
             </div>
             {temMaisCandidaturas && (
-              <div className="flex items-center justify-center py-6 text-xs font-semibold text-white/70">
-                Carregando mais candidaturas...
+              <div className="flex items-center justify-center py-6">
+                <PawTrailLoader label="Carregando mais candidaturas..." />
               </div>
             )}
           </div>

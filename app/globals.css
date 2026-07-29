@@ -37,6 +37,24 @@ a:hover { color: #00847e; }
   .login-copy-group { align-self: center; }
 }
 
+/* Trilha de patinhas: usada pelo componente PawTrailLoader (loading reutilizável) */
+@keyframes pawStep {
+  0%   { opacity: 0; transform: scale(.4) translateY(4px); }
+  22%  { opacity: 1; transform: scale(1) translateY(0); }
+  55%  { opacity: 1; transform: scale(1) translateY(0); }
+  85%  { opacity: 0; transform: scale(.85) translateY(0); }
+  100% { opacity: 0; }
+}
+.animate-paw-step {
+  animation: pawStep 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-paw-step {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* Variante mais sutil, para banners compactos (ex.: topo do cadastro) */
 .bg-paws-header {
   background-color: #00a19a;

@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 type IconProps = { className?: string };
 
 const base = {
@@ -276,6 +278,19 @@ export function HeartIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
       <path d="M20.8 4.6c-1.7-1.7-4.4-1.7-6 0L12 7.4 9.2 4.6c-1.7-1.7-4.4-1.7-6 0-1.7 1.7-1.7 4.4 0 6l8.8 8.8 8.8-8.8c1.7-1.6 1.7-4.3 0-6z" />
+    </svg>
+  );
+}
+
+// Mesma forma de patinha usada no padrão decorativo de fundo (.bg-paws em globals.css).
+export function PawIcon({ className, style }: IconProps & { style?: CSSProperties }) {
+  return (
+    <svg viewBox="0 0 100 90" fill="currentColor" className={className} style={style}>
+      <ellipse cx="50" cy="63" rx="20" ry="16" />
+      <circle cx="24" cy="32" r="10" />
+      <circle cx="41" cy="15" r="9" />
+      <circle cx="59" cy="15" r="9" />
+      <circle cx="76" cy="32" r="10" />
     </svg>
   );
 }
