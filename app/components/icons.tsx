@@ -274,10 +274,19 @@ export function DownloadIcon({ className }: IconProps) {
   );
 }
 
-export function HeartIcon({ className }: IconProps) {
+export function HeartIcon({ className, filled }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...base} fill={filled ? 'currentColor' : 'none'} className={className}>
+      <path d="M20.8 4.6c-1.7-1.7-4.4-1.7-6 0L12 7.4 9.2 4.6c-1.7-1.7-4.4-1.7-6 0-1.7 1.7-1.7 4.4 0 6l8.8 8.8 8.8-8.8c1.7-1.6 1.7-4.3 0-6z" />
+    </svg>
+  );
+}
+
+export function BellIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
-      <path d="M20.8 4.6c-1.7-1.7-4.4-1.7-6 0L12 7.4 9.2 4.6c-1.7-1.7-4.4-1.7-6 0-1.7 1.7-1.7 4.4 0 6l8.8 8.8 8.8-8.8c1.7-1.6 1.7-4.3 0-6z" />
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
     </svg>
   );
 }

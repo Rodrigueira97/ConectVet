@@ -8,10 +8,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCandidaturaDto } from './dto/create-candidatura.dto';
 import {
   CandidaturaStatus,
+  NotificacaoTipo,
   PagamentoStatus,
   VagaStatus,
 } from '../../generated/prisma/enums';
 import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 const TAXA_PLATAFORMA = 0.05;
 
@@ -20,6 +22,7 @@ export class CandidaturasService {
   constructor(
     private prisma: PrismaService,
     private avaliacoesService: AvaliacoesService,
+    private notificacoesService: NotificacoesService,
   ) {}
 
   async candidatar(profissionalUserId: string, dto: CreateCandidaturaDto) {
@@ -61,6 +64,27 @@ export class CandidaturasService {
       include: { vaga: { include: { clinica: { select: { nome: true } } } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /** Desistência da candidatura pelo próprio profissional — só permitida enquanto ainda não houve resposta. */
+  async cancelar(profissionalUserId: string, candidaturaId: string) {
+    const profissional = await this.prisma.profissional.findUniqueOrThrow({
+      where: { userId: profissionalUserId },
+    });
+    const candidatura = await this.prisma.candidatura.findUnique({
+      where: { id: candidaturaId },
+    });
+    if (!candidatura)
+      throw new NotFoundException('Candidatura não encontrada.');
+    if (candidatura.profissionalId !== profissional.id)
+      throw new ForbiddenException('Esta candidatura não pertence a você.');
+    if (candidatura.status !== CandidaturaStatus.PENDENTE)
+      throw new ConflictException(
+        'Só é possível cancelar candidaturas ainda pendentes.',
+      );
+
+    await this.prisma.candidatura.delete({ where: { id: candidaturaId } });
+    return { ok: true };
   }
 
   async candidatosDaVaga(clinicaUserId: string, vagaId: string) {
@@ -105,10 +129,16 @@ export class CandidaturasService {
     if (candidatura.status !== CandidaturaStatus.PENDENTE) {
       throw new ConflictException('Esta candidatura já foi respondida.');
     }
-    return this.prisma.candidatura.update({
+    const atualizada = await this.prisma.candidatura.update({
       where: { id: candidaturaId },
       data: { status: CandidaturaStatus.RECUSADO },
     });
+    await this.notificacoesService.criar(
+      candidatura.profissional.userId,
+      NotificacaoTipo.CANDIDATURA_RECUSADA,
+      `Sua candidatura para ${candidatura.vaga.clinica.nome} não foi aceita desta vez.`,
+    );
+    return atualizada;
   }
 
   /** Aceita a candidatura e já retém o pagamento — cada vaga permite apenas um aprovado por enquanto. */
@@ -126,20 +156,27 @@ export class CandidaturasService {
     const taxa = Number((valorLiquido * TAXA_PLATAFORMA).toFixed(2));
     const valorBruto = Number((valorLiquido + taxa).toFixed(2));
 
-    return this.prisma.$transaction(async (tx) => {
+    const outrosPendentes = await this.prisma.candidatura.findMany({
+      where: {
+        vagaId: candidatura.vagaId,
+        status: CandidaturaStatus.PENDENTE,
+        id: { not: candidaturaId },
+      },
+      include: { profissional: { select: { userId: true } } },
+    });
+
+    const pagamento = await this.prisma.$transaction(async (tx) => {
       await tx.candidatura.update({
         where: { id: candidaturaId },
         data: { status: CandidaturaStatus.ACEITO },
       });
 
-      await tx.candidatura.updateMany({
-        where: {
-          vagaId: candidatura.vagaId,
-          status: CandidaturaStatus.PENDENTE,
-          id: { not: candidaturaId },
-        },
-        data: { status: CandidaturaStatus.RECUSADO },
-      });
+      if (outrosPendentes.length) {
+        await tx.candidatura.updateMany({
+          where: { id: { in: outrosPendentes.map((c) => c.id) } },
+          data: { status: CandidaturaStatus.RECUSADO },
+        });
+      }
 
       await tx.vaga.update({
         where: { id: candidatura.vagaId },
@@ -157,6 +194,22 @@ export class CandidaturasService {
         },
       });
     });
+
+    const clinicaNome = candidatura.vaga.clinica.nome;
+    await this.notificacoesService.criar(
+      candidatura.profissional.userId,
+      NotificacaoTipo.CANDIDATURA_ACEITA,
+      `Sua candidatura para ${clinicaNome} foi aceita.`,
+    );
+    for (const outra of outrosPendentes) {
+      await this.notificacoesService.criar(
+        outra.profissional.userId,
+        NotificacaoTipo.VAGA_PREENCHIDA_OUTRO,
+        `A vaga em ${clinicaNome} foi preenchida por outro profissional.`,
+      );
+    }
+
+    return pagamento;
   }
 
   private async buscarComDono(clinicaUserId: string, candidaturaId: string) {
@@ -165,7 +218,10 @@ export class CandidaturasService {
     });
     const candidatura = await this.prisma.candidatura.findUnique({
       where: { id: candidaturaId },
-      include: { vaga: true },
+      include: {
+        vaga: { include: { clinica: true } },
+        profissional: { select: { userId: true } },
+      },
     });
     if (!candidatura)
       throw new NotFoundException('Candidatura não encontrada.');

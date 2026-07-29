@@ -13,13 +13,14 @@ import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { FileField } from '@/app/components/FileField';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { PawTrailLoader } from '@/app/components/PawTrailLoader';
+import { NotificationBell } from '@/app/components/NotificationBell';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
-  getAvaliacoesPorCandidatura, uploadArquivo,
+  getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura,
 } from '@/lib/api';
 
 const VAGAS_POR_PAGINA = 6;
@@ -58,6 +59,18 @@ function vagaEncerrada(v: { data: string; status: string }) {
   return v.data.slice(0, 10) <= hojeStr;
 }
 
+function urgenciaLabel(v: { data: string; status: string }) {
+  if (vagaEncerrada(v)) return null;
+  const hojeStr = new Date().toISOString().slice(0, 10);
+  const amanhaStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const d = v.data.slice(0, 10);
+  if (d === hojeStr) return 'É hoje';
+  if (d === amanhaStr) return 'Começa amanhã';
+  return null;
+}
+
+const FAVORITOS_KEY = 'conectvet_vagas_favoritas';
+
 type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'RECUSADO';
 
 function statusDaCandidatura(c: Candidatura): StatusCandidatura {
@@ -65,16 +78,66 @@ function statusDaCandidatura(c: Candidatura): StatusCandidatura {
   return c.status;
 }
 
-const STATUS_LABEL: Record<StatusCandidatura, string> = {
-  PENDENTE: 'Pendente', ACEITO: 'Aceito', CONCLUIDA: 'Concluído', RECUSADO: 'Recusado',
-};
+type PassoJornada = { label: string; state: 'done' | 'current' | 'fail' };
 
-const STATUS_PILL_CLASS: Record<StatusCandidatura, string> = {
-  PENDENTE: 'bg-amber-100 text-amber-700',
-  ACEITO: 'bg-primaryTint text-primaryDeep',
-  CONCLUIDA: 'bg-secondary/10 text-secondary',
-  RECUSADO: 'bg-gray-100 text-gray-500',
-};
+function passosDaCandidatura(c: Candidatura, status: StatusCandidatura): PassoJornada[] {
+  const vagaStatus = c.vaga?.status;
+  if (status === 'PENDENTE') {
+    return [{ label: 'Enviada', state: 'done' }, { label: 'Em análise', state: 'current' }];
+  }
+  if (status === 'RECUSADO') {
+    const ultimoLabel = vagaStatus === 'CANCELADA' ? 'Vaga cancelada' : vagaStatus === 'ABERTA' ? 'Não foi dessa vez' : 'Preenchida por outro';
+    return [
+      { label: 'Enviada', state: 'done' },
+      { label: 'Em análise', state: 'done' },
+      { label: ultimoLabel, state: 'fail' },
+    ];
+  }
+  if (status === 'ACEITO') {
+    return [
+      { label: 'Enviada', state: 'done' },
+      { label: 'Em análise', state: 'done' },
+      { label: 'Aceita', state: 'current' },
+    ];
+  }
+  return [
+    { label: 'Enviada', state: 'done' },
+    { label: 'Em análise', state: 'done' },
+    { label: 'Aceita', state: 'done' },
+    { label: 'Concluída', state: 'done' },
+  ];
+}
+
+function motivoRecusaLabel(c: Candidatura) {
+  const vagaStatus = c.vaga?.status;
+  if (vagaStatus === 'CANCELADA') return 'A clínica cancelou esta vaga.';
+  if (vagaStatus === 'ABERTA') return 'A clínica optou por outro profissional desta vez. Continue de olho em novas vagas na Home.';
+  return 'A vaga foi preenchida por outro profissional.';
+}
+
+function StepperCandidatura({ passos }: { passos: PassoJornada[] }) {
+  return (
+    <div className="flex items-start mt-3 mb-1">
+      {passos.map((p, i) => (
+        <div key={i} className="flex flex-col items-center flex-1 min-w-[64px] relative">
+          {i > 0 && (
+            <div className={`absolute top-[13px] right-1/2 w-full h-0.5 z-0 ${passos[i - 1].state === 'done' ? 'bg-primary' : 'bg-gray-200'}`} />
+          )}
+          <div
+            className={`relative z-10 w-[26px] h-[26px] rounded-full flex items-center justify-center text-[11px] font-extrabold border-[3px] border-white ${
+              p.state === 'done' ? 'bg-primary text-white' : p.state === 'current' ? 'bg-primaryTint text-primaryDeep ring-4 ring-primaryTint' : 'bg-red-100 text-red-700'
+            }`}
+          >
+            {p.state === 'done' ? <CheckIcon className="w-3 h-3" /> : p.state === 'fail' ? <CloseIcon className="w-3 h-3" /> : i + 1}
+          </div>
+          <div className={`text-[10px] font-bold text-center mt-1.5 leading-tight px-0.5 ${p.state === 'current' || p.state === 'done' ? 'text-ink' : 'text-gray-400'}`}>
+            {p.label}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function ProfissionalPage() {
   const router = useRouter();
@@ -90,8 +153,25 @@ export default function ProfissionalPage() {
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
-  const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
+  const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false, favoritas: false });
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const [favoritos, setFavoritos] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      const salvos = JSON.parse(localStorage.getItem(FAVORITOS_KEY) || '[]');
+      if (Array.isArray(salvos)) setFavoritos(new Set(salvos));
+    } catch {}
+  }, []);
+
+  function alternarFavorito(vagaId: string) {
+    setFavoritos((prev) => {
+      const next = new Set(prev);
+      if (next.has(vagaId)) next.delete(vagaId); else next.add(vagaId);
+      localStorage.setItem(FAVORITOS_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
   const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
   const [filtroCandidaturas, setFiltroCandidaturas] = useState<'TODAS' | StatusCandidatura>('TODAS');
   const [visiveisCandidaturas, setVisiveisCandidaturas] = useState(CANDIDATURAS_POR_PAGINA);
@@ -99,6 +179,8 @@ export default function ProfissionalPage() {
   const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
+  const [cancelandoProcessandoId, setCancelandoProcessandoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getToken()) { router.push('/'); return; }
@@ -150,6 +232,20 @@ export default function ProfissionalPage() {
     }
   }
 
+  async function confirmarCancelamento(candidaturaId: string) {
+    setCancelandoProcessandoId(candidaturaId);
+    setActionError('');
+    try {
+      await cancelarCandidatura(candidaturaId);
+      setCandidaturas((prev) => prev.filter((c) => c.id !== candidaturaId));
+      setCancelandoId(null);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Não foi possível cancelar a candidatura.');
+    } finally {
+      setCancelandoProcessandoId(null);
+    }
+  }
+
   const regioesTokens = (perfil?.regioesAtendimento || '')
     .split(/[,\s]+/)
     .map((t) => t.trim().toLowerCase())
@@ -165,6 +261,7 @@ export default function ProfissionalPage() {
     const local = localDaVaga(v);
     if (filtros.busca && !`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`.toLowerCase().includes(filtros.busca.toLowerCase())) return false;
     if (filtros.pertoDeMim && !pertoDeVoce(v)) return false;
+    if (filtros.favoritas && !favoritos.has(v.id)) return false;
     return true;
   });
 
@@ -242,10 +339,10 @@ export default function ProfissionalPage() {
   }
 
   function limparFiltros() {
-    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
+    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false, favoritas: false });
   }
 
-  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria, filtros.pertoDeMim].filter(Boolean).length;
+  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria, filtros.pertoDeMim, filtros.favoritas].filter(Boolean).length;
   const algumFiltroAtivo = filtrosAtivos > 0 || !!filtros.busca;
 
   async function salvarPerfil() {
@@ -311,6 +408,10 @@ export default function ProfissionalPage() {
         footerSubtitle="Conta profissional"
         footerPhotoUrl={perfil.fotoUrl}
       />
+
+      <div className="fixed top-2.5 right-14 md:top-5 md:right-6 z-30">
+        <NotificationBell />
+      </div>
 
       <main ref={mainRef} className="flex-1 overflow-y-auto bg-paws">
         {vagaSelecionada ? (() => {
@@ -396,6 +497,10 @@ export default function ProfissionalPage() {
                   Somente perto de mim ({perfil.regioesAtendimento})
                 </label>
               )}
+              <label className="flex items-center gap-2 text-sm font-semibold text-white/90 ml-1">
+                <input type="checkbox" checked={filtros.favoritas} onChange={(e) => atualizarFiltro({ favoritas: e.target.checked })} />
+                Só favoritas
+              </label>
               <button
                 onClick={limparFiltros}
                 disabled={!algumFiltroAtivo}
@@ -464,6 +569,10 @@ export default function ProfissionalPage() {
                       Somente perto de mim ({perfil.regioesAtendimento})
                     </label>
                   )}
+                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <input type="checkbox" checked={filtros.favoritas} onChange={(e) => atualizarFiltro({ favoritas: e.target.checked })} />
+                    Só favoritas
+                  </label>
                   {algumFiltroAtivo && (
                     <button
                       onClick={limparFiltros}
@@ -481,6 +590,8 @@ export default function ProfissionalPage() {
                 const applied = hasApplied(v.id);
                 const perto = pertoDeVoce(v);
                 const encerrada = vagaEncerrada(v);
+                const urgencia = urgenciaLabel(v);
+                const favorita = favoritos.has(v.id);
                 const local = localDaVaga(v);
                 const localCurto = [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ');
                 return (
@@ -498,11 +609,23 @@ export default function ProfissionalPage() {
                           ) : perto && (
                             <div className="bg-secondary text-white text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Perto de você</div>
                           )}
+                          {urgencia && (
+                            <div className="bg-amber-100 text-amber-700 text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">{urgencia}</div>
+                          )}
                         </div>
                         <div className="text-[17px] font-extrabold mt-[3px]">{v.clinica?.nome}</div>
                         <div className="mt-1.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
                       </div>
-                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap">R$ {v.valor}</div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); alternarFavorito(v.id); }}
+                          aria-label={favorita ? 'Remover dos favoritos' : 'Favoritar vaga'}
+                          className={`w-8 h-8 rounded-[9px] border flex items-center justify-center transition-colors ${favorita ? 'border-rose-200 bg-rose-50 text-rose-500' : 'border-gray-200 text-gray-300 hover:border-rose-200 hover:text-rose-400'}`}
+                        >
+                          <HeartIcon className="w-3.5 h-3.5" filled={favorita} />
+                        </button>
+                        <div className="bg-primaryTint text-primaryDeep font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap">R$ {v.valor}</div>
+                      </div>
                     </div>
                     <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
                       <a
@@ -575,15 +698,13 @@ export default function ProfissionalPage() {
                 const horas = v ? calcDuracaoHoras(v.horaInicio, v.horaFim) : 0;
                 const horasLabel = horas % 1 === 0 ? `${horas}h` : `${horas.toFixed(1)}h`;
                 return (
-                  <div key={c.id} className={`bg-white border border-gray-200 rounded-2xl p-[18px] ${status === 'RECUSADO' ? 'opacity-70' : ''}`}>
+                  <div key={c.id} className={`bg-white border border-gray-200 rounded-2xl p-[18px] ${status === 'RECUSADO' ? 'opacity-80' : ''}`}>
                     <div className="flex justify-between items-start gap-3">
                       <div>
                         <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{v && CATEGORIA_LABEL[v.categoria]}</div>
                         <div className="text-[17px] font-extrabold mt-[3px]">{v?.clinica?.nome}</div>
+                        <div className="text-xs text-gray-400 mt-1">Candidatura enviada em {formatDataBR(c.createdAt)}</div>
                       </div>
-                      <span className={`text-[11px] font-extrabold uppercase tracking-wide px-[11px] py-1 rounded-full whitespace-nowrap shrink-0 ${STATUS_PILL_CLASS[status]}`}>
-                        {STATUS_LABEL[status]}
-                      </span>
                     </div>
                     {v && (
                       <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
@@ -593,30 +714,31 @@ export default function ProfissionalPage() {
                         <div>{local}</div>
                       </div>
                     )}
-                    <div className="text-xs text-gray-400 mt-2.5">Candidatura enviada em {formatDataBR(c.createdAt)}</div>
+
+                    <StepperCandidatura passos={passosDaCandidatura(c, status)} />
 
                     {status === 'PENDENTE' && (
-                      <div className="flex items-start gap-2 mt-3 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-amber-50 text-amber-800">
+                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-amber-50 text-amber-800">
                         <ClockIcon className="w-4 h-4 shrink-0 mt-px" />
                         <div>Aguardando resposta da clínica.</div>
                       </div>
                     )}
                     {status === 'ACEITO' && (
-                      <div className="flex items-start gap-2 mt-3 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-primaryTint text-primaryDeep">
+                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-primaryTint text-primaryDeep">
                         <CheckCircleIcon className="w-4 h-4 shrink-0 mt-px" />
                         <div>Plantão confirmado! Fique de olho na data — ainda faltam alguns dias.</div>
                       </div>
                     )}
                     {status === 'CONCLUIDA' && v && (
-                      <div className="flex items-start gap-2 mt-3 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-secondary/10 text-secondary">
+                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-secondary/10 text-secondary">
                         <CheckCircleIcon className="w-4 h-4 shrink-0 mt-px" />
                         <div>Plantão realizado em {formatDataBR(v.data)}.</div>
                       </div>
                     )}
                     {status === 'RECUSADO' && (
-                      <div className="flex items-start gap-2 mt-3 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-gray-50 text-gray-500">
+                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-gray-50 text-gray-500">
                         <XCircleIcon className="w-4 h-4 shrink-0 mt-px" />
-                        <div>A clínica optou por outro profissional desta vez. Continue de olho em novas vagas na Home.</div>
+                        <div>{motivoRecusaLabel(c)}</div>
                       </div>
                     )}
 
@@ -629,6 +751,32 @@ export default function ProfissionalPage() {
                         labelOutra={`${v?.clinica?.nome || 'Clínica'} avaliou você`}
                         avaliacoesIniciais={avaliacoesPorCandidatura[c.id] || []}
                       />
+                    )}
+
+                    {status === 'PENDENTE' && (
+                      cancelandoId === c.id ? (
+                        <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3">
+                          <div className="text-[12.5px] font-semibold text-red-800 mb-2">Desistir dessa candidatura? A clínica vai ver que você não está mais concorrendo à vaga.</div>
+                          <div className="flex gap-2">
+                            <button
+                              disabled={cancelandoProcessandoId === c.id}
+                              onClick={() => confirmarCancelamento(c.id)}
+                              className="px-3.5 py-1.5 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-60"
+                            >
+                              {cancelandoProcessandoId === c.id ? 'Cancelando...' : 'Sim, cancelar'}
+                            </button>
+                            <button onClick={() => setCancelandoId(null)} className="px-3.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 text-xs font-bold">
+                              Voltar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end mt-3">
+                          <button onClick={() => setCancelandoId(c.id)} className="text-xs font-bold text-danger inline-flex items-center gap-1 hover:underline">
+                            <CloseIcon className="w-3 h-3" /> Cancelar candidatura
+                          </button>
+                        </div>
+                      )
                     )}
                   </div>
                 );

@@ -11,6 +11,7 @@ import { CandidaturasModule } from './candidaturas/candidaturas.module';
 import { PagamentosModule } from './pagamentos/pagamentos.module';
 import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { NotificacoesModule } from './notificacoes/notificacoes.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { UploadsModule } from './uploads/uploads.module';
     PagamentosModule,
     AvaliacoesModule,
     UploadsModule,
+    NotificacoesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

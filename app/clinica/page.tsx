@@ -11,10 +11,11 @@ import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
+import { NotificationBell } from '@/app/components/NotificationBell';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE,
   Vaga, Candidatura, Clinica, Avaliacao,
-  getClinicaMe, updateClinicaMe, getFeed, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
+  getClinicaMe, updateClinicaMe, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
   getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
   getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos,
 } from '@/lib/api';
@@ -52,7 +53,6 @@ export default function ClinicaPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('home');
   const [clinica, setClinica] = useState<Clinica | null>(null);
-  const [feed, setFeed] = useState<Vaga[]>([]);
   const [minhasVagas, setMinhasVagas] = useState<Vaga[]>([]);
   const [candidatos, setCandidatos] = useState<Candidatura[]>([]);
   const [candidatosLoading, setCandidatosLoading] = useState(false);
@@ -80,10 +80,9 @@ export default function ClinicaPage() {
     if (!getToken()) { router.push('/'); return; }
     (async () => {
       try {
-        const [c, f, mv] = await Promise.all([getClinicaMe(), getFeed(), getMinhasVagas()]);
+        const [c, mv] = await Promise.all([getClinicaMe(), getMinhasVagas()]);
         setClinica(c);
         setPerfilForm(perfilFormFromClinica(c));
-        setFeed(f);
         setMinhasVagas(mv);
 
         const hiredIds = mv
@@ -384,6 +383,10 @@ export default function ClinicaPage() {
         footerIcon="building"
       />
 
+      <div className="fixed top-2.5 right-14 md:top-5 md:right-6 z-30">
+        <NotificationBell />
+      </div>
+
       <main className="flex-1 overflow-y-auto bg-paws">
         {vagaSelecionada ? (
           <VagaDetalheView vaga={vagaSelecionada} onBack={() => setVagaSelecionada(null)} />
@@ -395,60 +398,81 @@ export default function ClinicaPage() {
           </div>
         )}
 
-        {tab === 'home' && (
-          <div className="max-w-[880px] mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas no feed</h1>
-            <p className="text-sm text-white/85 mb-6">Visão geral das vagas publicadas na plataforma</p>
-            <div className="flex flex-col gap-[14px]">
-              {feed.map((v) => {
-                const local = localDaVaga(v);
-                const localCurto = [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ');
-                return (
-                  <div
-                    key={v.id}
-                    onClick={() => setVagaSelecionada({
-                      clinica: v.clinica?.nome, categoria: CATEGORIA_LABEL[v.categoria],
-                      rua: v.rua, numero: v.numero, complemento: v.complemento, bairro: v.bairro, cidade: v.cidade, estado: v.estado,
-                      data: v.data, horaInicio: v.horaInicio, horaFim: v.horaFim,
-                      valor: v.valor, descricao: v.descricao,
-                    })}
-                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-primary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150"
-                  >
-                    <div className="flex justify-between items-start gap-3">
-                      <div>
-                        <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{CATEGORIA_LABEL[v.categoria]}</div>
-                        <div className="text-[17px] font-extrabold mt-[3px]">{v.clinica?.nome}</div>
-                        <div className="mt-1.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+        {tab === 'home' && (() => {
+          const vagasAtivas = minhasVagas.filter((v) => v.status === 'ABERTA').length;
+          const consideradas = minhasVagas.filter((v) => v.status !== 'CANCELADA');
+          const preenchidas = consideradas.filter((v) => v.status === 'PREENCHIDA' || v.status === 'CONCLUIDA').length;
+          const taxaPreenchimento = consideradas.length ? Math.round((preenchidas / consideradas.length) * 100) : null;
+
+          const avaliacoesRecebidas = Object.values(avaliacoesPorCandidatura).flat().filter((a) => a.autor === 'PROFISSIONAL');
+          const notaMedia = avaliacoesRecebidas.length
+            ? avaliacoesRecebidas.reduce((soma, a) => soma + a.nota, 0) / avaliacoesRecebidas.length
+            : null;
+
+          const retidoTotal = minhasVagas.reduce((soma, v) => soma + (v.pagamento?.status === 'RETIDO' ? Number(v.pagamento.valorBruto) : 0), 0);
+
+          const candidatosPendentes = minhasVagas
+            .filter((v) => v.status === 'ABERTA')
+            .flatMap((v) => (v.candidaturas || []).filter((c) => c.status === 'PENDENTE').map((c) => ({ candidatura: c, vaga: v })));
+
+          return (
+            <div className="max-w-3xl mx-auto p-8">
+              <h1 className="text-2xl font-extrabold mb-1 text-white">Painel</h1>
+              <p className="text-sm text-white/85 mb-6">Como sua clínica está indo na plataforma</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{vagasAtivas}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Vagas ativas</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{taxaPreenchimento !== null ? `${taxaPreenchimento}%` : '—'}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Taxa de preenchimento</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{notaMedia !== null ? notaMedia.toFixed(1) : '—'}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Avaliação recebida</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">R$ {retidoTotal.toFixed(2)}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Retido, aguardando confirmação</div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-sm font-extrabold text-ink">Candidatos aguardando resposta</div>
+                  {candidatosPendentes.length > 0 && (
+                    <span className="bg-amber-100 text-amber-700 text-[11px] font-extrabold px-2 py-0.5 rounded-full">{candidatosPendentes.length}</span>
+                  )}
+                </div>
+                {candidatosPendentes.length === 0 ? (
+                  <div className="text-sm text-gray-400 mt-2">Nenhum candidato pendente no momento.</div>
+                ) : (
+                  <div className="flex flex-col">
+                    {candidatosPendentes.map(({ candidatura: c, vaga: v }) => (
+                      <div key={c.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
+                        <div className="w-8 h-8 rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-xs font-extrabold shrink-0">
+                          {(c.profissional?.nome || '?').slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-bold text-ink truncate">{c.profissional?.nome}</div>
+                          <div className="text-[12px] text-gray-500 truncate">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · vaga de {formatDataBR(v.data)}</div>
+                        </div>
+                        <button
+                          onClick={() => { setSelectedMvId(v.id); setTab('candidatos'); }}
+                          className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold shrink-0"
+                        >
+                          Ver
+                        </button>
                       </div>
-                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap">R$ {v.valor}</div>
-                    </div>
-                    <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
-                      <a
-                        href={mapsLink(local)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 hover:underline"
-                      >
-                        <PinIcon className="w-3.5 h-3.5 shrink-0 text-primary" />
-                        Local <b className="font-bold text-gray-700">{localCurto}</b>
-                      </a>
-                      <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
-                      <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
-                    </div>
-                    {v.descricao && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 text-[13.5px] leading-relaxed text-gray-700">
-                        <div className="text-[11px] font-extrabold text-gray-400 uppercase tracking-[0.02em] mb-1">Descrição</div>
-                        <div className="whitespace-pre-line">{v.descricao}</div>
-                      </div>
-                    )}
+                    ))}
                   </div>
-                );
-              })}
-              {feed.length === 0 && <div className="text-sm text-gray-400">Nenhuma vaga publicada ainda.</div>}
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {tab === 'criar-vaga' && (
           <div className="max-w-xl mx-auto p-8">

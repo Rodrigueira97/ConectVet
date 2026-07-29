@@ -9,12 +9,17 @@ import { CreateAvaliacaoDto } from './dto/create-avaliacao.dto';
 import {
   AvaliacaoAutor,
   CandidaturaStatus,
+  NotificacaoTipo,
   Role,
 } from '../../generated/prisma/enums';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 @Injectable()
 export class AvaliacoesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificacoesService: NotificacoesService,
+  ) {}
 
   async criar(user: { userId: string; role: string }, dto: CreateAvaliacaoDto) {
     const candidatura = await this.prisma.candidatura.findUnique({
@@ -57,7 +62,7 @@ export class AvaliacoesService {
     if (jaAvaliou)
       throw new ConflictException('Você já avaliou esta candidatura.');
 
-    return this.prisma.avaliacao.create({
+    const avaliacao = await this.prisma.avaliacao.create({
       data: {
         candidaturaId: dto.candidaturaId,
         profissionalId: candidatura.profissionalId,
@@ -66,6 +71,23 @@ export class AvaliacoesService {
         comentario: dto.comentario,
       },
     });
+
+    const estrelas = '★'.repeat(dto.nota) + '☆'.repeat(5 - dto.nota);
+    if (autor === AvaliacaoAutor.CLINICA) {
+      await this.notificacoesService.criar(
+        candidatura.profissional.userId,
+        NotificacaoTipo.AVALIACAO_RECEBIDA,
+        `${candidatura.vaga.clinica.nome} avaliou seu plantão: ${estrelas}`,
+      );
+    } else {
+      await this.notificacoesService.criar(
+        candidatura.vaga.clinica.userId,
+        NotificacaoTipo.AVALIACAO_RECEBIDA,
+        `${candidatura.profissional.nome} avaliou o plantão: ${estrelas}`,
+      );
+    }
+
+    return avaliacao;
   }
 
   async porCandidatura(candidaturaId: string) {

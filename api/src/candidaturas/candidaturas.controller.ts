@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -33,6 +34,12 @@ export class CandidaturasController {
   @Get('minhas')
   minhas(@CurrentUser() user: AuthUser) {
     return this.candidaturasService.minhas(user.userId);
+  }
+
+  @Roles(Role.PROFISSIONAL)
+  @Delete(':id')
+  cancelar(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.candidaturasService.cancelar(user.userId, id);
   }
 
   @Roles(Role.CLINICA)

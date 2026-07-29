@@ -331,6 +331,10 @@ export function recusarCandidatura(id: string) {
   return patch<Candidatura>(`/candidaturas/${id}/recusar`);
 }
 
+export function cancelarCandidatura(id: string) {
+  return request<{ ok: true }>(`/candidaturas/${id}`, { method: 'DELETE' });
+}
+
 // ---------- Pagamentos ----------
 
 export function listarPagamentos() {
@@ -359,4 +363,30 @@ export function criarAvaliacao(payload: { candidaturaId: string; nota: number; c
 
 export function getAvaliacoesPorCandidatura(candidaturaId: string) {
   return get<Avaliacao[]>(`/avaliacoes/candidatura/${candidaturaId}`);
+}
+
+// ---------- Notificações ----------
+
+export type NotificacaoTipo =
+  | 'CANDIDATURA_ACEITA'
+  | 'CANDIDATURA_RECUSADA'
+  | 'VAGA_PREENCHIDA_OUTRO'
+  | 'PAGAMENTO_LIBERADO'
+  | 'AVALIACAO_RECEBIDA';
+
+export type Notificacao = {
+  id: string;
+  userId: string;
+  tipo: NotificacaoTipo;
+  texto: string;
+  lida: boolean;
+  createdAt: string;
+};
+
+export function getNotificacoes() {
+  return get<Notificacao[]>('/notificacoes');
+}
+
+export function marcarNotificacoesLidas() {
+  return patch<{ ok: true }>('/notificacoes/marcar-lidas');
 }
