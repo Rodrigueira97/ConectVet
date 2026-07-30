@@ -17,13 +17,21 @@ import { NotificationBell } from '@/app/components/NotificationBell';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import {
-  ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS,
+  ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
   getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura,
 } from '@/lib/api';
 
 const VAGAS_POR_PAGINA = 6;
+
+function especialidadeFormFromProfissional(p: { especialidade?: string | null }) {
+  const salva = p.especialidade || '';
+  const conhecida = ESPECIALIDADES_VETERINARIAS.includes(salva) && salva !== 'Outra';
+  return conhecida
+    ? { especialidade: salva, especialidadeOutra: '' }
+    : { especialidade: salva ? 'Outra' : '', especialidadeOutra: salva };
+}
 const CANDIDATURAS_POR_PAGINA = 10;
 
 type Tab = 'home' | 'historico' | 'perfil';
@@ -144,7 +152,7 @@ export default function ProfissionalPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('home');
   const [perfil, setPerfil] = useState<Profissional | null>(null);
-  const [perfilForm, setPerfilForm] = useState({ nome: '', telefone: '', dataNascimento: '', areaAtuacao: '', regioesAtendimento: '', observacoes: '' });
+  const [perfilForm, setPerfilForm] = useState({ nome: '', telefone: '', dataNascimento: '', especialidade: '', especialidadeOutra: '', areaAtuacao: '', regioesAtendimento: '', observacoes: '' });
   const [savingPerfil, setSavingPerfil] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [editandoPerfil, setEditandoPerfil] = useState(false);
@@ -190,6 +198,7 @@ export default function ProfissionalPage() {
         setPerfil(p);
         setPerfilForm({
           nome: p.nome, telefone: p.telefone || '', dataNascimento: p.dataNascimento ? p.dataNascimento.slice(0, 10) : '',
+          ...especialidadeFormFromProfissional(p),
           areaAtuacao: p.areaAtuacao, regioesAtendimento: p.regioesAtendimento, observacoes: p.observacoes || '',
         });
         setFeed(f);
@@ -352,15 +361,23 @@ export default function ProfissionalPage() {
       const curriculoUrl = curriculoNovo
         ? await uploadArquivo(curriculoNovo)
         : curriculoRemovido ? null : undefined;
+      const especialidade = perfil?.funcao === 'VETERINARIO_ESPECIALISTA'
+        ? (perfilForm.especialidade === 'Outra' ? perfilForm.especialidadeOutra.trim() : perfilForm.especialidade)
+        : undefined;
       const atualizado = await updateProfissionalMe({
-        ...perfilForm,
+        nome: perfilForm.nome,
         telefone: onlyDigits(perfilForm.telefone),
         dataNascimento: perfilForm.dataNascimento || undefined,
+        areaAtuacao: perfilForm.areaAtuacao,
+        regioesAtendimento: perfilForm.regioesAtendimento,
+        observacoes: perfilForm.observacoes,
+        ...(especialidade !== undefined ? { especialidade } : {}),
         ...(curriculoUrl !== undefined ? { curriculoUrl } : {}),
       });
       setPerfil(atualizado);
       setPerfilForm({
         nome: atualizado.nome, telefone: atualizado.telefone || '', dataNascimento: atualizado.dataNascimento ? atualizado.dataNascimento.slice(0, 10) : '',
+        ...especialidadeFormFromProfissional(atualizado),
         areaAtuacao: atualizado.areaAtuacao, regioesAtendimento: atualizado.regioesAtendimento, observacoes: atualizado.observacoes || '',
       });
       setCurriculoNovo(null);
@@ -826,6 +843,11 @@ export default function ProfissionalPage() {
                   <span className="bg-white/15 text-white text-xs font-extrabold uppercase tracking-wide px-3 py-1.5 rounded-full">
                     {CATEGORIA_LABEL[perfil.funcao]}
                   </span>
+                  {perfil.funcao === 'VETERINARIO_ESPECIALISTA' && perfil.especialidade && (
+                    <span className="bg-white/15 text-white text-xs font-bold px-3 py-1.5 rounded-full">
+                      {perfil.especialidade}
+                    </span>
+                  )}
                   {notaMediaRecebida !== null && (
                     <span className="inline-flex items-center gap-1.5 text-white/90 text-[13.5px] font-bold">
                       <span className="text-[#FFD666]">★</span> {notaMediaRecebida.toFixed(1)}
@@ -953,6 +975,28 @@ export default function ProfissionalPage() {
                   <input disabled value={perfil.documento} className="px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500" /></label>
                 <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Função</span>
                   <input disabled value={CATEGORIA_LABEL[perfil.funcao]} className="px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500" /></label>
+                {perfil.funcao === 'VETERINARIO_ESPECIALISTA' && (
+                  <>
+                    <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Especialidade</span>
+                      <select
+                        value={perfilForm.especialidade}
+                        onChange={(e) => setPerfilForm((f) => ({ ...f, especialidade: e.target.value, especialidadeOutra: e.target.value === 'Outra' ? f.especialidadeOutra : '' }))}
+                        className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm bg-white"
+                      >
+                        <option value="">Selecione...</option>
+                        {ESPECIALIDADES_VETERINARIAS.map((esp) => <option key={esp} value={esp}>{esp}</option>)}
+                      </select>
+                    </label>
+                    {perfilForm.especialidade === 'Outra' && (
+                      <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Qual especialidade?</span>
+                        <input
+                          value={perfilForm.especialidadeOutra}
+                          onChange={(e) => setPerfilForm((f) => ({ ...f, especialidadeOutra: e.target.value }))}
+                          className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
+                        /></label>
+                    )}
+                  </>
+                )}
                 <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Telefone</span>
                   <input
                     value={maskTelefone(perfilForm.telefone)}

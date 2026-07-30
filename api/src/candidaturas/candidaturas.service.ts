@@ -104,6 +104,7 @@ export class CandidaturasService {
             id: true,
             nome: true,
             funcao: true,
+            especialidade: true,
             areaAtuacao: true,
             regioesAtendimento: true,
           },

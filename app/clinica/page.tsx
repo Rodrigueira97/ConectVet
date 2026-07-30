@@ -699,7 +699,10 @@ export default function ClinicaPage() {
                           <div>
                             <div className="font-extrabold">{c.profissional?.nome}</div>
                             <div className="mt-0.5"><RatingBadge notaMedia={c.profissional?.notaMedia} totalAvaliacoes={c.profissional?.totalAvaliacoes} /></div>
-                            <div className="text-sm text-gray-500 mt-1">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · {c.profissional?.areaAtuacao}</div>
+                            <div className="text-sm text-gray-500 mt-1">
+                              {c.profissional && CATEGORIA_LABEL[c.profissional.funcao]}
+                              {c.profissional?.especialidade ? ` (${c.profissional.especialidade})` : ''} · {c.profissional?.areaAtuacao}
+                            </div>
                             <div className="text-xs text-gray-500 mt-1">Região: {c.profissional?.regioesAtendimento}</div>
                           </div>
                           <div className={badge.className}>{badge.label}</div>

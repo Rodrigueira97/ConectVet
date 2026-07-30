@@ -113,6 +113,9 @@ model Profissional {
   documento String    @unique // CPF ou CNPJ
   funcao    Categoria
 
+  // Só se aplica quando funcao = VETERINARIO_ESPECIALISTA.
+  especialidade String?
+
   telefone       String?
   dataNascimento DateTime?
 

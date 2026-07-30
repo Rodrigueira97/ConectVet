@@ -121,10 +121,38 @@ export const MIN_VALORES: Record<Categoria, number> = {
   AUXILIAR: 90,
 };
 
+// Especialidades com título reconhecido pelo CFMV (Conselho Federal de
+// Medicina Veterinária), preenchido só quando funcao = VETERINARIO_ESPECIALISTA.
+export const ESPECIALIDADES_VETERINARIAS: string[] = [
+  'Acupuntura Veterinária',
+  'Anestesiologia Veterinária',
+  'Cardiologia Veterinária',
+  'Cirurgia Veterinária',
+  'Clínica Médica de Pequenos Animais',
+  'Dermatologia Veterinária',
+  'Diagnóstico por Imagem',
+  'Endocanabinologia Veterinária',
+  'Endocrinologia Veterinária',
+  'Homeopatia Veterinária',
+  'Inspeção e Tecnologia de Produtos de Origem Animal',
+  'Medicina Veterinária de Animais Selvagens',
+  'Medicina Veterinária Comportamental',
+  'Medicina Veterinária do Coletivo',
+  'Medicina Veterinária Intensiva',
+  'Medicina Veterinária Legal',
+  'Nefrologia e Urologia Veterinária',
+  'Nutrição e Nutrologia de Cães e Gatos',
+  'Oftalmologia Veterinária',
+  'Oncologia Veterinária',
+  'Patologia Veterinária',
+  'Outra',
+];
+
 export type ProfissionalResumo = {
   id: string;
   nome: string;
   funcao: Categoria;
+  especialidade?: string | null;
   areaAtuacao: string;
   regioesAtendimento: string;
   notaMedia?: number | null;
@@ -213,6 +241,7 @@ export type Profissional = {
   nome: string;
   documento: string;
   funcao: Categoria;
+  especialidade?: string | null;
   telefone?: string | null;
   dataNascimento?: string | null;
   tipoComprovacao: string;

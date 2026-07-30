@@ -15,6 +15,10 @@ export class UpdateProfissionalDto {
 
   @IsOptional()
   @IsString()
+  especialidade?: string;
+
+  @IsOptional()
+  @IsString()
   areaAtuacao?: string;
 
   @IsOptional()

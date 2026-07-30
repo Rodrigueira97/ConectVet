@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { CATEGORIAS, ESTADOS_CIDADES, onlyDigits } from '@/lib/mockData';
 import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefone } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
-import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE } from '@/lib/api';
+import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE, ESPECIALIDADES_VETERINARIAS } from '@/lib/api';
 import { FileField } from '@/app/components/FileField';
 import { BuildingIcon, CheckIcon, CloseIcon, PlusIcon, UserIcon } from '@/app/components/icons';
 
@@ -31,6 +31,7 @@ const initialClinica = {
 
 const initialProf = {
   nome: '', doc: '', funcao: '' as Categoria | '', telefone: '', dataNascimento: '',
+  especialidade: '', especialidadeOutra: '',
   areaAtuacao: '', regioes: '', observacoes: '',
 };
 
@@ -84,6 +85,7 @@ const FIELD_SECTION_MAP: Record<string, string> = {
   estado: 'endereco', cidade: 'endereco', rua: 'endereco', numero: 'endereco',
   nomeProf: 'dados-profissional', doc: 'dados-profissional', funcao: 'dados-profissional',
   telefoneProf: 'dados-profissional', dataNascimentoProf: 'dados-profissional',
+  especialidade: 'dados-profissional', especialidadeOutra: 'dados-profissional',
   comprovante: 'comprovacao',
   idDocFrente: 'documentos', idDocVerso: 'documentos',
   areaAtuacao: 'atuacao', regioes: 'atuacao',
@@ -220,6 +222,10 @@ export default function CadastroPage() {
       if (!prof.nome.trim()) e.nomeProf = 'Informe seu nome.';
       if (!isValidCpfCnpj(prof.doc)) e.doc = 'CPF ou CNPJ inválido.';
       if (!prof.funcao) e.funcao = 'Selecione a função.';
+      if (prof.funcao === 'Veterinário Especialista') {
+        if (!prof.especialidade) e.especialidade = 'Selecione sua especialidade.';
+        else if (prof.especialidade === 'Outra' && !prof.especialidadeOutra.trim()) e.especialidadeOutra = 'Informe sua especialidade.';
+      }
       if (onlyDigits(prof.telefone).length < 10) e.telefoneProf = 'Informe um telefone válido com DDD.';
       if (!prof.dataNascimento) e.dataNascimentoProf = 'Informe a data de nascimento.';
       else if (!dataNascimentoValida(prof.dataNascimento)) e.dataNascimentoProf = 'Informe uma data de nascimento válida.';
@@ -280,6 +286,9 @@ export default function CadastroPage() {
           nome: prof.nome,
           documento: onlyDigits(prof.doc),
           funcao: CATEGORIA_VALUE[prof.funcao as string],
+          especialidade: prof.funcao === 'Veterinário Especialista'
+            ? (prof.especialidade === 'Outra' ? prof.especialidadeOutra.trim() : prof.especialidade)
+            : undefined,
           telefone: onlyDigits(prof.telefone),
           dataNascimento: prof.dataNascimento,
           tipoComprovacao: comprovacao?.label ?? '',
@@ -502,9 +511,20 @@ export default function CadastroPage() {
                     <TextField label="CNPJ/CPF" value={prof.doc} onChange={(v) => pField('doc', maskCpfCnpj(v))} error={errors.doc} placeholder="000.000.000-00" required />
                     <TextField label="Escolha da função" value={prof.funcao} onChange={() => {}} error={errors.funcao} required select
                       options={CATEGORIAS}
-                      onSelect={(v) => { pField('funcao', v as Categoria); setComprovante(null); }}
+                      onSelect={(v) => { pField('funcao', v as Categoria); setComprovante(null); pField('especialidade', ''); pField('especialidadeOutra', ''); }}
                     />
                   </div>
+                  {prof.funcao === 'Veterinário Especialista' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <TextField label="Especialidade" value={prof.especialidade} onChange={() => {}} error={errors.especialidade} required select
+                        options={ESPECIALIDADES_VETERINARIAS}
+                        onSelect={(v) => pField('especialidade', v)}
+                      />
+                      {prof.especialidade === 'Outra' && (
+                        <TextField label="Qual especialidade?" value={prof.especialidadeOutra} onChange={(v) => pField('especialidadeOutra', v)} error={errors.especialidadeOutra} required />
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <TextField label="Telefone" value={maskTelefone(prof.telefone)} onChange={(v) => pField('telefone', onlyDigits(v))} error={errors.telefoneProf} placeholder="(00) 00000-0000" required />

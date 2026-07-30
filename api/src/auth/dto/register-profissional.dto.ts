@@ -25,6 +25,10 @@ export class RegisterProfissionalDto {
   @IsEnum(Categoria)
   funcao: Categoria;
 
+  @IsOptional()
+  @IsString()
+  especialidade?: string;
+
   @IsString()
   telefone: string;
 

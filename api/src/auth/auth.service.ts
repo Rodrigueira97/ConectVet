@@ -101,6 +101,7 @@ export class AuthService {
             nome: dto.nome,
             documento: dto.documento,
             funcao: dto.funcao,
+            especialidade: dto.especialidade,
             telefone: dto.telefone,
             dataNascimento: new Date(dto.dataNascimento),
             tipoComprovacao: dto.tipoComprovacao,
