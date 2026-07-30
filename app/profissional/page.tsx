@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { buildEndereco, mapsLink, onlyDigits } from '@/lib/mockData';
+import { buildEndereco, mapsLink, onlyDigits, hojeBrasil, somarDiasISO } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import {
@@ -34,7 +34,7 @@ function especialidadeFormFromProfissional(p: { especialidade?: string | null })
 }
 const CANDIDATURAS_POR_PAGINA = 10;
 
-type Tab = 'home' | 'historico' | 'perfil';
+type Tab = 'home' | 'favoritas' | 'historico' | 'perfil';
 
 function formatDataBR(iso: string) {
   if (!iso) return '';
@@ -63,14 +63,13 @@ function calcDuracaoHoras(inicio: string, fim: string) {
 
 function vagaEncerrada(v: { data: string; status: string }) {
   if (v.status !== 'ABERTA') return true;
-  const hojeStr = new Date().toISOString().slice(0, 10);
-  return v.data.slice(0, 10) <= hojeStr;
+  return v.data.slice(0, 10) <= hojeBrasil();
 }
 
 function urgenciaLabel(v: { data: string; status: string }) {
   if (vagaEncerrada(v)) return null;
-  const hojeStr = new Date().toISOString().slice(0, 10);
-  const amanhaStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const hojeStr = hojeBrasil();
+  const amanhaStr = somarDiasISO(hojeStr, 1);
   const d = v.data.slice(0, 10);
   if (d === hojeStr) return 'É hoje';
   if (d === amanhaStr) return 'Começa amanhã';
@@ -161,7 +160,7 @@ export default function ProfissionalPage() {
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
-  const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false, favoritas: false });
+  const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [favoritos, setFavoritos] = useState<Set<string>>(new Set());
 
@@ -270,9 +269,10 @@ export default function ProfissionalPage() {
     const local = localDaVaga(v);
     if (filtros.busca && !`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`.toLowerCase().includes(filtros.busca.toLowerCase())) return false;
     if (filtros.pertoDeMim && !pertoDeVoce(v)) return false;
-    if (filtros.favoritas && !favoritos.has(v.id)) return false;
     return true;
   });
+
+  const vagasFavoritas = feed.filter((v) => favoritos.has(v.id));
 
   const feedPaginado = feedFiltrado.slice(0, visiveis);
   const temMaisVagas = visiveis < feedFiltrado.length;
@@ -348,10 +348,10 @@ export default function ProfissionalPage() {
   }
 
   function limparFiltros() {
-    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false, favoritas: false });
+    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
   }
 
-  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria, filtros.pertoDeMim, filtros.favoritas].filter(Boolean).length;
+  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria, filtros.pertoDeMim].filter(Boolean).length;
   const algumFiltroAtivo = filtrosAtivos > 0 || !!filtros.busca;
 
   async function salvarPerfil() {
@@ -405,6 +405,78 @@ export default function ProfissionalPage() {
     }
   }
 
+  function renderVagaCard(v: Vaga) {
+    const compat = v.categoria === perfil!.funcao;
+    const applied = hasApplied(v.id);
+    const perto = pertoDeVoce(v);
+    const encerrada = vagaEncerrada(v);
+    const urgencia = urgenciaLabel(v);
+    const favorita = favoritos.has(v.id);
+    const local = localDaVaga(v);
+    const localCurto = [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ');
+    return (
+      <div
+        key={v.id}
+        onClick={() => setVagaSelecionada(v)}
+        className={`bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow,opacity] duration-150 ${encerrada ? 'opacity-70' : ''}`}
+      >
+        <div className="flex justify-between items-start gap-3">
+          <div>
+            <div className="flex gap-2 items-center flex-wrap">
+              <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{CATEGORIA_LABEL[v.categoria]}</div>
+              {encerrada ? (
+                <div className="bg-gray-200 text-gray-500 text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Encerrada</div>
+              ) : perto && (
+                <div className="bg-secondary text-white text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Perto de você</div>
+              )}
+              {urgencia && (
+                <div className="bg-amber-100 text-amber-700 text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">{urgencia}</div>
+              )}
+            </div>
+            <div className="text-[17px] font-extrabold mt-[3px]">{v.clinica?.nome}</div>
+            <div className="mt-1.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={(e) => { e.stopPropagation(); alternarFavorito(v.id); }}
+              aria-label={favorita ? 'Remover dos favoritos' : 'Favoritar vaga'}
+              className={`w-8 h-8 rounded-[9px] border flex items-center justify-center transition-colors ${favorita ? 'border-rose-200 bg-rose-50 text-rose-500' : 'border-gray-200 text-gray-300 hover:border-rose-200 hover:text-rose-400'}`}
+            >
+              <HeartIcon className="w-3.5 h-3.5" filled={favorita} />
+            </button>
+            <div className="bg-primaryTint text-primaryDeep font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap">R$ {v.valor}</div>
+          </div>
+        </div>
+        <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
+          <a
+            href={mapsLink(local)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 hover:underline"
+          >
+            <PinIcon className="w-3.5 h-3.5 shrink-0 text-primary" />
+            Local <b className="font-bold text-gray-700">{localCurto}</b>
+          </a>
+          <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
+          <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
+        </div>
+        {v.descricao && (
+          <div className="mt-3 pt-3 border-t border-gray-100 text-[13.5px] leading-relaxed text-gray-700">
+            <div className="text-[11px] font-extrabold text-gray-400 uppercase tracking-[0.02em] mb-1">Descrição</div>
+            <div className="whitespace-pre-line">{v.descricao}</div>
+          </div>
+        )}
+        <div className="flex justify-end mt-[14px]">
+          <button disabled={applied || encerrada || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
+            className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || encerrada || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
+            {applied ? 'Candidatura enviada' : encerrada ? 'Vaga encerrada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading || !perfil) {
     return <FeedPageSkeleton sidebarItems={3} showFilters />;
   }
@@ -416,6 +488,7 @@ export default function ProfissionalPage() {
         subtitle="Profissional"
         items={[
           { key: 'home', label: 'Home', icon: <HomeIcon /> },
+          { key: 'favoritas', label: 'Favoritas', icon: <HeartIcon />, count: vagasFavoritas.length },
           { key: 'historico', label: 'Minhas candidaturas', icon: <ClockIcon /> },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
         ]}
@@ -514,10 +587,6 @@ export default function ProfissionalPage() {
                   Somente perto de mim ({perfil.regioesAtendimento})
                 </label>
               )}
-              <label className="flex items-center gap-2 text-sm font-semibold text-white/90 ml-1">
-                <input type="checkbox" checked={filtros.favoritas} onChange={(e) => atualizarFiltro({ favoritas: e.target.checked })} />
-                Só favoritas
-              </label>
               <button
                 onClick={limparFiltros}
                 disabled={!algumFiltroAtivo}
@@ -586,10 +655,6 @@ export default function ProfissionalPage() {
                       Somente perto de mim ({perfil.regioesAtendimento})
                     </label>
                   )}
-                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                    <input type="checkbox" checked={filtros.favoritas} onChange={(e) => atualizarFiltro({ favoritas: e.target.checked })} />
-                    Só favoritas
-                  </label>
                   {algumFiltroAtivo && (
                     <button
                       onClick={limparFiltros}
@@ -602,77 +667,7 @@ export default function ProfissionalPage() {
               )}
             </div>
             <div className="flex flex-col gap-[14px]">
-              {feedPaginado.map((v) => {
-                const compat = v.categoria === perfil.funcao;
-                const applied = hasApplied(v.id);
-                const perto = pertoDeVoce(v);
-                const encerrada = vagaEncerrada(v);
-                const urgencia = urgenciaLabel(v);
-                const favorita = favoritos.has(v.id);
-                const local = localDaVaga(v);
-                const localCurto = [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ');
-                return (
-                  <div
-                    key={v.id}
-                    onClick={() => setVagaSelecionada(v)}
-                    className={`bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow,opacity] duration-150 ${encerrada ? 'opacity-70' : ''}`}
-                  >
-                    <div className="flex justify-between items-start gap-3">
-                      <div>
-                        <div className="flex gap-2 items-center flex-wrap">
-                          <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{CATEGORIA_LABEL[v.categoria]}</div>
-                          {encerrada ? (
-                            <div className="bg-gray-200 text-gray-500 text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Encerrada</div>
-                          ) : perto && (
-                            <div className="bg-secondary text-white text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Perto de você</div>
-                          )}
-                          {urgencia && (
-                            <div className="bg-amber-100 text-amber-700 text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">{urgencia}</div>
-                          )}
-                        </div>
-                        <div className="text-[17px] font-extrabold mt-[3px]">{v.clinica?.nome}</div>
-                        <div className="mt-1.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); alternarFavorito(v.id); }}
-                          aria-label={favorita ? 'Remover dos favoritos' : 'Favoritar vaga'}
-                          className={`w-8 h-8 rounded-[9px] border flex items-center justify-center transition-colors ${favorita ? 'border-rose-200 bg-rose-50 text-rose-500' : 'border-gray-200 text-gray-300 hover:border-rose-200 hover:text-rose-400'}`}
-                        >
-                          <HeartIcon className="w-3.5 h-3.5" filled={favorita} />
-                        </button>
-                        <div className="bg-primaryTint text-primaryDeep font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap">R$ {v.valor}</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
-                      <a
-                        href={mapsLink(local)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 hover:underline"
-                      >
-                        <PinIcon className="w-3.5 h-3.5 shrink-0 text-primary" />
-                        Local <b className="font-bold text-gray-700">{localCurto}</b>
-                      </a>
-                      <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
-                      <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
-                    </div>
-                    {v.descricao && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 text-[13.5px] leading-relaxed text-gray-700">
-                        <div className="text-[11px] font-extrabold text-gray-400 uppercase tracking-[0.02em] mb-1">Descrição</div>
-                        <div className="whitespace-pre-line">{v.descricao}</div>
-                      </div>
-                    )}
-                    <div className="flex justify-end mt-[14px]">
-                      <button disabled={applied || encerrada || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
-                        className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || encerrada || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
-                        {applied ? 'Candidatura enviada' : encerrada ? 'Vaga encerrada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {feedPaginado.map((v) => renderVagaCard(v))}
               {feedFiltrado.length === 0 && <div className="text-sm text-gray-400">Nenhuma vaga encontrada.</div>}
             </div>
             {temMaisVagas && (
@@ -680,6 +675,21 @@ export default function ProfissionalPage() {
                 <PawTrailLoader label="Carregando mais vagas..." />
               </div>
             )}
+          </div>
+        )}
+
+        {tab === 'favoritas' && (
+          <div className="max-w-[880px] mx-auto p-8">
+            <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas favoritas</h1>
+            <p className="text-sm text-white/85 mb-5">Vagas que você salvou pra decidir com calma depois</p>
+            <div className="flex flex-col gap-[14px]">
+              {vagasFavoritas.map((v) => renderVagaCard(v))}
+              {vagasFavoritas.length === 0 && (
+                <div className="text-sm text-white/85 text-center py-10">
+                  Você ainda não favoritou nenhuma vaga. Clique no coração de um card na Home pra salvar aqui.
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1010,7 +1020,7 @@ export default function ProfissionalPage() {
                     value={perfilForm.dataNascimento}
                     onChange={(e) => setPerfilForm((f) => ({ ...f, dataNascimento: e.target.value }))}
                     min="1900-01-01"
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={hojeBrasil()}
                     className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
                   /></label>
                 <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Área de atuação</span>

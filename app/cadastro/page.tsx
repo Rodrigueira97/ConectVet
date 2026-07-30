@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CATEGORIAS, ESTADOS_CIDADES, onlyDigits } from '@/lib/mockData';
+import { CATEGORIAS, ESTADOS_CIDADES, onlyDigits, hojeBrasil } from '@/lib/mockData';
 import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefone } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
 import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE, ESPECIALIDADES_VETERINARIAS } from '@/lib/api';
@@ -15,7 +15,7 @@ function withCurrent(list: string[], current: string) {
   return current && !list.includes(current) ? [...list, current] : list;
 }
 
-const HOJE_ISO = new Date().toISOString().slice(0, 10);
+const HOJE_ISO = hojeBrasil();
 const DATA_NASCIMENTO_MIN = '1900-01-01';
 
 function dataNascimentoValida(iso: string) {

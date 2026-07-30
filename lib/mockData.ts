@@ -22,6 +22,21 @@ export const ESTADOS_CIDADES: Record<string, string[]> = {
 
 export function onlyDigits(v: string) { return (v || '').replace(/\D/g, ''); }
 
+// Data de "hoje" no calendário do Brasil (America/Sao_Paulo), no formato YYYY-MM-DD.
+// new Date().toISOString() usa UTC, que já é o dia seguinte entre 21h e meia-noite
+// no horário de Brasília — usar isso pra decidir "hoje"/"amanhã" fazia vagas do fim
+// de tarde/noite serem marcadas como encerradas ou "começa amanhã" cedo demais.
+export function hojeBrasil() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+
+// Soma (ou subtrai) dias a uma data YYYY-MM-DD, sem depender de fuso horário
+// (é aritmética pura sobre o calendário, não um instante real no tempo).
+export function somarDiasISO(dataISO: string, dias: number) {
+  const [ano, mes, dia] = dataISO.split('-').map(Number);
+  return new Date(Date.UTC(ano, mes - 1, dia + dias)).toISOString().slice(0, 10);
+}
+
 export function buildEndereco(form: {
   rua?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; cidade?: string | null; estado?: string | null;
 }) {
