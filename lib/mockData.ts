@@ -56,6 +56,7 @@ export function mapsLink(endereco: string) {
 export function statusBadge(status: string) {
   const map: Record<string, [string, string, string]> = {
     cancelada: ['bg-gray-100', 'text-gray-500', 'Cancelada'],
+    encerrada: ['bg-gray-100', 'text-gray-500', 'Encerrada'],
     aberta: ['bg-primaryTint', 'text-primaryDeep', 'Aberta'],
     preenchida: ['bg-secondary/10', 'text-secondary', 'Aguardando presença'],
     concluida: ['bg-gray-100', 'text-gray-500', 'Concluída'],

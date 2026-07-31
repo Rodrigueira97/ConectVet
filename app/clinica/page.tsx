@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
@@ -45,6 +45,31 @@ function localDaVaga(v: { rua: string; numero: string; complemento?: string | nu
   return buildEndereco({ rua: v.rua, numero: v.numero, complemento: v.complemento || undefined, bairro: v.bairro || undefined, cidade: v.cidade, estado: v.estado });
 }
 
+// Uma vaga aberta cuja data já passou sem ninguém contratado nunca muda de status no backend
+// (continua ABERTA) — aqui ela é tratada como encerrada só pra exibição/filtro no Painel.
+function vagaExpirada(v: { data: string; status: string }) {
+  return v.status === 'ABERTA' && v.data.slice(0, 10) <= hojeBrasil();
+}
+
+const CATEGORIA_ICON: Record<Categoria, (className: string) => ReactNode> = {
+  'Veterinário Clínico': (c) => <HeartIcon className={c} />,
+  'Veterinário Especialista': (c) => <ShieldIcon className={c} />,
+  'Estagiário': (c) => <GraduationCapIcon className={c} />,
+  'Auxiliar': (c) => <UserIcon className={c} />,
+};
+
+function SectionHead({ num, title, sub }: { num: number; title: string; sub?: string }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-4">
+      <div className="w-[26px] h-[26px] rounded-lg bg-primaryTint text-primaryDeep flex items-center justify-center text-xs font-extrabold shrink-0">{num}</div>
+      <div>
+        <div className="text-[15px] font-extrabold text-ink">{title}</div>
+        {sub && <div className="text-xs text-gray-400">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
 const vagaFormInicial = {
   outroEndereco: false, cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '',
   data: '', horaInicio: '', horaFim: '', valor: '', categoria: '' as Categoria | '', descricao: '',
@@ -68,6 +93,16 @@ export default function ClinicaPage() {
   const [vagaForm, setVagaForm] = useState(vagaFormInicial);
   const [vagaCepStatus, setVagaCepStatus] = useState<CepStatus>('idle');
   const [publishing, setPublishing] = useState(false);
+  const [vagaErrors, setVagaErrors] = useState<Record<string, string>>({});
+
+  function limparErroVaga(campo: string) {
+    setVagaErrors((e) => {
+      if (!e[campo]) return e;
+      const next = { ...e };
+      delete next[campo];
+      return next;
+    });
+  }
 
   const [perfilForm, setPerfilForm] = useState({
     nome: '', cnpj: '', telefone: '',
@@ -77,6 +112,8 @@ export default function ClinicaPage() {
   const [savingPerfil, setSavingPerfil] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingFotos, setUploadingFotos] = useState(false);
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const [painelFiltro, setPainelFiltro] = useState<'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido'>('todas');
 
   useEffect(() => {
     if (!getToken()) { router.push('/'); return; }
@@ -166,9 +203,6 @@ export default function ClinicaPage() {
   const enderecoParaExibir = vagaForm.outroEndereco
     ? buildEndereco(vagaForm)
     : clinica ? buildEndereco(clinica) : '';
-  const publishDisabled = vagaForm.outroEndereco
-    ? (!vagaForm.rua || !vagaForm.numero || !vagaForm.cidade || !vagaForm.estado)
-    : !clinica?.rua;
 
   const minVal = vagaForm.categoria ? MIN_VALORES[vagaForm.categoria] : undefined;
   const valorNum = parseFloat(vagaForm.valor);
@@ -180,9 +214,32 @@ export default function ClinicaPage() {
     if (diff < 0) diff += 24;
     horaLabel = `Duração: ${diff.toFixed(1)}h${diff > 12 ? ' — excede o máximo de 12h' : ''}`;
   }
+  const localPreview = vagaForm.outroEndereco
+    ? [vagaForm.bairro, [vagaForm.cidade, vagaForm.estado].filter(Boolean).join(' - ')].filter(Boolean).join(', ')
+    : clinica ? [clinica.bairro, [clinica.cidade, clinica.estado].filter(Boolean).join(' - ')].filter(Boolean).join(', ') : '';
+
+  function validateVaga(): Record<string, string> {
+    const e: Record<string, string> = {};
+    if (vagaForm.outroEndereco) {
+      if (!vagaForm.estado) e.estado = 'Selecione o estado.';
+      if (!vagaForm.cidade) e.cidade = 'Selecione a cidade.';
+      if (!vagaForm.rua.trim()) e.rua = 'Informe a rua.';
+      if (!vagaForm.numero.trim()) e.numero = 'Informe o número.';
+    } else if (!clinica?.rua) {
+      e.endereco = 'Sua clínica não tem endereço cadastrado. Cadastre em Perfil ou use outro endereço pra essa vaga.';
+    }
+    if (!vagaForm.categoria) e.categoria = 'Selecione a categoria.';
+    if (!vagaForm.data) e.data = 'Selecione a data do serviço.';
+    if (!vagaForm.horaInicio) e.horaInicio = 'Selecione o horário de início.';
+    if (!vagaForm.horaFim) e.horaFim = 'Selecione o horário de fim.';
+    if (!vagaForm.valor || isNaN(parseFloat(vagaForm.valor)) || parseFloat(vagaForm.valor) <= 0) e.valor = 'Informe o valor do plantão.';
+    return e;
+  }
 
   async function publicarVaga() {
-    if (publishDisabled || !vagaForm.categoria || !clinica) return;
+    const errosValidacao = validateVaga();
+    setVagaErrors(errosValidacao);
+    if (Object.keys(errosValidacao).length > 0 || !clinica) return;
     setPublishing(true);
     setActionError('');
     const endereco = vagaForm.outroEndereco
@@ -206,6 +263,7 @@ export default function ClinicaPage() {
       }
       setVagaForm(vagaFormInicial);
       setVagaCepStatus('idle');
+      setVagaErrors({});
       await refreshMinhasVagas();
       setTab('painel');
     } catch (err) {
@@ -223,6 +281,7 @@ export default function ClinicaPage() {
       data: mv.data.slice(0, 10), horaInicio: mv.horaInicio, horaFim: mv.horaFim, valor: mv.valor, categoria: CATEGORIA_LABEL[mv.categoria] as Categoria, descricao: mv.descricao || '',
     });
     setVagaCepStatus('idle');
+    setVagaErrors({});
     setTab('criar-vaga');
   }
 
@@ -360,7 +419,22 @@ export default function ClinicaPage() {
 
   const selectedMv = minhasVagas.find((m) => m.id === selectedMvId) || null;
   const selectedCand = candidatos.find((c) => c.id === selectedCandId) || null;
-  const pendingTotal = minhasVagas.reduce((sum, mv) => sum + (mv.candidaturas || []).filter((c) => c.status === 'PENDENTE').length, 0);
+  const pendingTotal = minhasVagas
+    .filter((mv) => mv.status === 'ABERTA' && !vagaExpirada(mv))
+    .reduce((sum, mv) => sum + (mv.candidaturas || []).filter((c) => c.status === 'PENDENTE').length, 0);
+
+  const vagasAtivas = minhasVagas.filter((v) => v.status === 'ABERTA').length;
+  const vagasConsideradas = minhasVagas.filter((v) => v.status !== 'CANCELADA');
+  const vagasPreenchidas = vagasConsideradas.filter((v) => v.status === 'PREENCHIDA' || v.status === 'CONCLUIDA').length;
+  const taxaPreenchimento = vagasConsideradas.length ? Math.round((vagasPreenchidas / vagasConsideradas.length) * 100) : null;
+  const avaliacoesRecebidas = Object.values(avaliacoesPorCandidatura).flat().filter((a) => a.autor === 'PROFISSIONAL');
+  const notaMedia = avaliacoesRecebidas.length
+    ? avaliacoesRecebidas.reduce((soma, a) => soma + a.nota, 0) / avaliacoesRecebidas.length
+    : null;
+  const retidoTotal = minhasVagas.reduce((soma, v) => soma + (v.pagamento?.status === 'RETIDO' ? Number(v.pagamento.valorBruto) : 0), 0);
+  const candidatosPendentes = minhasVagas
+    .filter((v) => v.status === 'ABERTA' && !vagaExpirada(v))
+    .flatMap((v) => (v.candidaturas || []).filter((c) => c.status === 'PENDENTE').map((c) => ({ candidatura: c, vaga: v })));
 
   if (loading || !clinica) {
     return <FeedPageSkeleton sidebarItems={4} />;
@@ -400,25 +474,8 @@ export default function ClinicaPage() {
           </div>
         )}
 
-        {tab === 'home' && (() => {
-          const vagasAtivas = minhasVagas.filter((v) => v.status === 'ABERTA').length;
-          const consideradas = minhasVagas.filter((v) => v.status !== 'CANCELADA');
-          const preenchidas = consideradas.filter((v) => v.status === 'PREENCHIDA' || v.status === 'CONCLUIDA').length;
-          const taxaPreenchimento = consideradas.length ? Math.round((preenchidas / consideradas.length) * 100) : null;
-
-          const avaliacoesRecebidas = Object.values(avaliacoesPorCandidatura).flat().filter((a) => a.autor === 'PROFISSIONAL');
-          const notaMedia = avaliacoesRecebidas.length
-            ? avaliacoesRecebidas.reduce((soma, a) => soma + a.nota, 0) / avaliacoesRecebidas.length
-            : null;
-
-          const retidoTotal = minhasVagas.reduce((soma, v) => soma + (v.pagamento?.status === 'RETIDO' ? Number(v.pagamento.valorBruto) : 0), 0);
-
-          const candidatosPendentes = minhasVagas
-            .filter((v) => v.status === 'ABERTA')
-            .flatMap((v) => (v.candidaturas || []).filter((c) => c.status === 'PENDENTE').map((c) => ({ candidatura: c, vaga: v })));
-
-          return (
-            <div className="max-w-3xl mx-auto p-8">
+        {tab === 'home' && (
+            <div className="max-w-[1080px] mx-auto p-8">
               <h1 className="text-2xl font-extrabold mb-1 text-white">Painel</h1>
               <p className="text-sm text-white/85 mb-6">Como sua clínica está indo na plataforma</p>
 
@@ -473,201 +530,382 @@ export default function ClinicaPage() {
                 )}
               </div>
             </div>
-          );
-        })()}
+        )}
 
         {tab === 'criar-vaga' && (
-          <div className="max-w-xl mx-auto p-8">
+          <div className="max-w-[1080px] mx-auto p-8">
             <div className="text-sm font-bold text-primaryTint mb-1">{editingId ? 'Editar vaga' : 'Nova vaga'}</div>
             <h1 className="text-2xl font-extrabold mb-6 text-white">{editingId ? 'Editar vaga' : 'Nova vaga'}</h1>
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 flex flex-col gap-5">
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={vagaForm.outroEndereco} onChange={(e) => setVagaForm((f) => ({ ...f, outroEndereco: e.target.checked }))} />
-                Usar um endereço diferente do cadastro da clínica
-              </label>
-              {vagaForm.outroEndereco && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className="flex flex-col gap-1.5 sm:col-span-2">
-                    <span className="text-sm font-bold">CEP</span>
-                    <input
-                      value={maskCEP(vagaForm.cep)}
-                      onChange={(e) => onVagaCepChange(e.target.value)}
-                      placeholder="00000-000"
-                      className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm outline-none max-w-[200px]"
-                    />
-                    {vagaCepStatus === 'loading' && <span className="text-xs text-gray-400">Buscando endereço...</span>}
-                    {vagaCepStatus === 'error' && <span className="text-xs font-semibold text-danger">CEP não encontrado. Preencha o endereço manualmente.</span>}
-                    <a
-                      href="https://buscacepinter.correios.com.br/app/endereco/index.php"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-bold text-primary w-fit"
-                    >
-                      Não sei o CEP
-                    </a>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Estado (UF) *</span>
-                    <select value={vagaForm.estado} onChange={(e) => setVagaForm((f) => ({ ...f, estado: e.target.value, cidade: '' }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
-                      <option value="">Selecione...</option>
-                      {withCurrent(Object.keys(ESTADOS_CIDADES), vagaForm.estado).map((uf) => <option key={uf} value={uf}>{uf}</option>)}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Cidade *</span>
-                    <select disabled={!vagaForm.estado} value={vagaForm.cidade} onChange={(e) => setVagaForm((f) => ({ ...f, cidade: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
-                      <option value="">Selecione...</option>
-                      {withCurrent(ESTADOS_CIDADES[vagaForm.estado] || [], vagaForm.cidade).map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Bairro</span>
-                    <input value={vagaForm.bairro} onChange={(e) => setVagaForm((f) => ({ ...f, bairro: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Rua *</span>
-                    <input value={vagaForm.rua} onChange={(e) => setVagaForm((f) => ({ ...f, rua: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Número *</span>
-                    <input value={vagaForm.numero} onChange={(e) => setVagaForm((f) => ({ ...f, numero: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Complemento</span>
-                    <input value={vagaForm.complemento} onChange={(e) => setVagaForm((f) => ({ ...f, complemento: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                  </label>
-                </div>
-              )}
-              {enderecoParaExibir && (
-                <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700">
-                  {enderecoParaExibir} — <a href={mapsLink(enderecoParaExibir)} target="_blank" className="font-bold">ver no Google Maps</a>
-                </div>
-              )}
-              <DateField
-                label="Data do serviço"
-                value={vagaForm.data}
-                onChange={(v) => setVagaForm((f) => ({ ...f, data: v }))}
-                min={hojeBrasil()}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <TimeField label="Início" value={vagaForm.horaInicio} onChange={(v) => setVagaForm((f) => ({ ...f, horaInicio: v }))} />
-                <TimeField label="Fim" value={vagaForm.horaFim} onChange={(v) => setVagaForm((f) => ({ ...f, horaFim: v }))} />
-              </div>
-              {horaLabel && <div className="text-xs font-mono text-gray-500">{horaLabel}</div>}
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">Categoria</span>
-                <select value={vagaForm.categoria} onChange={(e) => setVagaForm((f) => ({ ...f, categoria: e.target.value as Categoria }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
-                  <option value="">Selecione...</option>
-                  {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">Valor a pagar ao profissional (R$)</span>
-                <input type="number" value={vagaForm.valor} onChange={(e) => setVagaForm((f) => ({ ...f, valor: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                {minVal && <span className="text-xs text-gray-500">Mínimo para esta categoria: R$ {minVal}{!isNaN(valorNum) && valorNum < minVal ? ' — abaixo do mínimo' : ''}</span>}
-                {!isNaN(valorNum) && valorNum > 0 ? (
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 flex flex-col gap-1">
-                    <div className="flex justify-between"><span>Profissional recebe</span><span className="font-bold">R$ {valorNum.toFixed(2)}</span></div>
-                    <div className="flex justify-between text-gray-500"><span>Taxa da ConectVet (5%)</span><span>+ R$ {(valorNum * TAXA_PLATAFORMA).toFixed(2)}</span></div>
-                    <div className="flex justify-between font-extrabold pt-1 border-t border-gray-200"><span>Você paga no total</span><span>R$ {(valorNum * (1 + TAXA_PLATAFORMA)).toFixed(2)}</span></div>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6 items-start">
+              <div>
+                <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7">
+                  <SectionHead num={1} title="Onde" />
+                  {!vagaForm.outroEndereco ? (
+                    <div>
+                      <div className={`flex items-start gap-2.5 border rounded-xl px-3.5 py-3 ${vagaErrors.endereco ? 'border-danger bg-red-50/40' : 'bg-gray-50 border-gray-200'}`}>
+                        <PinIcon className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                        <div className="text-sm text-gray-700 flex-1">
+                          {enderecoParaExibir || 'Endereço da clínica não cadastrado — cadastre em Perfil ou use outro endereço abaixo.'}
+                          <div className="mt-1.5">
+                            <button type="button" onClick={() => { setVagaForm((f) => ({ ...f, outroEndereco: true })); limparErroVaga('endereco'); }} className="text-[13px] font-bold text-primary">
+                              Usar outro endereço pra essa vaga
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {vagaErrors.endereco && <span className="text-xs font-semibold text-danger mt-1.5 block">{vagaErrors.endereco}</span>}
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <label className="flex flex-col gap-1.5 sm:col-span-2">
+                          <span className="text-sm font-bold">CEP</span>
+                          <input
+                            value={maskCEP(vagaForm.cep)}
+                            onChange={(e) => onVagaCepChange(e.target.value)}
+                            placeholder="00000-000"
+                            className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm outline-none max-w-[200px]"
+                          />
+                          {vagaCepStatus === 'loading' && <span className="text-xs text-gray-400">Buscando endereço...</span>}
+                          {vagaCepStatus === 'error' && <span className="text-xs font-semibold text-danger">CEP não encontrado. Preencha o endereço manualmente.</span>}
+                          <a
+                            href="https://buscacepinter.correios.com.br/app/endereco/index.php"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-bold text-primary w-fit"
+                          >
+                            Não sei o CEP
+                          </a>
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-sm font-bold">Estado (UF) *</span>
+                          <select value={vagaForm.estado} onChange={(e) => { setVagaForm((f) => ({ ...f, estado: e.target.value, cidade: '' })); limparErroVaga('estado'); }} className={`px-3 py-2.5 rounded-lg border text-sm ${vagaErrors.estado ? 'border-danger' : 'border-gray-300'}`}>
+                            <option value="">Selecione...</option>
+                            {withCurrent(Object.keys(ESTADOS_CIDADES), vagaForm.estado).map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+                          </select>
+                          {vagaErrors.estado && <span className="text-xs font-semibold text-danger">{vagaErrors.estado}</span>}
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-sm font-bold">Cidade *</span>
+                          <select disabled={!vagaForm.estado} value={vagaForm.cidade} onChange={(e) => { setVagaForm((f) => ({ ...f, cidade: e.target.value })); limparErroVaga('cidade'); }} className={`px-3 py-2.5 rounded-lg border text-sm ${vagaErrors.cidade ? 'border-danger' : 'border-gray-300'}`}>
+                            <option value="">Selecione...</option>
+                            {withCurrent(ESTADOS_CIDADES[vagaForm.estado] || [], vagaForm.cidade).map((c) => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          {vagaErrors.cidade && <span className="text-xs font-semibold text-danger">{vagaErrors.cidade}</span>}
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-sm font-bold">Bairro</span>
+                          <input value={vagaForm.bairro} onChange={(e) => setVagaForm((f) => ({ ...f, bairro: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-sm font-bold">Rua *</span>
+                          <input value={vagaForm.rua} onChange={(e) => { setVagaForm((f) => ({ ...f, rua: e.target.value })); limparErroVaga('rua'); }} className={`px-3 py-2.5 rounded-lg border text-sm ${vagaErrors.rua ? 'border-danger' : 'border-gray-300'}`} />
+                          {vagaErrors.rua && <span className="text-xs font-semibold text-danger">{vagaErrors.rua}</span>}
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-sm font-bold">Número *</span>
+                          <input value={vagaForm.numero} onChange={(e) => { setVagaForm((f) => ({ ...f, numero: e.target.value })); limparErroVaga('numero'); }} className={`px-3 py-2.5 rounded-lg border text-sm ${vagaErrors.numero ? 'border-danger' : 'border-gray-300'}`} />
+                          {vagaErrors.numero && <span className="text-xs font-semibold text-danger">{vagaErrors.numero}</span>}
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-sm font-bold">Complemento</span>
+                          <input value={vagaForm.complemento} onChange={(e) => setVagaForm((f) => ({ ...f, complemento: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                        </label>
+                      </div>
+                      {enderecoParaExibir && (
+                        <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 mt-4">
+                          {enderecoParaExibir} — <a href={mapsLink(enderecoParaExibir)} target="_blank" className="font-bold">ver no Google Maps</a>
+                        </div>
+                      )}
+                      <button type="button" onClick={() => setVagaForm((f) => ({ ...f, outroEndereco: false }))} className="text-[13px] font-bold text-primary mt-3">
+                        ← Usar o endereço da clínica
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <SectionHead num={2} title="Quando" />
+                    <div className="flex flex-col gap-4">
+                      <DateField
+                        label="Data do serviço"
+                        value={vagaForm.data}
+                        onChange={(v) => { setVagaForm((f) => ({ ...f, data: v })); limparErroVaga('data'); }}
+                        min={hojeBrasil()}
+                        error={vagaErrors.data}
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <TimeField label="Início" value={vagaForm.horaInicio} onChange={(v) => { setVagaForm((f) => ({ ...f, horaInicio: v })); limparErroVaga('horaInicio'); }} error={vagaErrors.horaInicio} />
+                        <TimeField label="Fim" value={vagaForm.horaFim} onChange={(v) => { setVagaForm((f) => ({ ...f, horaFim: v })); limparErroVaga('horaFim'); }} error={vagaErrors.horaFim} />
+                      </div>
+                      {horaLabel && <div className="text-xs font-mono text-gray-500 -mt-2">{horaLabel}</div>}
+                    </div>
                   </div>
-                ) : (
-                  <span className="text-xs text-gray-500">A ConectVet soma 5% de taxa de serviço sobre este valor.</span>
-                )}
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">Descrição (opcional)</span>
-                <textarea
-                  value={vagaForm.descricao}
-                  onChange={(e) => setVagaForm((f) => ({ ...f, descricao: e.target.value }))}
-                  rows={3}
-                  placeholder="Detalhes sobre a vaga, requisitos, observações..."
-                  className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
-                />
-              </label>
+
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <SectionHead num={3} title="Vaga" />
+                    <span className="text-sm font-bold block mb-2">Categoria</span>
+                    <div className="grid grid-cols-2 gap-2.5 mb-1.5">
+                      {CATEGORIAS.map((c) => {
+                        const selecionada = vagaForm.categoria === c;
+                        return (
+                          <button
+                            type="button"
+                            key={c}
+                            onClick={() => { setVagaForm((f) => ({ ...f, categoria: c })); limparErroVaga('categoria'); }}
+                            className={`text-left rounded-xl border-[1.5px] p-3 transition-colors ${
+                              selecionada ? 'border-primary bg-primaryTint' : vagaErrors.categoria ? 'border-danger' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <div className={`w-[26px] h-[26px] rounded-lg flex items-center justify-center mb-2 ${selecionada ? 'bg-primary text-white' : 'bg-primaryTint text-primaryDeep'}`}>
+                              {CATEGORIA_ICON[c]('w-3.5 h-3.5')}
+                            </div>
+                            <div className="text-[13px] font-extrabold text-ink">{c}</div>
+                            <div className="text-[11px] text-gray-400">Mín. R$ {MIN_VALORES[c]}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {vagaErrors.categoria && <span className="text-xs font-semibold text-danger block mb-3">{vagaErrors.categoria}</span>}
+                    <label className="flex flex-col gap-1.5 mt-3">
+                      <span className="text-sm font-bold">Valor a pagar ao profissional (R$)</span>
+                      <input type="number" value={vagaForm.valor} onChange={(e) => { setVagaForm((f) => ({ ...f, valor: e.target.value })); limparErroVaga('valor'); }} className={`px-3 py-2.5 rounded-lg border text-sm ${vagaErrors.valor ? 'border-danger' : 'border-gray-300'}`} />
+                      {vagaErrors.valor && <span className="text-xs font-semibold text-danger">{vagaErrors.valor}</span>}
+                      {minVal && (
+                        <span className={`text-xs ${!isNaN(valorNum) && valorNum < minVal ? 'text-danger font-semibold' : 'text-gray-500'}`}>
+                          Mínimo para esta categoria: R$ {minVal}{!isNaN(valorNum) && valorNum < minVal ? ' — abaixo do mínimo' : ''}
+                        </span>
+                      )}
+                      {!isNaN(valorNum) && valorNum > 0 ? (
+                        <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 flex flex-col gap-1">
+                          <div className="flex justify-between"><span>Profissional recebe</span><span className="font-bold">R$ {valorNum.toFixed(2)}</span></div>
+                          <div className="flex justify-between text-gray-500"><span>Taxa da ConectVet (5%)</span><span>+ R$ {(valorNum * TAXA_PLATAFORMA).toFixed(2)}</span></div>
+                          <div className="flex justify-between font-extrabold pt-1 border-t border-gray-200"><span>Você paga no total</span><span>R$ {(valorNum * (1 + TAXA_PLATAFORMA)).toFixed(2)}</span></div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-500">A ConectVet soma 5% de taxa de serviço sobre este valor.</span>
+                      )}
+                    </label>
+                  </div>
+
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <SectionHead num={4} title="Detalhes" sub="Opcional" />
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-bold">Descrição</span>
+                      <textarea
+                        value={vagaForm.descricao}
+                        onChange={(e) => setVagaForm((f) => ({ ...f, descricao: e.target.value }))}
+                        rows={3}
+                        placeholder="Detalhes sobre a vaga, requisitos, observações..."
+                        className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
+                      />
+                    </label>
+                  </div>
+
+                  {Object.keys(vagaErrors).length > 0 && (
+                    <div className="mt-6 pt-6 border-t border-gray-100">
+                      <div className="flex items-start gap-2.5 bg-red-50 rounded-xl px-3.5 py-3 text-sm font-semibold text-danger">
+                        <WarningIcon className="w-4 h-4 shrink-0 mt-px" />
+                        Corrija os campos destacados acima antes de publicar.
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button disabled={publishing} onClick={publicarVaga}
+                  className={`mt-4 w-full py-3.5 rounded-lg font-bold text-sm shadow-sm ${publishing ? 'bg-gray-200 text-gray-400' : 'bg-ink text-white'}`}>
+                  {publishing ? 'Publicando...' : editingId ? 'Salvar alterações' : 'Publicar vaga'}
+                </button>
+              </div>
+
+              <div className="hidden md:block sticky top-8">
+                <div className="text-xs font-bold text-white/85 mb-2.5 flex items-center gap-1.5">
+                  <EyeIcon className="w-3.5 h-3.5" /> Assim que o profissional vai ver
+                </div>
+                <div className="bg-paws rounded-2xl p-4">
+                  <div className="bg-white rounded-2xl p-4">
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <div className="text-[10.5px] font-extrabold text-primary uppercase tracking-wide">{vagaForm.categoria || 'Categoria'}</div>
+                        <div className="text-[15px] font-extrabold text-ink mt-0.5">{clinica.nome}</div>
+                        <div className="mt-1"><RatingBadge /></div>
+                      </div>
+                      <div className="bg-primaryTint text-primaryDeep font-extrabold text-[12.5px] px-[9px] py-1 rounded-[9px] whitespace-nowrap">
+                        {!isNaN(valorNum) && valorNum > 0 ? `R$ ${vagaForm.valor}` : 'R$ —'}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1 mt-2.5 text-[11.5px] text-gray-500">
+                      <div className={localPreview ? '' : 'text-gray-400 italic'}>
+                        {localPreview ? <>Local: <b className="text-gray-700 font-bold">{localPreview}</b></> : 'Local a definir'}
+                      </div>
+                      <div className={vagaForm.data ? '' : 'text-gray-400 italic'}>
+                        {vagaForm.data ? <>Data: <b className="text-gray-700 font-bold">{formatDataBR(vagaForm.data)}</b></> : 'Data a definir'}
+                      </div>
+                      <div className={vagaForm.horaInicio && vagaForm.horaFim ? '' : 'text-gray-400 italic'}>
+                        {vagaForm.horaInicio && vagaForm.horaFim ? <>Horário: <b className="text-gray-700 font-bold">{vagaForm.horaInicio} – {vagaForm.horaFim}</b></> : 'Horário a definir'}
+                      </div>
+                    </div>
+                    {vagaForm.descricao && (
+                      <div className="mt-2.5 pt-2.5 border-t border-gray-100 text-[11.5px] leading-relaxed text-gray-600 whitespace-pre-line">{vagaForm.descricao}</div>
+                    )}
+                    <div className="flex justify-end mt-3">
+                      <span className="px-3 py-[7px] rounded-[9px] text-[11.5px] font-bold bg-primary text-white">Ver detalhes e candidatar-se</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <button disabled={publishDisabled || publishing} onClick={publicarVaga}
-              className={`mt-6 w-full py-3.5 rounded-lg font-bold text-sm shadow-sm ${publishDisabled || publishing ? 'bg-gray-200 text-gray-400' : 'bg-ink text-white'}`}>
-              {publishing ? 'Publicando...' : editingId ? 'Salvar alterações' : 'Publicar vaga'}
-            </button>
           </div>
         )}
 
-        {tab === 'painel' && (
-          <div className="max-w-3xl mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-1 text-white">Painel da clínica</h1>
-            <p className="text-sm text-white/85 mb-6">Acompanhe suas vagas publicadas e candidatos</p>
-            <div className="flex flex-col gap-4">
-              {minhasVagas.map((mv) => {
-                const badge = statusBadge(mv.status.toLowerCase());
-                const local = localDaVaga(mv);
-                const pend = (mv.candidaturas || []).filter((c) => c.status === 'PENDENTE').length;
-                const hired = (mv.candidaturas || []).find((c) => c.status === 'ACEITO');
-                return (
-                  <div
-                    key={mv.id}
-                    onClick={() => setVagaSelecionada({
-                      categoria: CATEGORIA_LABEL[mv.categoria],
-                      rua: mv.rua, numero: mv.numero, complemento: mv.complemento, bairro: mv.bairro, cidade: mv.cidade, estado: mv.estado,
-                      data: mv.data, horaInicio: mv.horaInicio, horaFim: mv.horaFim,
-                      valor: mv.valor, descricao: mv.descricao,
-                    })}
-                    className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
+        {tab === 'painel' && (() => {
+          const totalVagas = minhasVagas.length;
+          const abertaCount = minhasVagas.filter((v) => v.status === 'ABERTA' && !vagaExpirada(v)).length;
+          const encerradaCount = minhasVagas.filter((v) => vagaExpirada(v)).length;
+          const retidoCount = minhasVagas.filter((v) => v.status === 'PREENCHIDA' && v.pagamento?.status === 'RETIDO').length;
+          const concluidaCount = minhasVagas.filter((v) => v.status === 'CONCLUIDA').length;
+          const preenchidaCount = minhasVagas.filter((v) => v.status === 'PREENCHIDA').length;
+          const canceladaCount = minhasVagas.filter((v) => v.status === 'CANCELADA').length;
+
+          const filtradas = painelFiltro === 'todas'
+            ? minhasVagas
+            : painelFiltro === 'retido'
+              ? minhasVagas.filter((v) => v.status === 'PREENCHIDA' && v.pagamento?.status === 'RETIDO')
+              : painelFiltro === 'encerrada'
+                ? minhasVagas.filter((v) => vagaExpirada(v))
+                : painelFiltro === 'aberta'
+                  ? minhasVagas.filter((v) => v.status === 'ABERTA' && !vagaExpirada(v))
+                  : minhasVagas.filter((v) => v.status.toLowerCase() === painelFiltro);
+
+          const statCards: { key: typeof painelFiltro; label: string; value: number; iconBg: string; iconFg: string; icon: ReactNode }[] = [
+            { key: 'todas', label: 'Total de vagas', value: totalVagas, iconBg: 'bg-secondary/10', iconFg: 'text-secondary', icon: <GridIcon className="w-4 h-4" /> },
+            { key: 'aberta', label: 'Abertas', value: abertaCount, iconBg: 'bg-primaryTint', iconFg: 'text-primaryDeep', icon: <CheckCircleIcon className="w-4 h-4" /> },
+            { key: 'retido', label: 'Aguardando sua ação', value: retidoCount, iconBg: 'bg-amber-100', iconFg: 'text-amber-700', icon: <WarningIcon className="w-4 h-4" /> },
+            { key: 'concluida', label: 'Concluídas', value: concluidaCount, iconBg: 'bg-gray-100', iconFg: 'text-gray-500', icon: <CheckCircleIcon className="w-4 h-4" /> },
+          ];
+          const filtros: { key: typeof painelFiltro; label: string; count: number }[] = [
+            { key: 'todas', label: 'Todas', count: totalVagas },
+            { key: 'aberta', label: 'Abertas', count: abertaCount },
+            { key: 'encerrada', label: 'Encerradas', count: encerradaCount },
+            { key: 'preenchida', label: 'Aguardando presença', count: preenchidaCount },
+            { key: 'concluida', label: 'Concluídas', count: concluidaCount },
+            { key: 'cancelada', label: 'Canceladas', count: canceladaCount },
+          ];
+
+          return (
+            <div className="max-w-[1080px] mx-auto p-8">
+              <h1 className="text-2xl font-extrabold mb-1 text-white">Painel da clínica</h1>
+              <p className="text-sm text-white/85 mb-6">Acompanhe suas vagas publicadas e candidatos</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                {statCards.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => setPainelFiltro(s.key)}
+                    className={`text-left bg-white rounded-2xl p-4 shadow-sm border-[1.5px] transition-colors ${painelFiltro === s.key ? 'border-primary' : 'border-transparent'}`}
                   >
-                    <div className="flex justify-between items-start gap-3">
-                      <div>
-                        <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[mv.categoria]}</div>
-                        <a
-                          href={mapsLink(local)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-lg font-extrabold mt-1 hover:text-primary hover:underline"
-                        >
-                          <PinIcon className="w-4 h-4 shrink-0 text-primary" />
-                          {local}
-                        </a>
+                    <div className={`w-[30px] h-[30px] rounded-[9px] flex items-center justify-center mb-2 ${s.iconBg} ${s.iconFg}`}>{s.icon}</div>
+                    <div className="text-2xl font-extrabold text-ink leading-none">{s.value}</div>
+                    <div className="text-xs font-bold text-gray-400 mt-1.5">{s.label}</div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2 flex-wrap mb-5">
+                {filtros.map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setPainelFiltro(f.key)}
+                    className={`px-3.5 py-2 rounded-full text-xs font-extrabold ${painelFiltro === f.key ? 'bg-white text-primaryDeep' : 'bg-white/15 text-white hover:bg-white/25'}`}
+                  >
+                    {f.label} <span className="opacity-70">({f.count})</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-4">
+                {filtradas.map((mv) => {
+                  const expirada = vagaExpirada(mv);
+                  const badge = statusBadge(expirada ? 'encerrada' : mv.status.toLowerCase());
+                  const local = localDaVaga(mv);
+                  const pend = (mv.candidaturas || []).filter((c) => c.status === 'PENDENTE').length;
+                  const hired = (mv.candidaturas || []).find((c) => c.status === 'ACEITO');
+                  return (
+                    <div
+                      key={mv.id}
+                      onClick={() => setVagaSelecionada({
+                        categoria: CATEGORIA_LABEL[mv.categoria],
+                        rua: mv.rua, numero: mv.numero, complemento: mv.complemento, bairro: mv.bairro, cidade: mv.cidade, estado: mv.estado,
+                        data: mv.data, horaInicio: mv.horaInicio, horaFim: mv.horaFim,
+                        valor: mv.valor, descricao: mv.descricao,
+                      })}
+                      className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
+                    >
+                      <div className="flex justify-between items-start gap-3">
+                        <div>
+                          <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[mv.categoria]}</div>
+                          <a
+                            href={mapsLink(local)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-start gap-1 text-lg font-extrabold mt-1 hover:text-primary hover:underline"
+                          >
+                            <PinIcon className="w-4 h-4 shrink-0 text-primary mt-1.5" />
+                            {local}
+                          </a>
+                        </div>
+                        <div className={badge.className}>{badge.label}</div>
                       </div>
-                      <div className={badge.className}>{badge.label}</div>
-                    </div>
-                    <div className="flex gap-4 flex-wrap mt-3 text-sm text-gray-500">
-                      <div>Data <b className="font-bold text-gray-700">{formatDataBR(mv.data)}</b></div><div>Horário <b className="font-bold text-gray-700">{mv.horaInicio} - {mv.horaFim}</b></div><div>R$ {mv.valor}</div>
-                    </div>
-                    {mv.descricao && <div className="text-sm text-gray-600 mt-3">{mv.descricao}</div>}
-                    <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100 flex-wrap gap-2">
-                      <div className="text-sm text-gray-500">{(mv.candidaturas || []).length === 0 ? 'Nenhum candidato ainda' : `${mv.candidaturas!.length} candidato(s) · ${pend} pendente(s)`}</div>
-                      <div className="flex gap-2 flex-wrap">
-                        {mv.status === 'ABERTA' && (
-                          <>
+                      <div className="flex gap-2 flex-wrap mt-3">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg">Data <b className="text-ink font-extrabold">{formatDataBR(mv.data)}</b></span>
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg">Horário <b className="text-ink font-extrabold">{mv.horaInicio} - {mv.horaFim}</b></span>
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-primaryDeep bg-primaryTint px-2.5 py-1 rounded-lg">R$ {mv.valor}</span>
+                      </div>
+                      {mv.descricao && <div className="text-sm text-gray-600 mt-3">{mv.descricao}</div>}
+                      {mv.status === 'PREENCHIDA' && mv.pagamento && mv.pagamento.status === 'RETIDO' && (
+                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2.5 justify-between flex-wrap bg-amber-50 rounded-xl px-3.5 py-3 mt-3">
+                          <div className="flex items-center gap-2 text-xs font-bold text-amber-700">
+                            <WarningIcon className="w-4 h-4 shrink-0" />
+                            {hired?.profissional?.nome || 'O profissional'} concluiu o plantão — confirme a presença pra liberar o pagamento.
+                          </div>
+                          <button onClick={() => handleLiberarPagamento(mv.pagamento!.id)} className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-extrabold shrink-0">Confirmar presença e liberar pagamento</button>
+                        </div>
+                      )}
+                      <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100 flex-wrap gap-2">
+                        <div className="text-sm text-gray-500">{(mv.candidaturas || []).length === 0 ? 'Nenhum candidato ainda' : `${mv.candidaturas!.length} candidato(s) · ${pend} pendente(s)`}</div>
+                        <div className="flex gap-2 flex-wrap">
+                          {mv.status === 'ABERTA' && !expirada && (mv.candidaturas || []).length === 0 && (
                             <button onClick={() => editarVaga(mv)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Editar</button>
+                          )}
+                          {mv.status === 'ABERTA' && !expirada && (
                             <button onClick={() => cancelarVaga(mv.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold text-danger">Cancelar</button>
-                          </>
-                        )}
-                        {mv.status === 'PREENCHIDA' && mv.pagamento && mv.pagamento.status === 'RETIDO' && (
-                          <button onClick={() => handleLiberarPagamento(mv.pagamento!.id)} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold">Confirmar presença e liberar pagamento</button>
-                        )}
-                        <button onClick={() => { setSelectedMvId(mv.id); setTab('candidatos'); }} className="px-4 py-2 rounded-lg bg-secondary text-white text-sm font-bold">Ver candidatos</button>
+                          )}
+                          <button onClick={() => { setSelectedMvId(mv.id); setTab('candidatos'); }} className="px-4 py-2 rounded-lg bg-secondary text-white text-sm font-bold">Ver candidatos</button>
+                        </div>
                       </div>
+                      {mv.status === 'CONCLUIDA' && hired && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <AvaliacaoCandidatura
+                            candidaturaId={hired.id}
+                            autorProprio="CLINICA"
+                            labelForm={`Avaliar ${hired.profissional?.nome || 'profissional'}`}
+                            labelFeita={`Avaliação de ${hired.profissional?.nome || 'profissional'}`}
+                            labelOutra={`${hired.profissional?.nome || 'Profissional'} avaliou você`}
+                            avaliacoesIniciais={avaliacoesPorCandidatura[hired.id] || []}
+                          />
+                        </div>
+                      )}
                     </div>
-                    {mv.status === 'CONCLUIDA' && hired && (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <AvaliacaoCandidatura
-                          candidaturaId={hired.id}
-                          autorProprio="CLINICA"
-                          labelForm={`Avaliar ${hired.profissional?.nome || 'profissional'}`}
-                          labelFeita={`Avaliação de ${hired.profissional?.nome || 'profissional'}`}
-                          labelOutra={`${hired.profissional?.nome || 'Profissional'} avaliou você`}
-                          avaliacoesIniciais={avaliacoesPorCandidatura[hired.id] || []}
-                        />
-                      </div>
-                    )}
+                  );
+                })}
+                {filtradas.length === 0 && (
+                  <div className="bg-white/95 border-2 border-dashed border-white/40 rounded-2xl p-10 text-center text-sm font-semibold text-gray-400">
+                    {minhasVagas.length === 0 ? 'Você ainda não publicou nenhuma vaga.' : 'Nenhuma vaga encontrada para esse filtro.'}
                   </div>
-                );
-              })}
-              {minhasVagas.length === 0 && <div className="text-sm text-gray-400">Você ainda não publicou nenhuma vaga.</div>}
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {tab === 'candidatos' && selectedMv && (
           <div className="max-w-2xl mx-auto p-8">
@@ -749,91 +987,176 @@ export default function ClinicaPage() {
         })()}
 
         {tab === 'perfil' && (
-          <div className="max-w-2xl mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-6 text-white">Perfil da clínica</h1>
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 flex flex-col gap-4">
-              <div className="flex items-center gap-4 pb-2">
-                <div className="w-20 h-20 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden shrink-0">
-                  {clinica.logoUrl ? (
-                    <img src={clinica.logoUrl} alt={clinica.nome} className="w-full h-full object-cover" />
-                  ) : (
-                    <BuildingIcon className="w-9 h-9" />
-                  )}
+          <div className="max-w-[880px] mx-auto p-8">
+            <div className="flex flex-col items-center text-center gap-2.5 sm:flex-row sm:items-end sm:text-left sm:gap-5 mb-6">
+              <div className="relative w-[100px] h-[100px] shrink-0">
+                <div className="w-full h-full rounded-2xl p-1 bg-white/90 shadow-lg">
+                  <div className="w-full h-full rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
+                    {clinica.logoUrl ? (
+                      <img src={clinica.logoUrl} alt={clinica.nome} className="w-full h-full object-cover" />
+                    ) : (
+                      <BuildingIcon className="w-9 h-9" />
+                    )}
+                  </div>
                 </div>
-                <label className="cursor-pointer px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-50">
-                  {uploadingLogo ? 'Enviando...' : 'Trocar logo'}
+                <label className="absolute right-0 bottom-0.5 w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center cursor-pointer border-[3px] border-primary shadow-md">
+                  <PencilIcon className="w-3.5 h-3.5" />
                   <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={(e) => handleLogoChange(e.target.files)} />
                 </label>
               </div>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">Nome / Razão social</span>
-                <input value={perfilForm.nome} onChange={(e) => setPerfilForm((f) => ({ ...f, nome: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">CNPJ</span>
-                <input disabled value={perfilForm.cnpj} className="px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500" />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">Telefone</span>
-                <input
-                  value={maskTelefone(perfilForm.telefone)}
-                  onChange={(e) => setPerfilForm((f) => ({ ...f, telefone: onlyDigits(e.target.value) }))}
-                  placeholder="(00) 00000-0000"
-                  className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
-                />
-              </label>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-center sm:justify-start gap-2.5 flex-wrap">
+                  <div className="text-white text-2xl font-extrabold">{clinica.nome}</div>
+                  <span className="inline-flex items-center gap-1 bg-white/15 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-full">
+                    <ShieldIcon className="w-3 h-3 text-[#7CF0C7]" /> Alvará verificado
+                  </span>
+                </div>
+                <div className="text-white/85 text-sm font-semibold mt-1.5">{buildEndereco(clinica)}</div>
+              </div>
+              {!editandoPerfil && (
+                <button
+                  onClick={() => setEditandoPerfil(true)}
+                  className="inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[13.5px] font-extrabold px-[18px] py-2.5 rounded-xl shadow-lg hover:bg-primaryTint shrink-0"
+                >
+                  <PencilIcon className="w-3.5 h-3.5" /> Editar perfil
+                </button>
+              )}
+            </div>
 
-              <div className="pt-2 mt-2 border-t border-gray-100">
-                <div className="text-sm font-extrabold text-gray-800 mb-3">Endereço</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className="flex flex-col gap-1.5 sm:col-span-2">
-                    <span className="text-sm font-bold">CEP</span>
-                    <input
-                      value={maskCEP(perfilForm.cep)}
-                      onChange={(e) => onPerfilCepChange(e.target.value)}
-                      placeholder="00000-000"
-                      className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm outline-none max-w-[200px]"
-                    />
-                    {perfilCepStatus === 'loading' && <span className="text-xs text-gray-400">Buscando endereço...</span>}
-                    {perfilCepStatus === 'error' && <span className="text-xs font-semibold text-danger">CEP não encontrado. Preencha o endereço manualmente.</span>}
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Estado (UF)</span>
-                    <select value={perfilForm.estado} onChange={(e) => setPerfilForm((f) => ({ ...f, estado: e.target.value, cidade: '' }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
-                      <option value="">Selecione...</option>
-                      {withCurrent(Object.keys(ESTADOS_CIDADES), perfilForm.estado).map((uf) => <option key={uf} value={uf}>{uf}</option>)}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Cidade</span>
-                    <select disabled={!perfilForm.estado} value={perfilForm.cidade} onChange={(e) => setPerfilForm((f) => ({ ...f, cidade: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
-                      <option value="">Selecione...</option>
-                      {withCurrent(ESTADOS_CIDADES[perfilForm.estado] || [], perfilForm.cidade).map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Bairro</span>
-                    <input value={perfilForm.bairro} onChange={(e) => setPerfilForm((f) => ({ ...f, bairro: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Rua</span>
-                    <input value={perfilForm.rua} onChange={(e) => setPerfilForm((f) => ({ ...f, rua: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Número</span>
-                    <input value={perfilForm.numero} onChange={(e) => setPerfilForm((f) => ({ ...f, numero: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-bold">Complemento</span>
-                    <input value={perfilForm.complemento} onChange={(e) => setPerfilForm((f) => ({ ...f, complemento: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                  </label>
+            {uploadingLogo && <div className="text-center text-sm font-semibold text-white/85 mb-4">Enviando logo...</div>}
+            {actionError && <div className="text-sm font-semibold text-danger bg-red-50 rounded-lg p-3 mb-4">{actionError}</div>}
+
+            {!editandoPerfil ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+                  <div className="bg-white rounded-2xl p-4 text-center">
+                    <div className="text-xl font-extrabold text-ink">{minhasVagas.length}</div>
+                    <div className="text-[11px] font-bold text-gray-500 mt-0.5">Vagas publicadas</div>
+                  </div>
+                  <div className="bg-white rounded-2xl p-4 text-center">
+                    <div className="text-xl font-extrabold text-ink">{taxaPreenchimento !== null ? `${taxaPreenchimento}%` : '—'}</div>
+                    <div className="text-[11px] font-bold text-gray-500 mt-0.5">Taxa de preenchimento</div>
+                  </div>
+                  <div className="bg-white rounded-2xl p-4 text-center">
+                    <div className="text-xl font-extrabold text-ink">{notaMedia !== null ? notaMedia.toFixed(1) : '—'}</div>
+                    <div className="text-[11px] font-bold text-gray-500 mt-0.5">Avaliação média</div>
+                  </div>
+                  <div className="bg-white rounded-2xl p-4 text-center">
+                    <div className="text-xl font-extrabold text-ink">{avaliacoesRecebidas.length}</div>
+                    <div className="text-[11px] font-bold text-gray-500 mt-0.5">Avaliações recebidas</div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
+                  <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Dados de contato</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-[30px] h-[30px] rounded-[9px] bg-primaryTint text-primaryDeep flex items-center justify-center shrink-0"><PhoneIcon className="w-3.5 h-3.5" /></div>
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Telefone</div>
+                        <div className="text-sm font-bold text-ink mt-0.5">{clinica.telefone ? maskTelefone(clinica.telefone) : 'Não informado'}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-[30px] h-[30px] rounded-[9px] bg-primaryTint text-primaryDeep flex items-center justify-center shrink-0"><BuildingIcon className="w-3.5 h-3.5" /></div>
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">CNPJ</div>
+                        <div className="text-sm font-bold text-ink mt-0.5">{clinica.cnpj}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                  <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-2">Endereço</div>
+                  <div className="text-sm font-bold text-ink mb-2">{buildEndereco(clinica)}</div>
+                  <a href={mapsLink(buildEndereco(clinica))} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline">Ver no mapa →</a>
+                </div>
+              </>
+            ) : (
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 flex flex-col gap-4">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-bold">Nome / Razão social</span>
+                  <input value={perfilForm.nome} onChange={(e) => setPerfilForm((f) => ({ ...f, nome: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-bold">CNPJ</span>
+                  <input disabled value={perfilForm.cnpj} className="px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500" />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-bold">Telefone</span>
+                  <input
+                    value={maskTelefone(perfilForm.telefone)}
+                    onChange={(e) => setPerfilForm((f) => ({ ...f, telefone: onlyDigits(e.target.value) }))}
+                    placeholder="(00) 00000-0000"
+                    className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
+                  />
+                </label>
+
+                <div className="pt-2 mt-2 border-t border-gray-100">
+                  <div className="text-sm font-extrabold text-gray-800 mb-3">Endereço</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <label className="flex flex-col gap-1.5 sm:col-span-2">
+                      <span className="text-sm font-bold">CEP</span>
+                      <input
+                        value={maskCEP(perfilForm.cep)}
+                        onChange={(e) => onPerfilCepChange(e.target.value)}
+                        placeholder="00000-000"
+                        className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm outline-none max-w-[200px]"
+                      />
+                      {perfilCepStatus === 'loading' && <span className="text-xs text-gray-400">Buscando endereço...</span>}
+                      {perfilCepStatus === 'error' && <span className="text-xs font-semibold text-danger">CEP não encontrado. Preencha o endereço manualmente.</span>}
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-bold">Estado (UF)</span>
+                      <select value={perfilForm.estado} onChange={(e) => setPerfilForm((f) => ({ ...f, estado: e.target.value, cidade: '' }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
+                        <option value="">Selecione...</option>
+                        {withCurrent(Object.keys(ESTADOS_CIDADES), perfilForm.estado).map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-bold">Cidade</span>
+                      <select disabled={!perfilForm.estado} value={perfilForm.cidade} onChange={(e) => setPerfilForm((f) => ({ ...f, cidade: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm">
+                        <option value="">Selecione...</option>
+                        {withCurrent(ESTADOS_CIDADES[perfilForm.estado] || [], perfilForm.cidade).map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-bold">Bairro</span>
+                      <input value={perfilForm.bairro} onChange={(e) => setPerfilForm((f) => ({ ...f, bairro: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-bold">Rua</span>
+                      <input value={perfilForm.rua} onChange={(e) => setPerfilForm((f) => ({ ...f, rua: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-bold">Número</span>
+                      <input value={perfilForm.numero} onChange={(e) => setPerfilForm((f) => ({ ...f, numero: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-bold">Complemento</span>
+                      <input value={perfilForm.complemento} onChange={(e) => setPerfilForm((f) => ({ ...f, complemento: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => salvarPerfil().then(() => setEditandoPerfil(false))}
+                    disabled={savingPerfil}
+                    className="px-5 py-2.5 rounded-lg bg-primary hover:bg-primaryDark text-white text-sm font-bold shadow-sm disabled:opacity-60"
+                  >
+                    {savingPerfil ? 'Salvando...' : 'Salvar alterações'}
+                  </button>
+                  <button
+                    onClick={() => { setEditandoPerfil(false); setPerfilForm(perfilFormFromClinica(clinica)); }}
+                    className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm font-bold hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
                 </div>
               </div>
-
-              <button onClick={salvarPerfil} disabled={savingPerfil} className="self-start px-5 py-2.5 rounded-lg bg-ink text-white text-sm font-bold shadow-sm disabled:opacity-60">
-                {savingPerfil ? 'Salvando...' : 'Salvar alterações'}
-              </button>
-            </div>
+            )}
 
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 mt-6 flex flex-col gap-4">
               <div>

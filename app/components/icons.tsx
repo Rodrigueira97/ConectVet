@@ -282,6 +282,15 @@ export function HeartIcon({ className, filled }: IconProps & { filled?: boolean 
   );
 }
 
+export function GraduationCapIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M22 10 12 5 2 10l10 5 10-5z" />
+      <path d="M6 12v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5" />
+    </svg>
+  );
+}
+
 export function BellIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>

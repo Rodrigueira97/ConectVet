@@ -73,7 +73,7 @@ function urgenciaLabel(v: { data: string; status: string }) {
   const amanhaStr = somarDiasISO(hojeStr, 1);
   const d = v.data.slice(0, 10);
   if (d === hojeStr) return 'É hoje';
-  if (d === amanhaStr) return 'Começa amanhã';
+  if (d === amanhaStr) return 'Amanhã';
   return null;
 }
 

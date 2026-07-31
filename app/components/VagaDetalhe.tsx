@@ -57,7 +57,7 @@ export function VagaDetalheView({
   const mostrarCta = !!(onAction && actionLabel);
 
   return (
-    <div className="max-w-[880px] mx-auto p-8">
+    <div className="max-w-[1080px] mx-auto p-8">
       <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-bold text-white/85 hover:text-white mb-4">
         <ChevronLeftIcon className="w-[15px] h-[15px]" /> Voltar para vagas
       </button>
