@@ -843,8 +843,8 @@ function ProfissionalPageInner() {
                       <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
                         <span className={`font-extrabold text-[13px] px-2.5 py-1 rounded-lg ${fechada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>R$ {v.valor}</span>
                         <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
-                        <div>{v.horaInicio} – {v.horaFim} · {horasLabel}</div>
-                        <div>{local}</div>
+                        <div><b className="font-bold text-gray-700">{v.horaInicio} – {v.horaFim} · {horasLabel}</b></div>
+                        <div><b className="font-bold text-gray-700">{local}</b></div>
                       </div>
                     )}
 
@@ -975,10 +975,6 @@ function ProfissionalPageInner() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-center sm:justify-start gap-2.5 flex-wrap">
                   <div className="text-white text-2xl font-extrabold">{perfil.nome}</div>
-                  <span className="inline-flex items-center gap-1 bg-white/15 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-full">
-                    <ShieldIcon className="w-3 h-3 text-[#7CF0C7]" />
-                    {perfil.tipoComprovacao} verificado
-                  </span>
                 </div>
                 <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap mt-2">
                   <span className="bg-white/15 text-white text-xs font-extrabold uppercase tracking-wide px-3 py-1.5 rounded-full">
@@ -1068,7 +1064,7 @@ function ProfissionalPageInner() {
                       <div className="w-[34px] h-[34px] rounded-[10px] bg-gray-100 text-gray-500 flex items-center justify-center shrink-0"><ShieldIcon className="w-4 h-4" /></div>
                       <div className="min-w-0">
                         <div className="text-[13.5px] font-bold text-ink">Carteirinha do {perfil.tipoComprovacao}</div>
-                        <div className="text-xs text-gray-400">Enviado e verificado</div>
+                        <div className="text-xs text-gray-400">Enviado</div>
                       </div>
                     </div>
                     <a href={perfil.comprovanteUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline shrink-0">Ver documento →</a>

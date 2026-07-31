@@ -476,7 +476,16 @@ function ClinicaPageInner() {
   const vagasConsideradas = minhasVagas.filter((v) => v.status !== 'CANCELADA');
   const vagasPreenchidas = vagasConsideradas.filter((v) => v.status === 'PREENCHIDA' || v.status === 'CONCLUIDA').length;
   const taxaPreenchimento = vagasConsideradas.length ? Math.round((vagasPreenchidas / vagasConsideradas.length) * 100) : null;
-  const avaliacoesRecebidas = Object.values(avaliacoesPorCandidatura).flat().filter((a) => a.autor === 'PROFISSIONAL');
+  const avaliacoesRecebidas = minhasVagas
+    .filter((v) => v.status === 'CONCLUIDA')
+    .flatMap((v) => {
+      const hired = (v.candidaturas || []).find((c) => c.status === 'ACEITO');
+      if (!hired) return [];
+      return (avaliacoesPorCandidatura[hired.id] || [])
+        .filter((a) => a.autor === 'PROFISSIONAL')
+        .map((a) => ({ ...a, profissionalNome: hired.profissional?.nome || 'Profissional', data: v.data }));
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const notaMedia = avaliacoesRecebidas.length
     ? avaliacoesRecebidas.reduce((soma, a) => soma + a.nota, 0) / avaliacoesRecebidas.length
     : null;
@@ -565,7 +574,7 @@ function ClinicaPageInner() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-[13px] font-bold text-ink truncate">{c.profissional?.nome}</div>
-                          <div className="text-[12px] text-gray-500 truncate">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · vaga de {formatDataBR(v.data)}</div>
+                          <div className="text-[12px] text-gray-500 truncate">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · vaga de <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
                         </div>
                         <button
                           onClick={() => irParaCandidatos(v.id)}
@@ -974,7 +983,9 @@ function ClinicaPageInner() {
           <div className="max-w-2xl mx-auto p-8">
             <button onClick={voltarAoPainel} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar ao painel</button>
             <h1 className="text-xl font-extrabold mb-1 text-white">Candidatos — {CATEGORIA_LABEL[selectedMv.categoria]}</h1>
-            <p className="text-sm text-white/85 mb-6">{localDaVaga(selectedMv)} · {formatDataBR(selectedMv.data)}</p>
+            <p className="text-sm text-white/85 mb-6">
+              <b className="font-bold text-white">{localDaVaga(selectedMv)}</b> · <b className="font-bold text-white">{formatDataBR(selectedMv.data)}</b>
+            </p>
             {selectedMv.status !== 'ABERTA' && (
               <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 mb-4">
                 {selectedMv.status === 'CANCELADA'
@@ -1041,7 +1052,7 @@ function ClinicaPageInner() {
               <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7">
                 <div className="text-sm text-gray-500">Profissional</div>
                 <div className="text-lg font-extrabold">{selectedCand?.profissional?.nome}</div>
-                <div className="text-sm text-gray-500">{CATEGORIA_LABEL[selectedMv.categoria]} · {localDaVaga(selectedMv)}</div>
+                <div className="text-sm text-gray-500">{CATEGORIA_LABEL[selectedMv.categoria]} · <b className="font-bold text-gray-700">{localDaVaga(selectedMv)}</b></div>
                 <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-2">
                   <div className="flex justify-between text-sm"><span>Valor ao profissional</span><span className="font-bold">R$ {valorProfissional.toFixed(2)}</span></div>
                   <div className="flex justify-between text-sm text-gray-500"><span>Taxa da ConectVet (5%)</span><span>+ R$ {taxa.toFixed(2)}</span></div>
@@ -1078,9 +1089,6 @@ function ClinicaPageInner() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-center sm:justify-start gap-2.5 flex-wrap">
                   <div className="text-white text-2xl font-extrabold">{clinica.nome}</div>
-                  <span className="inline-flex items-center gap-1 bg-white/15 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-full">
-                    <ShieldIcon className="w-3 h-3 text-[#7CF0C7]" /> Alvará verificado
-                  </span>
                 </div>
                 <div className="text-white/85 text-sm font-semibold mt-1.5">{buildEndereco(clinica)}</div>
               </div>
@@ -1138,11 +1146,29 @@ function ClinicaPageInner() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
                   <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-2">Endereço</div>
                   <div className="text-sm font-bold text-ink mb-2">{buildEndereco(clinica)}</div>
                   <a href={mapsLink(buildEndereco(clinica))} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline">Ver no mapa →</a>
                 </div>
+
+                {avaliacoesRecebidas.length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                    <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-1">
+                      <HeartIcon className="w-3.5 h-3.5 text-primary" /> Avaliações recebidas
+                    </div>
+                    {avaliacoesRecebidas.map((a) => (
+                      <div key={a.id} className="py-3.5 border-b border-gray-100 last:border-b-0 last:pb-0 first:pt-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[13.5px] font-extrabold text-ink">{a.profissionalNome}</div>
+                          <div className="text-amber-500 text-sm tracking-widest">{'★'.repeat(a.nota)}{'☆'.repeat(5 - a.nota)}</div>
+                        </div>
+                        {a.comentario && <div className="text-[13.5px] leading-relaxed text-gray-700 mt-1">{a.comentario}</div>}
+                        {a.data && <div className="text-xs text-gray-400 mt-1.5">Plantão de {formatDataBR(a.data)}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 flex flex-col gap-4">
