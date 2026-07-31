@@ -7,13 +7,14 @@ import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
-  CheckCircleIcon, XCircleIcon,
+  CheckCircleIcon, XCircleIcon, LockIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { FileField } from '@/app/components/FileField';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { PawTrailLoader } from '@/app/components/PawTrailLoader';
 import { NotificationBell } from '@/app/components/NotificationBell';
+import { DateField } from '@/app/components/DateField';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import {
@@ -76,12 +77,20 @@ function urgenciaLabel(v: { data: string; status: string }) {
   return null;
 }
 
+function motivoVagaFechada(v: { status: string }) {
+  if (v.status === 'PREENCHIDA') return 'Preenchida por outro profissional';
+  if (v.status === 'CONCLUIDA') return 'Vaga concluída';
+  if (v.status === 'CANCELADA') return 'Cancelada pela clínica';
+  return 'Prazo encerrado';
+}
+
 const FAVORITOS_KEY = 'conectvet_vagas_favoritas';
 
-type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'RECUSADO';
+type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'RECUSADO' | 'ENCERRADA';
 
 function statusDaCandidatura(c: Candidatura): StatusCandidatura {
   if (c.status === 'ACEITO') return c.vaga?.status === 'CONCLUIDA' ? 'CONCLUIDA' : 'ACEITO';
+  if (c.status === 'PENDENTE' && c.vaga && vagaEncerrada(c.vaga)) return 'ENCERRADA';
   return c.status;
 }
 
@@ -91,6 +100,14 @@ function passosDaCandidatura(c: Candidatura, status: StatusCandidatura): PassoJo
   const vagaStatus = c.vaga?.status;
   if (status === 'PENDENTE') {
     return [{ label: 'Enviada', state: 'done' }, { label: 'Em análise', state: 'current' }];
+  }
+  if (status === 'ENCERRADA') {
+    const ultimoLabel = vagaStatus === 'CANCELADA' ? 'Vaga cancelada' : 'Prazo encerrado';
+    return [
+      { label: 'Enviada', state: 'done' },
+      { label: 'Em análise', state: 'done' },
+      { label: ultimoLabel, state: 'fail' },
+    ];
   }
   if (status === 'RECUSADO') {
     const ultimoLabel = vagaStatus === 'CANCELADA' ? 'Vaga cancelada' : vagaStatus === 'ABERTA' ? 'Não foi dessa vez' : 'Preenchida por outro';
@@ -120,6 +137,11 @@ function motivoRecusaLabel(c: Candidatura) {
   if (vagaStatus === 'CANCELADA') return 'A clínica cancelou esta vaga.';
   if (vagaStatus === 'ABERTA') return 'A clínica optou por outro profissional desta vez. Continue de olho em novas vagas na Home.';
   return 'A vaga foi preenchida por outro profissional.';
+}
+
+function motivoEncerradaLabel(c: Candidatura) {
+  if (c.vaga?.status === 'CANCELADA') return 'A clínica cancelou esta vaga antes de responder.';
+  return 'A data da vaga já passou e a clínica não respondeu a tempo.';
 }
 
 function StepperCandidatura({ passos }: { passos: PassoJornada[] }) {
@@ -264,13 +286,15 @@ export default function ProfissionalPage() {
     return regioesTokens.some((t) => local.includes(t));
   }
 
-  const feedFiltrado = feed.filter((v) => {
-    if (filtros.categoria && v.categoria !== filtros.categoria) return false;
-    const local = localDaVaga(v);
-    if (filtros.busca && !`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`.toLowerCase().includes(filtros.busca.toLowerCase())) return false;
-    if (filtros.pertoDeMim && !pertoDeVoce(v)) return false;
-    return true;
-  });
+  const feedFiltrado = feed
+    .filter((v) => {
+      if (filtros.categoria && v.categoria !== filtros.categoria) return false;
+      const local = localDaVaga(v);
+      if (filtros.busca && !`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`.toLowerCase().includes(filtros.busca.toLowerCase())) return false;
+      if (filtros.pertoDeMim && !pertoDeVoce(v)) return false;
+      return true;
+    })
+    .sort((a, b) => Number(vagaEncerrada(a)) - Number(vagaEncerrada(b)));
 
   const vagasFavoritas = feed.filter((v) => favoritos.has(v.id));
 
@@ -301,6 +325,7 @@ export default function ProfissionalPage() {
     ACEITO: candidaturasComStatus.filter((c) => c.statusExibido === 'ACEITO').length,
     CONCLUIDA: candidaturasComStatus.filter((c) => c.statusExibido === 'CONCLUIDA').length,
     RECUSADO: candidaturasComStatus.filter((c) => c.statusExibido === 'RECUSADO').length,
+    ENCERRADA: candidaturasComStatus.filter((c) => c.statusExibido === 'ENCERRADA').length,
   };
 
   function selecionarFiltroCandidaturas(f: 'TODAS' | StatusCandidatura) {
@@ -418,14 +443,16 @@ export default function ProfissionalPage() {
       <div
         key={v.id}
         onClick={() => setVagaSelecionada(v)}
-        className={`bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow,opacity] duration-150 ${encerrada ? 'opacity-70' : ''}`}
+        className={`bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150 ${encerrada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}
       >
         <div className="flex justify-between items-start gap-3">
           <div>
             <div className="flex gap-2 items-center flex-wrap">
               <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{CATEGORIA_LABEL[v.categoria]}</div>
               {encerrada ? (
-                <div className="bg-gray-200 text-gray-500 text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Encerrada</div>
+                <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">
+                  <LockIcon className="w-2.5 h-2.5" /> Encerrada
+                </div>
               ) : perto && (
                 <div className="bg-secondary text-white text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Perto de você</div>
               )}
@@ -444,7 +471,7 @@ export default function ProfissionalPage() {
             >
               <HeartIcon className="w-3.5 h-3.5" filled={favorita} />
             </button>
-            <div className="bg-primaryTint text-primaryDeep font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap">R$ {v.valor}</div>
+            <div className={`font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap ${encerrada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>R$ {v.valor}</div>
           </div>
         </div>
         <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
@@ -467,12 +494,18 @@ export default function ProfissionalPage() {
             <div className="whitespace-pre-line">{v.descricao}</div>
           </div>
         )}
-        <div className="flex justify-end mt-[14px]">
-          <button disabled={applied || encerrada || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
-            className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || encerrada || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
-            {applied ? 'Candidatura enviada' : encerrada ? 'Vaga encerrada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
-          </button>
-        </div>
+        {!applied && encerrada ? (
+          <div className="flex items-center justify-center gap-2 w-full mt-[14px] py-2.5 rounded-[10px] bg-gray-50 text-gray-500 text-[12.5px] font-bold">
+            <LockIcon className="w-3.5 h-3.5" /> {motivoVagaFechada(v)}
+          </div>
+        ) : (
+          <div className="flex justify-end mt-[14px]">
+            <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
+              className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
+              {applied ? 'Candidatura enviada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -700,7 +733,7 @@ export default function ProfissionalPage() {
 
             <div className="flex gap-2 flex-wrap mb-5">
               {([
-                ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['RECUSADO', 'Recusadas'],
+                ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['RECUSADO', 'Recusadas'], ['ENCERRADA', 'Encerradas'],
               ] as const).map(([key, label]) => (
                 <button
                   key={key}
@@ -720,12 +753,13 @@ export default function ProfissionalPage() {
             <div className="flex flex-col gap-[14px]">
               {candidaturasPaginadas.map((c) => {
                 const status = c.statusExibido;
+                const fechada = status === 'RECUSADO' || status === 'ENCERRADA';
                 const v = c.vaga;
                 const local = v ? [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ') : '';
                 const horas = v ? calcDuracaoHoras(v.horaInicio, v.horaFim) : 0;
                 const horasLabel = horas % 1 === 0 ? `${horas}h` : `${horas.toFixed(1)}h`;
                 return (
-                  <div key={c.id} className={`bg-white border border-gray-200 rounded-2xl p-[18px] ${status === 'RECUSADO' ? 'opacity-80' : ''}`}>
+                  <div key={c.id} className={`bg-white border border-gray-200 rounded-2xl p-[18px] ${fechada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}>
                     <div className="flex justify-between items-start gap-3">
                       <div>
                         <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{v && CATEGORIA_LABEL[v.categoria]}</div>
@@ -735,7 +769,7 @@ export default function ProfissionalPage() {
                     </div>
                     {v && (
                       <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
-                        <span className="bg-primaryTint text-primaryDeep font-extrabold text-[13px] px-2.5 py-1 rounded-lg">R$ {v.valor}</span>
+                        <span className={`font-extrabold text-[13px] px-2.5 py-1 rounded-lg ${fechada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>R$ {v.valor}</span>
                         <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
                         <div>{v.horaInicio} – {v.horaFim} · {horasLabel}</div>
                         <div>{local}</div>
@@ -766,6 +800,12 @@ export default function ProfissionalPage() {
                       <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-gray-50 text-gray-500">
                         <XCircleIcon className="w-4 h-4 shrink-0 mt-px" />
                         <div>{motivoRecusaLabel(c)}</div>
+                      </div>
+                    )}
+                    {status === 'ENCERRADA' && (
+                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-gray-50 text-gray-500">
+                        <LockIcon className="w-4 h-4 shrink-0 mt-px" />
+                        <div>{motivoEncerradaLabel(c)}</div>
                       </div>
                     )}
 
@@ -1014,15 +1054,13 @@ export default function ProfissionalPage() {
                     placeholder="(00) 00000-0000"
                     className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
                   /></label>
-                <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Data de nascimento</span>
-                  <input
-                    type="date"
-                    value={perfilForm.dataNascimento}
-                    onChange={(e) => setPerfilForm((f) => ({ ...f, dataNascimento: e.target.value }))}
-                    min="1900-01-01"
-                    max={hojeBrasil()}
-                    className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
-                  /></label>
+                <DateField
+                  label="Data de nascimento"
+                  value={perfilForm.dataNascimento}
+                  onChange={(v) => setPerfilForm((f) => ({ ...f, dataNascimento: v }))}
+                  min="1900-01-01"
+                  max={hojeBrasil()}
+                />
                 <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Área de atuação</span>
                   <input value={perfilForm.areaAtuacao} onChange={(e) => setPerfilForm((f) => ({ ...f, areaAtuacao: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" /></label>
                 <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Regiões de atendimento</span>

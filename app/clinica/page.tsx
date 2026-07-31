@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge } from '@/lib/mockData';
+import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon } from '@/app/components/icons';
@@ -12,6 +12,8 @@ import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import { NotificationBell } from '@/app/components/NotificationBell';
+import { DateField } from '@/app/components/DateField';
+import { TimeField } from '@/app/components/TimeField';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE,
   Vaga, Candidatura, Clinica, Avaliacao,
@@ -541,19 +543,15 @@ export default function ClinicaPage() {
                   {enderecoParaExibir} — <a href={mapsLink(enderecoParaExibir)} target="_blank" className="font-bold">ver no Google Maps</a>
                 </div>
               )}
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-bold">Data do serviço</span>
-                <input type="date" value={vagaForm.data} onChange={(e) => setVagaForm((f) => ({ ...f, data: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-              </label>
+              <DateField
+                label="Data do serviço"
+                value={vagaForm.data}
+                onChange={(v) => setVagaForm((f) => ({ ...f, data: v }))}
+                min={hojeBrasil()}
+              />
               <div className="grid grid-cols-2 gap-4">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-bold">Início</span>
-                  <input type="time" value={vagaForm.horaInicio} onChange={(e) => setVagaForm((f) => ({ ...f, horaInicio: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-bold">Fim</span>
-                  <input type="time" value={vagaForm.horaFim} onChange={(e) => setVagaForm((f) => ({ ...f, horaFim: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" />
-                </label>
+                <TimeField label="Início" value={vagaForm.horaInicio} onChange={(v) => setVagaForm((f) => ({ ...f, horaInicio: v }))} />
+                <TimeField label="Fim" value={vagaForm.horaFim} onChange={(v) => setVagaForm((f) => ({ ...f, horaFim: v }))} />
               </div>
               {horaLabel && <div className="text-xs font-mono text-gray-500">{horaLabel}</div>}
               <label className="flex flex-col gap-1.5">

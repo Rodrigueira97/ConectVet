@@ -6,6 +6,7 @@ import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefo
 import { Categoria } from '@/lib/types';
 import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE, ESPECIALIDADES_VETERINARIAS } from '@/lib/api';
 import { FileField } from '@/app/components/FileField';
+import { DateField } from '@/app/components/DateField';
 import { BuildingIcon, CheckIcon, CloseIcon, PlusIcon, UserIcon } from '@/app/components/icons';
 
 type Role = 'clinica' | 'profissional';
@@ -528,7 +529,7 @@ export default function CadastroPage() {
                 </div>
               </div>
               <TextField label="Telefone" value={maskTelefone(prof.telefone)} onChange={(v) => pField('telefone', onlyDigits(v))} error={errors.telefoneProf} placeholder="(00) 00000-0000" required />
-              <TextField label="Data de nascimento" type="date" value={prof.dataNascimento} onChange={(v) => pField('dataNascimento', v)} error={errors.dataNascimentoProf} min={DATA_NASCIMENTO_MIN} max={HOJE_ISO} required />
+              <DateField label="Data de nascimento" value={prof.dataNascimento} onChange={(v) => pField('dataNascimento', v)} error={errors.dataNascimentoProf} min={DATA_NASCIMENTO_MIN} max={HOJE_ISO} required />
             </SectionCard>
 
             <SectionCard id="comprovacao" sectionRef={(el) => { sectionRefs.current.comprovacao = el; }} title="Comprovação de função">
