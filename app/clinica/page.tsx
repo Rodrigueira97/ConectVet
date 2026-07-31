@@ -1,16 +1,17 @@
 'use client';
-import { ReactNode, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { ReactNode, Suspense, useEffect, useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
+import { EmptyState } from '@/app/components/EmptyState';
 import { NotificationBell } from '@/app/components/NotificationBell';
 import { DateField } from '@/app/components/DateField';
 import { TimeField } from '@/app/components/TimeField';
@@ -24,6 +25,7 @@ import {
 
 type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'perfil';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
+type PainelFiltro = 'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido';
 
 function withCurrent(list: string[], current: string) {
   return current && !list.includes(current) ? [...list, current] : list;
@@ -51,6 +53,15 @@ function vagaExpirada(v: { data: string; status: string }) {
   return v.status === 'ABERTA' && v.data.slice(0, 10) <= hojeBrasil();
 }
 
+function buildVagaDetalhe(mv: Vaga): VagaDetalheData {
+  return {
+    categoria: CATEGORIA_LABEL[mv.categoria],
+    rua: mv.rua, numero: mv.numero, complemento: mv.complemento, bairro: mv.bairro, cidade: mv.cidade, estado: mv.estado,
+    data: mv.data, horaInicio: mv.horaInicio, horaFim: mv.horaFim,
+    valor: mv.valor, descricao: mv.descricao,
+  };
+}
+
 const CATEGORIA_ICON: Record<Categoria, (className: string) => ReactNode> = {
   'Veterinário Clínico': (c) => <HeartIcon className={c} />,
   'Veterinário Especialista': (c) => <ShieldIcon className={c} />,
@@ -76,19 +87,58 @@ const vagaFormInicial = {
 };
 
 export default function ClinicaPage() {
+  return (
+    <Suspense fallback={<FeedPageSkeleton sidebarItems={4} />}>
+      <ClinicaPageInner />
+    </Suspense>
+  );
+}
+
+function ClinicaPageInner() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Tab, vaga/candidatura selecionada e filtro do painel moram na URL (não em estado local):
+  // refresh, botão voltar do navegador e links compartilhados/vindos de notificação continuam
+  // funcionando. `goTo` funde um patch nos query params atuais numa única navegação — chamar
+  // vários setters em sequência no mesmo handler pisaria um no outro, já que cada um partiria
+  // do mesmo searchParams "congelado" da renderização atual.
+  function goTo(patch: Record<string, string | null | undefined>) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === undefined || value === '') params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  const tab = (searchParams.get('tab') as Tab | null) || 'home';
+  const selectedMvId = searchParams.get('vaga');
+  const selectedCandId = searchParams.get('cand');
+  const painelFiltro = (searchParams.get('filtro') as PainelFiltro | null) || 'todas';
+  const vagaDetalheId = searchParams.get('detalhe');
+
+  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next }); }
+  function setPainelFiltro(next: PainelFiltro) { goTo({ filtro: next === 'todas' ? null : next }); }
+  function irParaCandidatos(mvId: string) { goTo({ vaga: mvId, tab: 'candidatos' }); }
+  function irParaPagamento(mvId: string, candId: string) { goTo({ vaga: mvId, cand: candId, tab: 'pagamento' }); }
+  function voltarAoPainel() { goTo({ tab: null, vaga: null, cand: null }); }
+  function abrirDetalheVaga(mvId: string) { goTo({ detalhe: mvId }); }
+  function fecharDetalheVaga() { goTo({ detalhe: null }); }
+
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('home');
   const [clinica, setClinica] = useState<Clinica | null>(null);
   const [minhasVagas, setMinhasVagas] = useState<Vaga[]>([]);
   const [candidatos, setCandidatos] = useState<Candidatura[]>([]);
   const [candidatosLoading, setCandidatosLoading] = useState(false);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
-  const [selectedMvId, setSelectedMvId] = useState<string | null>(null);
-  const [selectedCandId, setSelectedCandId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [vagaSelecionada, setVagaSelecionada] = useState<VagaDetalheData | null>(null);
   const [actionError, setActionError] = useState('');
+
+  const vagaSelecionadaMv = vagaDetalheId ? minhasVagas.find((m) => m.id === vagaDetalheId) : undefined;
+  const vagaSelecionada = vagaSelecionadaMv ? buildVagaDetalhe(vagaSelecionadaMv) : null;
 
   const [vagaForm, setVagaForm] = useState(vagaFormInicial);
   const [vagaCepStatus, setVagaCepStatus] = useState<CepStatus>('idle');
@@ -113,7 +163,6 @@ export default function ClinicaPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingFotos, setUploadingFotos] = useState(false);
   const [editandoPerfil, setEditandoPerfil] = useState(false);
-  const [painelFiltro, setPainelFiltro] = useState<'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido'>('todas');
 
   useEffect(() => {
     if (!getToken()) { router.push('/'); return; }
@@ -265,7 +314,7 @@ export default function ClinicaPage() {
       setVagaCepStatus('idle');
       setVagaErrors({});
       await refreshMinhasVagas();
-      setTab('painel');
+      voltarAoPainel();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Não foi possível publicar a vaga.');
     } finally {
@@ -298,7 +347,7 @@ export default function ClinicaPage() {
   function aceitarCandidato(mvId: string, candId: string) {
     const mv = minhasVagas.find((m) => m.id === mvId);
     if (!mv || mv.status !== 'ABERTA') return; // cada vaga só pode ter um profissional aprovado
-    setSelectedMvId(mvId); setSelectedCandId(candId); setTab('pagamento');
+    irParaPagamento(mvId, candId);
   }
 
   async function recusarCandidato(candId: string) {
@@ -317,7 +366,7 @@ export default function ClinicaPage() {
     try {
       await aceitarCandidatura(selectedCandId);
       await refreshMinhasVagas();
-      setTab('painel');
+      voltarAoPainel();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Não foi possível confirmar o pagamento.');
     }
@@ -465,7 +514,7 @@ export default function ClinicaPage() {
 
       <main className="flex-1 overflow-y-auto bg-paws">
         {vagaSelecionada ? (
-          <VagaDetalheView vaga={vagaSelecionada} onBack={() => setVagaSelecionada(null)} />
+          <VagaDetalheView vaga={vagaSelecionada} onBack={fecharDetalheVaga} />
         ) : (
         <>
         {actionError && (
@@ -519,7 +568,7 @@ export default function ClinicaPage() {
                           <div className="text-[12px] text-gray-500 truncate">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · vaga de {formatDataBR(v.data)}</div>
                         </div>
                         <button
-                          onClick={() => { setSelectedMvId(v.id); setTab('candidatos'); }}
+                          onClick={() => irParaCandidatos(v.id)}
                           className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold shrink-0"
                         >
                           Ver
@@ -831,12 +880,7 @@ export default function ClinicaPage() {
                   return (
                     <div
                       key={mv.id}
-                      onClick={() => setVagaSelecionada({
-                        categoria: CATEGORIA_LABEL[mv.categoria],
-                        rua: mv.rua, numero: mv.numero, complemento: mv.complemento, bairro: mv.bairro, cidade: mv.cidade, estado: mv.estado,
-                        data: mv.data, horaInicio: mv.horaInicio, horaFim: mv.horaFim,
-                        valor: mv.valor, descricao: mv.descricao,
-                      })}
+                      onClick={() => abrirDetalheVaga(mv.id)}
                       className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
                     >
                       <div className="flex justify-between items-start gap-3">
@@ -879,7 +923,7 @@ export default function ClinicaPage() {
                           {mv.status === 'ABERTA' && !expirada && (
                             <button onClick={() => cancelarVaga(mv.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold text-danger">Cancelar</button>
                           )}
-                          <button onClick={() => { setSelectedMvId(mv.id); setTab('candidatos'); }} className="px-4 py-2 rounded-lg bg-secondary text-white text-sm font-bold">Ver candidatos</button>
+                          <button onClick={() => irParaCandidatos(mv.id)} className="px-4 py-2 rounded-lg bg-secondary text-white text-sm font-bold">Ver candidatos</button>
                         </div>
                       </div>
                       {mv.status === 'CONCLUIDA' && hired && (
@@ -898,8 +942,27 @@ export default function ClinicaPage() {
                   );
                 })}
                 {filtradas.length === 0 && (
-                  <div className="bg-white/95 border-2 border-dashed border-white/40 rounded-2xl p-10 text-center text-sm font-semibold text-gray-400">
-                    {minhasVagas.length === 0 ? 'Você ainda não publicou nenhuma vaga.' : 'Nenhuma vaga encontrada para esse filtro.'}
+                  <div className="bg-white rounded-2xl shadow-sm p-10">
+                    {minhasVagas.length === 0 ? (
+                      <EmptyState
+                        icon={<BuildingIcon className="w-6 h-6" />}
+                        title="Você ainda não publicou nenhuma vaga"
+                        description="Crie a primeira vaga pra começar a receber candidaturas de profissionais na sua região."
+                        actionLabel="Criar vaga"
+                        actionIcon={<PlusIcon className="w-3.5 h-3.5" />}
+                        onAction={() => setTab('criar-vaga')}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={<SearchIcon className="w-6 h-6" />}
+                        title="Nenhuma vaga encontrada"
+                        description="Nenhuma vaga bate com esse filtro."
+                        actionLabel="Ver todas"
+                        actionIcon={<CloseIcon className="w-3.5 h-3.5" />}
+                        onAction={() => setPainelFiltro('todas')}
+                        actionVariant="ghost"
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -909,7 +972,7 @@ export default function ClinicaPage() {
 
         {tab === 'candidatos' && selectedMv && (
           <div className="max-w-2xl mx-auto p-8">
-            <button onClick={() => setTab('painel')} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar ao painel</button>
+            <button onClick={voltarAoPainel} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar ao painel</button>
             <h1 className="text-xl font-extrabold mb-1 text-white">Candidatos — {CATEGORIA_LABEL[selectedMv.categoria]}</h1>
             <p className="text-sm text-white/85 mb-6">{localDaVaga(selectedMv)} · {formatDataBR(selectedMv.data)}</p>
             {selectedMv.status !== 'ABERTA' && (
@@ -952,7 +1015,15 @@ export default function ClinicaPage() {
                       </div>
                     );
                   })}
-                  {candidatos.length === 0 && <div className="text-sm text-gray-400">Nenhum candidato ainda.</div>}
+                  {candidatos.length === 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm p-10">
+                      <EmptyState
+                        icon={<UsersIcon className="w-6 h-6" />}
+                        title="Nenhum candidato ainda"
+                        description="Assim que um profissional se candidatar a essa vaga, ele aparece aqui pra você aceitar ou recusar."
+                      />
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -979,7 +1050,7 @@ export default function ClinicaPage() {
               </div>
               <p className="text-xs text-white/85 mt-3">O valor fica retido até a clínica confirmar a presença do profissional.</p>
               <div className="flex justify-end gap-3 mt-6">
-                <button onClick={() => setTab('painel')} className="px-5 py-3 rounded-lg border border-gray-300 bg-white text-sm font-bold">Cancelar</button>
+                <button onClick={voltarAoPainel} className="px-5 py-3 rounded-lg border border-gray-300 bg-white text-sm font-bold">Cancelar</button>
                 <button onClick={confirmarPagamento} className="px-6 py-3 rounded-lg bg-ink text-white text-sm font-bold shadow-sm">Confirmar pagamento</button>
               </div>
             </div>

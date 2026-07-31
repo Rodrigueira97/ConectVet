@@ -16,3 +16,15 @@ export function PawTrailLoader({ label, className = '' }: { label?: string; clas
     </div>
   );
 }
+
+// Variante compacta, sem o card branco, pra usar dentro de um botão — herda a cor do texto
+// do próprio botão via currentColor, então não muda de tamanho/cor quando o botão troca de estado.
+export function PawTrailInline({ className = '' }: { className?: string }) {
+  return (
+    <span className={`inline-flex items-end gap-1.5 h-3.5 ${className}`}>
+      {[0, 1, 2, 3].map((i) => (
+        <PawIcon key={i} className="w-3.5 h-3 animate-paw-step" style={{ animationDelay: `${i * 0.15}s` }} />
+      ))}
+    </span>
+  );
+}

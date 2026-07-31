@@ -1,13 +1,13 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { buildEndereco, mapsLink, onlyDigits, hojeBrasil, somarDiasISO } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
-  CheckCircleIcon, XCircleIcon, LockIcon,
+  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { FileField } from '@/app/components/FileField';
@@ -17,6 +17,7 @@ import { NotificationBell } from '@/app/components/NotificationBell';
 import { DateField } from '@/app/components/DateField';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
+import { EmptyState } from '@/app/components/EmptyState';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
@@ -169,9 +170,51 @@ function StepperCandidatura({ passos }: { passos: PassoJornada[] }) {
 }
 
 export default function ProfissionalPage() {
+  return (
+    <Suspense fallback={<FeedPageSkeleton sidebarItems={3} showFilters />}>
+      <ProfissionalPageInner />
+    </Suspense>
+  );
+}
+
+function ProfissionalPageInner() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Aba, filtros do feed e filtro de candidaturas moram na URL, não em estado local:
+  // refresh, botão voltar do navegador e links compartilhados continuam funcionando.
+  // `goTo` funde um patch nos query params atuais numa única navegação (mode 'replace'
+  // pra ajustes de filtro, que não devem empilhar histórico a cada tecla/clique;
+  // 'push' — o padrão — pra navegação de verdade entre abas).
+  function goTo(patch: Record<string, string | null | undefined>, mode: 'push' | 'replace' = 'push') {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === undefined || value === '') params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    const url = qs ? `${pathname}?${qs}` : pathname;
+    if (mode === 'replace') router.replace(url); else router.push(url);
+  }
+
+  const tab = (searchParams.get('tab') as Tab | null) || 'home';
+  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next }); }
+
+  const filtros = {
+    busca: searchParams.get('busca') || '',
+    categoria: searchParams.get('categoria') || '',
+    cidade: searchParams.get('cidade') || '',
+    data: searchParams.get('data') || '',
+    pertoDeMim: searchParams.get('perto') === '1',
+  };
+
+  const filtroCandidaturas = (searchParams.get('statusCand') as 'TODAS' | StatusCandidatura | null) || 'TODAS';
+  const vagaDetalheId = searchParams.get('detalhe');
+  function abrirDetalheVaga(vagaId: string) { goTo({ detalhe: vagaId }); }
+  function fecharDetalheVaga() { goTo({ detalhe: null }); }
+
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('home');
   const [perfil, setPerfil] = useState<Profissional | null>(null);
   const [perfilForm, setPerfilForm] = useState({ nome: '', telefone: '', dataNascimento: '', especialidade: '', especialidadeOutra: '', areaAtuacao: '', regioesAtendimento: '', observacoes: '' });
   const [savingPerfil, setSavingPerfil] = useState(false);
@@ -182,7 +225,6 @@ export default function ProfissionalPage() {
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
-  const [filtros, setFiltros] = useState({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [favoritos, setFavoritos] = useState<Set<string>>(new Set());
 
@@ -202,10 +244,9 @@ export default function ProfissionalPage() {
     });
   }
   const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
-  const [filtroCandidaturas, setFiltroCandidaturas] = useState<'TODAS' | StatusCandidatura>('TODAS');
   const [visiveisCandidaturas, setVisiveisCandidaturas] = useState(CANDIDATURAS_POR_PAGINA);
   const mainRef = useRef<HTMLElement | null>(null);
-  const [vagaSelecionada, setVagaSelecionada] = useState<Vaga | null>(null);
+  const vagaSelecionada = vagaDetalheId ? feed.find((v) => v.id === vagaDetalheId) || null : null;
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
@@ -329,7 +370,7 @@ export default function ProfissionalPage() {
   };
 
   function selecionarFiltroCandidaturas(f: 'TODAS' | StatusCandidatura) {
-    setFiltroCandidaturas(f);
+    goTo({ statusCand: f === 'TODAS' ? null : f }, 'replace');
     setVisiveisCandidaturas(CANDIDATURAS_POR_PAGINA);
   }
 
@@ -368,7 +409,13 @@ export default function ProfissionalPage() {
   }, [tab, feedFiltrado.length, candidaturasFiltradas.length]);
 
   function atualizarFiltro(novo: Partial<typeof filtros>) {
-    setFiltros((f) => ({ ...f, ...novo }));
+    const patch: Record<string, string | null> = {};
+    if ('busca' in novo) patch.busca = novo.busca || null;
+    if ('categoria' in novo) patch.categoria = novo.categoria || null;
+    if ('cidade' in novo) patch.cidade = novo.cidade || null;
+    if ('data' in novo) patch.data = novo.data || null;
+    if ('pertoDeMim' in novo) patch.perto = novo.pertoDeMim ? '1' : null;
+    goTo(patch, 'replace');
     setVisiveis(VAGAS_POR_PAGINA);
   }
 
@@ -442,7 +489,7 @@ export default function ProfissionalPage() {
     return (
       <div
         key={v.id}
-        onClick={() => setVagaSelecionada(v)}
+        onClick={() => abrirDetalheVaga(v.id)}
         className={`bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150 ${encerrada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}
       >
         <div className="flex justify-between items-start gap-3">
@@ -500,7 +547,7 @@ export default function ProfissionalPage() {
           </div>
         ) : (
           <div className="flex justify-end mt-[14px]">
-            <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); setVagaSelecionada(v); }}
+            <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); abrirDetalheVaga(v.id); }}
               className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
               {applied ? 'Candidatura enviada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
             </button>
@@ -554,9 +601,10 @@ export default function ProfissionalPage() {
                 notaMedia: vagaSelecionada.clinica?.notaMedia, totalAvaliacoes: vagaSelecionada.clinica?.totalAvaliacoes,
                 perto,
               }}
-              onBack={() => setVagaSelecionada(null)}
+              onBack={fecharDetalheVaga}
               actionLabel={applied ? 'Candidatura enviada' : encerrada ? 'Vaga encerrada' : compat ? 'Candidatar-se' : 'Perfil incompatível'}
-              actionDisabled={applied || encerrada || !compat || candidatandoId === vagaSelecionada.id}
+              actionDisabled={applied || encerrada || !compat}
+              actionLoading={candidatandoId === vagaSelecionada.id}
               onAction={() => candidatar(vagaSelecionada)}
               compatStatus={applied ? 'aplicada' : encerrada ? 'encerrada' : compat ? 'compativel' : 'incompativel'}
               perfilFuncao={CATEGORIA_LABEL[perfil.funcao]}
@@ -701,7 +749,23 @@ export default function ProfissionalPage() {
             </div>
             <div className="flex flex-col gap-[14px]">
               {feedPaginado.map((v) => renderVagaCard(v))}
-              {feedFiltrado.length === 0 && <div className="text-sm text-gray-400">Nenhuma vaga encontrada.</div>}
+              {feedFiltrado.length === 0 && (
+                <div className="bg-white rounded-2xl shadow-sm p-10">
+                  <EmptyState
+                    icon={<SearchIcon className="w-6 h-6" />}
+                    title="Nenhuma vaga encontrada"
+                    description={
+                      algumFiltroAtivo
+                        ? 'Nenhuma vaga bate com os filtros que você escolheu. Tente remover algum filtro ou ampliar a busca.'
+                        : 'No momento não há vagas publicadas. Volte mais tarde pra conferir novidades.'
+                    }
+                    actionLabel={algumFiltroAtivo ? 'Limpar filtros' : undefined}
+                    actionIcon={<CloseIcon className="w-3.5 h-3.5" />}
+                    onAction={algumFiltroAtivo ? limparFiltros : undefined}
+                    actionVariant="ghost"
+                  />
+                </div>
+              )}
             </div>
             {temMaisVagas && (
               <div className="flex items-center justify-center py-6">
@@ -718,8 +782,16 @@ export default function ProfissionalPage() {
             <div className="flex flex-col gap-[14px]">
               {vagasFavoritas.map((v) => renderVagaCard(v))}
               {vagasFavoritas.length === 0 && (
-                <div className="text-sm text-white/85 text-center py-10">
-                  Você ainda não favoritou nenhuma vaga. Clique no coração de um card na Home pra salvar aqui.
+                <div className="bg-white rounded-2xl shadow-sm p-10">
+                  <EmptyState
+                    icon={<HeartIcon className="w-6 h-6" />}
+                    tone="rose"
+                    title="Nenhuma vaga favoritada ainda"
+                    description="Toque no coração de uma vaga na Home pra salvar aqui e decidir com calma depois."
+                    actionLabel="Ver vagas disponíveis"
+                    actionIcon={<ArrowRightIcon className="w-3.5 h-3.5" />}
+                    onAction={() => setTab('home')}
+                  />
                 </div>
               )}
             </div>
@@ -849,8 +921,27 @@ export default function ProfissionalPage() {
                 );
               })}
               {candidaturasFiltradas.length === 0 && (
-                <div className="text-sm text-white/85 text-center py-10">
-                  {candidaturas.length === 0 ? 'Você ainda não se candidatou a nenhuma vaga.' : 'Nenhuma candidatura encontrada com esse filtro.'}
+                <div className="bg-white rounded-2xl shadow-sm p-10">
+                  {candidaturas.length === 0 ? (
+                    <EmptyState
+                      icon={<ClockIcon className="w-6 h-6" />}
+                      title="Você ainda não se candidatou a nenhuma vaga"
+                      description="Quando você se candidatar a um plantão, o progresso da candidatura aparece aqui."
+                      actionLabel="Ver vagas disponíveis"
+                      actionIcon={<ArrowRightIcon className="w-3.5 h-3.5" />}
+                      onAction={() => setTab('home')}
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={<SearchIcon className="w-6 h-6" />}
+                      title="Nenhuma candidatura encontrada"
+                      description="Nenhuma candidatura bate com esse filtro."
+                      actionLabel="Ver todas"
+                      actionIcon={<CloseIcon className="w-3.5 h-3.5" />}
+                      onAction={() => selecionarFiltroCandidaturas('TODAS')}
+                      actionVariant="ghost"
+                    />
+                  )}
                 </div>
               )}
             </div>

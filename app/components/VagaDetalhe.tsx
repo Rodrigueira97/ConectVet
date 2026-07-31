@@ -1,6 +1,7 @@
 'use client';
 import { buildEndereco, mapsLink } from '@/lib/mockData';
 import { CalendarIcon, ChevronLeftIcon, CheckCircleIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
+import { PawTrailInline } from '@/app/components/PawTrailLoader';
 
 export type VagaDetalheData = {
   clinica?: string;
@@ -37,13 +38,14 @@ function formatQuando(dataIso: string) {
 }
 
 export function VagaDetalheView({
-  vaga, onBack, actionLabel, onAction, actionDisabled, compatStatus, perfilFuncao,
+  vaga, onBack, actionLabel, onAction, actionDisabled, actionLoading, compatStatus, perfilFuncao,
 }: {
   vaga: VagaDetalheData;
   onBack: () => void;
   actionLabel?: string;
   onAction?: () => void;
   actionDisabled?: boolean;
+  actionLoading?: boolean;
   compatStatus?: 'compativel' | 'incompativel' | 'aplicada' | 'encerrada';
   perfilFuncao?: string;
 }) {
@@ -146,15 +148,17 @@ export function VagaDetalheView({
         <>
           <div className="hidden md:block max-w-[340px] mt-2">
             <button
-              disabled={actionDisabled}
+              disabled={actionDisabled || actionLoading}
               onClick={onAction}
-              className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors ${
-                actionDisabled
-                  ? 'bg-white/10 border border-white/25 text-white/60'
-                  : 'bg-white text-primaryDeep shadow-lg hover:bg-primaryTint'
+              className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors flex items-center justify-center ${
+                actionLoading
+                  ? 'bg-white text-primaryDeep shadow-lg cursor-default'
+                  : actionDisabled
+                    ? 'bg-white/10 border border-white/25 text-white/60'
+                    : 'bg-white text-primaryDeep shadow-lg hover:bg-primaryTint'
               }`}
             >
-              {actionLabel}
+              {actionLoading ? <PawTrailInline /> : actionLabel}
             </button>
           </div>
           <div
@@ -162,15 +166,17 @@ export function VagaDetalheView({
             style={{ background: 'linear-gradient(to top, #F5F8F6 65%, transparent)' }}
           >
             <button
-              disabled={actionDisabled}
+              disabled={actionDisabled || actionLoading}
               onClick={onAction}
-              className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors ${
-                actionDisabled
-                  ? 'bg-white border border-gray-200 text-gray-400'
-                  : 'bg-primary text-white hover:bg-primaryDark'
+              className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors flex items-center justify-center ${
+                actionLoading
+                  ? 'bg-primary text-white cursor-default'
+                  : actionDisabled
+                    ? 'bg-white border border-gray-200 text-gray-400'
+                    : 'bg-primary text-white hover:bg-primaryDark'
               }`}
             >
-              {actionLabel}
+              {actionLoading ? <PawTrailInline /> : actionLabel}
             </button>
           </div>
         </>
