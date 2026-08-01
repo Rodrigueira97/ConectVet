@@ -55,6 +55,18 @@ a:hover { color: #00847e; }
   }
 }
 
+/* Barra de auto-dismiss dos toasts (componente Toast.tsx) */
+@keyframes toastProgress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="toastProgress"] {
+    animation: none !important;
+    transform: scaleX(1) !important;
+  }
+}
+
 /* Variante mais sutil, para banners compactos (ex.: topo do cadastro) */
 .bg-paws-header {
   background-color: #00a19a;

@@ -1,13 +1,13 @@
 'use client';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { buildEndereco, mapsLink, onlyDigits, hojeBrasil, somarDiasISO } from '@/lib/mockData';
+import { buildEndereco, mapsLink, onlyDigits, hojeBrasil, somarDiasISO, agoraBrasil, plantaoEncerrado } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
-  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon,
+  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { FileField } from '@/app/components/FileField';
@@ -18,6 +18,7 @@ import { DateField } from '@/app/components/DateField';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import { EmptyState } from '@/app/components/EmptyState';
+import { useToast } from '@/app/components/Toast';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
@@ -55,20 +56,12 @@ function tempoNaPlataforma(createdAt: string) {
   return `${anos} ${anos === 1 ? 'ano' : 'anos'}`;
 }
 
-function calcDuracaoHoras(inicio: string, fim: string) {
-  const [h1, m1] = inicio.split(':').map(Number);
-  const [h2, m2] = fim.split(':').map(Number);
-  let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
-  if (mins <= 0) mins += 24 * 60;
-  return mins / 60;
-}
-
-function vagaEncerrada(v: { data: string; status: string }) {
+function vagaEncerrada(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
   if (v.status !== 'ABERTA') return true;
-  return v.data.slice(0, 10) <= hojeBrasil();
+  return plantaoEncerrado(v);
 }
 
-function urgenciaLabel(v: { data: string; status: string }) {
+function urgenciaLabel(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
   if (vagaEncerrada(v)) return null;
   const hojeStr = hojeBrasil();
   const amanhaStr = somarDiasISO(hojeStr, 1);
@@ -145,6 +138,26 @@ function motivoEncerradaLabel(c: Candidatura) {
   return 'A data da vaga já passou e a clínica não respondeu a tempo.';
 }
 
+// "Ainda faltam alguns dias" só faz sentido quando falta mesmo. Um plantão que
+// atravessa a madrugada (ex.: 19:00–07:00) começou "ontem" mas pode continuar em
+// andamento de manhã — por isso o cálculo usa o mesmo critério de fim real do
+// plantão que o `plantaoEncerrado`, não só a data de início.
+function mensagemAceito(v: { data: string; horaInicio: string; horaFim: string }) {
+  if (plantaoEncerrado(v)) {
+    return 'Plantão confirmado! O horário já passou — assim que a clínica confirmar sua presença, ele aparece como concluído aqui.';
+  }
+  const hoje = hojeBrasil();
+  const dataInicio = v.data.slice(0, 10);
+  const overnight = v.horaFim <= v.horaInicio;
+  const dataFim = overnight ? somarDiasISO(dataInicio, 1) : dataInicio;
+  if (dataInicio === hoje || dataFim === hoje) {
+    const emAndamento = dataInicio < hoje || agoraBrasil() >= v.horaInicio;
+    return emAndamento ? 'Plantão confirmado! Está rolando agora — bom plantão!' : 'Plantão confirmado! É hoje — não esqueça de comparecer.';
+  }
+  if (dataInicio === somarDiasISO(hoje, 1)) return 'Plantão confirmado! É amanhã.';
+  return 'Plantão confirmado! Fique de olho na data — ainda faltam alguns dias.';
+}
+
 function StepperCandidatura({ passos }: { passos: PassoJornada[] }) {
   return (
     <div className="flex items-start mt-3 mb-1">
@@ -179,6 +192,7 @@ export default function ProfissionalPage() {
 
 function ProfissionalPageInner() {
   const router = useRouter();
+  const toast = useToast();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -199,7 +213,9 @@ function ProfissionalPageInner() {
   }
 
   const tab = (searchParams.get('tab') as Tab | null) || 'home';
-  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next }); }
+  // Trocar de aba pela sidebar precisa fechar o detalhe de vaga aberto — ele é
+  // renderizado com prioridade sobre as abas, então sem isso a tela ficava "presa".
+  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next, detalhe: null }); }
 
   const filtros = {
     busca: searchParams.get('busca') || '',
@@ -248,7 +264,6 @@ function ProfissionalPageInner() {
   const mainRef = useRef<HTMLElement | null>(null);
   const vagaSelecionada = vagaDetalheId ? feed.find((v) => v.id === vagaDetalheId) || null : null;
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState('');
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
   const [cancelandoProcessandoId, setCancelandoProcessandoId] = useState<string | null>(null);
 
@@ -292,12 +307,15 @@ function ProfissionalPageInner() {
   async function candidatar(v: Vaga) {
     if (hasApplied(v.id) || !perfil) return;
     setCandidatandoId(v.id);
-    setActionError('');
     try {
       const nova = await apiCandidatar(v.id);
       setCandidaturas((prev) => [{ ...nova, vaga: v }, ...prev]);
+      toast.success('Candidatura enviada', { message: `${v.clinica?.nome || 'A clínica'} vai te avisar por aqui assim que responder.` });
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível enviar a candidatura.');
+      toast.error('Não foi possível enviar a candidatura', {
+        message: err instanceof ApiError ? err.message : undefined,
+        action: { label: 'Tentar novamente', onClick: () => candidatar(v) },
+      });
     } finally {
       setCandidatandoId(null);
     }
@@ -305,13 +323,13 @@ function ProfissionalPageInner() {
 
   async function confirmarCancelamento(candidaturaId: string) {
     setCancelandoProcessandoId(candidaturaId);
-    setActionError('');
     try {
       await cancelarCandidatura(candidaturaId);
       setCandidaturas((prev) => prev.filter((c) => c.id !== candidaturaId));
       setCancelandoId(null);
+      toast.success('Candidatura cancelada');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível cancelar a candidatura.');
+      toast.error('Não foi possível cancelar a candidatura', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setCancelandoProcessandoId(null);
     }
@@ -428,7 +446,6 @@ function ProfissionalPageInner() {
 
   async function salvarPerfil() {
     setSavingPerfil(true);
-    setActionError('');
     try {
       const curriculoUrl = curriculoNovo
         ? await uploadArquivo(curriculoNovo)
@@ -454,8 +471,9 @@ function ProfissionalPageInner() {
       });
       setCurriculoNovo(null);
       setCurriculoRemovido(false);
+      toast.success('Perfil atualizado');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível salvar o perfil.');
+      toast.error('Não foi possível salvar o perfil', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setSavingPerfil(false);
     }
@@ -465,13 +483,13 @@ function ProfissionalPageInner() {
     const file = files?.[0];
     if (!file) return;
     setUploadingFoto(true);
-    setActionError('');
     try {
       const fotoUrl = await uploadArquivo(file);
       const atualizado = await updateProfissionalMe({ fotoUrl });
       setPerfil(atualizado);
+      toast.success('Foto atualizada');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível enviar a foto.');
+      toast.error('Não foi possível enviar a foto', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setUploadingFoto(false);
     }
@@ -490,69 +508,105 @@ function ProfissionalPageInner() {
       <div
         key={v.id}
         onClick={() => abrirDetalheVaga(v.id)}
-        className={`bg-white border border-gray-200 rounded-2xl shadow-sm p-[18px] cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150 ${encerrada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}
+        className={`flex flex-col gap-3 bg-white border border-gray-200 rounded-2xl shadow-sm p-4 cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150 ${encerrada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}
       >
-        <div className="flex justify-between items-start gap-3">
-          <div>
-            <div className="flex gap-2 items-center flex-wrap">
-              <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{CATEGORIA_LABEL[v.categoria]}</div>
-              {encerrada ? (
-                <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">
-                  <LockIcon className="w-2.5 h-2.5" /> Encerrada
-                </div>
-              ) : perto && (
-                <div className="bg-secondary text-white text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">Perto de você</div>
-              )}
-              {urgencia && (
-                <div className="bg-amber-100 text-amber-700 text-[9.5px] font-extrabold px-[7px] py-0.5 rounded-[5px] uppercase">{urgencia}</div>
+        {/* Identidade da clínica + preço — só isso disputa a primeira linha */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex gap-2.5 min-w-0">
+            <div className="w-[42px] h-[42px] rounded-xl bg-white border border-gray-200 text-gray-300 flex items-center justify-center shrink-0 overflow-hidden">
+              {v.clinica?.logoUrl ? (
+                <img src={v.clinica.logoUrl} alt={v.clinica.nome} className="w-full h-full object-cover" />
+              ) : (
+                <BuildingIcon className="w-[18px] h-[18px]" />
               )}
             </div>
-            <div className="text-[17px] font-extrabold mt-[3px]">{v.clinica?.nome}</div>
-            <div className="mt-1.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+            <div className="min-w-0">
+              <div className="text-[16.5px] font-extrabold text-ink truncate">{v.clinica?.nome}</div>
+              <div className="mt-0.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={(e) => { e.stopPropagation(); alternarFavorito(v.id); }}
-              aria-label={favorita ? 'Remover dos favoritos' : 'Favoritar vaga'}
-              className={`w-8 h-8 rounded-[9px] border flex items-center justify-center transition-colors ${favorita ? 'border-rose-200 bg-rose-50 text-rose-500' : 'border-gray-200 text-gray-300 hover:border-rose-200 hover:text-rose-400'}`}
-            >
-              <HeartIcon className="w-3.5 h-3.5" filled={favorita} />
-            </button>
-            <div className={`font-extrabold text-[13.5px] px-[11px] py-1.5 rounded-[10px] whitespace-nowrap ${encerrada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>R$ {v.valor}</div>
+          <div className={`font-extrabold text-[15px] px-3 py-1.5 rounded-[11px] whitespace-nowrap shrink-0 ${encerrada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>
+            R$ {v.valor}
           </div>
         </div>
-        <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
+
+        {/* Categoria e selos de status — uma única linguagem de chip, só muda a cor */}
+        <div className="flex gap-1.5 flex-wrap">
+          <span className="bg-primaryTint text-primaryDeep text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">
+            {CATEGORIA_LABEL[v.categoria]}
+          </span>
+          {encerrada ? (
+            <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">
+              <LockIcon className="w-2.5 h-2.5" /> Encerrada
+            </span>
+          ) : perto && (
+            <span className="bg-secondary text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">Perto de você</span>
+          )}
+          {urgencia && (
+            <span className="bg-amber-100 text-amber-700 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">{urgencia}</span>
+          )}
+        </div>
+
+        {/* Data, horário e local — colunas fixas no desktop, empilhado no mobile,
+            nunca uma frase corrida que quebra linha de forma imprevisível */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 rounded-[13px] bg-gray-50 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+            <CalendarIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Data</span>
+              <span className="text-[12.5px] font-bold text-ink truncate">{formatDataBR(v.data)}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+            <ClockIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Horário</span>
+              <span className="text-[12.5px] font-bold text-ink truncate">{v.horaInicio} – {v.horaFim}</span>
+            </div>
+          </div>
           <a
             href={mapsLink(local)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 hover:underline"
+            className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-100"
           >
-            <PinIcon className="w-3.5 h-3.5 shrink-0 text-primary" />
-            Local <b className="font-bold text-gray-700">{localCurto}</b>
+            <PinIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Local</span>
+              <span className="text-[12.5px] font-bold text-ink truncate">{localCurto}</span>
+            </div>
           </a>
-          <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
-          <div>Horário <b className="font-bold text-gray-700">{v.horaInicio} - {v.horaFim}</b></div>
         </div>
+
         {v.descricao && (
-          <div className="mt-3 pt-3 border-t border-gray-100 text-[13.5px] leading-relaxed text-gray-700">
-            <div className="text-[11px] font-extrabold text-gray-400 uppercase tracking-[0.02em] mb-1">Descrição</div>
-            <div className="whitespace-pre-line">{v.descricao}</div>
-          </div>
+          <div className="text-[12.5px] text-gray-500 leading-relaxed line-clamp-2">{v.descricao}</div>
         )}
-        {!applied && encerrada ? (
-          <div className="flex items-center justify-center gap-2 w-full mt-[14px] py-2.5 rounded-[10px] bg-gray-50 text-gray-500 text-[12.5px] font-bold">
-            <LockIcon className="w-3.5 h-3.5" /> {motivoVagaFechada(v)}
-          </div>
-        ) : (
-          <div className="flex justify-end mt-[14px]">
-            <button disabled={applied || !compat} onClick={(e) => { e.stopPropagation(); abrirDetalheVaga(v.id); }}
-              className={`px-4 py-[9px] rounded-[10px] text-[13.5px] font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}>
+
+        {/* Favoritar e a ação principal, lado a lado — as duas únicas coisas
+            clicáveis do card além do próprio card */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); alternarFavorito(v.id); }}
+            aria-label={favorita ? 'Remover dos favoritos' : 'Favoritar vaga'}
+            className={`w-10 h-10 rounded-[11px] flex items-center justify-center shrink-0 transition-colors ${favorita ? 'text-rose-500' : 'text-gray-300 hover:text-rose-400'}`}
+          >
+            <HeartIcon className="w-4 h-4" filled={favorita} />
+          </button>
+          {!applied && encerrada ? (
+            <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[11px] bg-gray-50 text-gray-500 text-[12.5px] font-bold">
+              <LockIcon className="w-3.5 h-3.5" /> {motivoVagaFechada(v)}
+            </div>
+          ) : (
+            <button
+              disabled={applied || !compat}
+              onClick={(e) => { e.stopPropagation(); abrirDetalheVaga(v.id); }}
+              className={`flex-1 py-2.5 rounded-[11px] text-[13px] font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}
+            >
               {applied ? 'Candidatura enviada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
@@ -593,6 +647,8 @@ function ProfissionalPageInner() {
             <VagaDetalheView
               vaga={{
                 clinica: vagaSelecionada.clinica?.nome,
+                clinicaLogoUrl: vagaSelecionada.clinica?.logoUrl,
+                clinicaFotos: vagaSelecionada.clinica?.fotosEstrutura,
                 categoria: CATEGORIA_LABEL[vagaSelecionada.categoria],
                 rua: vagaSelecionada.rua, numero: vagaSelecionada.numero, complemento: vagaSelecionada.complemento,
                 bairro: vagaSelecionada.bairro, cidade: vagaSelecionada.cidade, estado: vagaSelecionada.estado,
@@ -612,12 +668,6 @@ function ProfissionalPageInner() {
           );
         })() : (
         <>
-        {actionError && (
-          <div className="max-w-3xl mx-auto pt-6 px-8">
-            <div className="text-sm font-semibold text-danger bg-red-50 rounded-lg p-3">{actionError}</div>
-          </div>
-        )}
-
         {tab === 'home' && (
           <div className="max-w-[880px] mx-auto p-8">
             <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas disponíveis</h1>
@@ -828,58 +878,111 @@ function ProfissionalPageInner() {
                 const fechada = status === 'RECUSADO' || status === 'ENCERRADA';
                 const v = c.vaga;
                 const local = v ? [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ') : '';
-                const horas = v ? calcDuracaoHoras(v.horaInicio, v.horaFim) : 0;
-                const horasLabel = horas % 1 === 0 ? `${horas}h` : `${horas.toFixed(1)}h`;
+                const STATUS_CHIP: Record<StatusCandidatura, { label: string; className: string }> = {
+                  PENDENTE: { label: 'Pendente', className: 'bg-amber-100 text-amber-700' },
+                  ACEITO: { label: 'Aceita', className: 'bg-primary text-white' },
+                  CONCLUIDA: { label: 'Concluída', className: 'bg-secondary text-white' },
+                  RECUSADO: { label: 'Recusada', className: 'bg-gray-100 text-gray-500' },
+                  ENCERRADA: { label: 'Encerrada', className: 'bg-gray-100 text-gray-500' },
+                };
+                const statusChip = STATUS_CHIP[status];
+                const painelBg =
+                  status === 'PENDENTE' ? 'bg-amber-50' : status === 'ACEITO' ? 'bg-primaryTint' : status === 'CONCLUIDA' ? 'bg-secondary/10' : 'bg-gray-50';
                 return (
-                  <div key={c.id} className={`bg-white border border-gray-200 rounded-2xl p-[18px] ${fechada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}>
-                    <div className="flex justify-between items-start gap-3">
-                      <div>
-                        <div className="text-[11.5px] font-extrabold text-primary uppercase tracking-[0.02em]">{v && CATEGORIA_LABEL[v.categoria]}</div>
-                        <div className="text-[17px] font-extrabold mt-[3px]">{v?.clinica?.nome}</div>
-                        <div className="text-xs text-gray-400 mt-1">Candidatura enviada em {formatDataBR(c.createdAt)}</div>
+                  <div key={c.id} className={`flex flex-col gap-3 bg-white border border-gray-200 rounded-2xl shadow-sm p-4 ${fechada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}>
+                    {/* Identidade da clínica + valor — mesmo cabeçalho do card de vaga */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex gap-2.5 min-w-0">
+                        <div className="w-[42px] h-[42px] rounded-xl bg-white border border-gray-200 text-gray-300 flex items-center justify-center shrink-0 overflow-hidden">
+                          {v?.clinica?.logoUrl ? (
+                            <img src={v.clinica.logoUrl} alt={v.clinica.nome} className="w-full h-full object-cover" />
+                          ) : (
+                            <BuildingIcon className="w-[18px] h-[18px]" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[16.5px] font-extrabold text-ink truncate">{v?.clinica?.nome}</div>
+                          <div className="text-[11.5px] font-semibold text-gray-400 mt-0.5">Enviada em {formatDataBR(c.createdAt)}</div>
+                        </div>
                       </div>
+                      {v && (
+                        <div className={`font-extrabold text-[15px] px-3 py-1.5 rounded-[11px] whitespace-nowrap shrink-0 ${fechada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>
+                          R$ {v.valor}
+                        </div>
+                      )}
                     </div>
+
+                    {/* Categoria e o status, na mesma linguagem de chip do card de vaga */}
+                    <div className="flex gap-1.5 flex-wrap">
+                      {v && (
+                        <span className="bg-primaryTint text-primaryDeep text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">
+                          {CATEGORIA_LABEL[v.categoria]}
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full ${statusChip.className}`}>{statusChip.label}</span>
+                    </div>
+
+                    {/* Data, horário e local — mesma faixa de fatos do card de vaga */}
                     {v && (
-                      <div className="flex gap-4 flex-wrap items-center mt-3 text-[13px] text-gray-500">
-                        <span className={`font-extrabold text-[13px] px-2.5 py-1 rounded-lg ${fechada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>R$ {v.valor}</span>
-                        <div>Data <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
-                        <div><b className="font-bold text-gray-700">{v.horaInicio} – {v.horaFim} · {horasLabel}</b></div>
-                        <div><b className="font-bold text-gray-700">{local}</b></div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 rounded-[13px] bg-gray-50 overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+                          <CalendarIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                          <div className="flex items-baseline gap-1.5 min-w-0">
+                            <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Data</span>
+                            <span className="text-[12.5px] font-bold text-ink truncate">{formatDataBR(v.data)}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+                          <ClockIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                          <div className="flex items-baseline gap-1.5 min-w-0">
+                            <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Horário</span>
+                            <span className="text-[12.5px] font-bold text-ink truncate">{v.horaInicio} – {v.horaFim}</span>
+                          </div>
+                        </div>
+                        <a
+                          href={mapsLink(local)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-100"
+                        >
+                          <PinIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                          <div className="flex items-baseline gap-1.5 min-w-0">
+                            <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Local</span>
+                            <span className="text-[12.5px] font-bold text-ink truncate">{local}</span>
+                          </div>
+                        </a>
                       </div>
                     )}
 
-                    <StepperCandidatura passos={passosDaCandidatura(c, status)} />
-
-                    {status === 'PENDENTE' && (
-                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-amber-50 text-amber-800">
-                        <ClockIcon className="w-4 h-4 shrink-0 mt-px" />
-                        <div>Aguardando resposta da clínica.</div>
-                      </div>
-                    )}
-                    {status === 'ACEITO' && (
-                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-primaryTint text-primaryDeep">
-                        <CheckCircleIcon className="w-4 h-4 shrink-0 mt-px" />
-                        <div>Plantão confirmado! Fique de olho na data — ainda faltam alguns dias.</div>
-                      </div>
-                    )}
-                    {status === 'CONCLUIDA' && v && (
-                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-secondary/10 text-secondary">
-                        <CheckCircleIcon className="w-4 h-4 shrink-0 mt-px" />
-                        <div>Plantão realizado em {formatDataBR(v.data)}.</div>
-                      </div>
-                    )}
-                    {status === 'RECUSADO' && (
-                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-gray-50 text-gray-500">
-                        <XCircleIcon className="w-4 h-4 shrink-0 mt-px" />
-                        <div>{motivoRecusaLabel(c)}</div>
-                      </div>
-                    )}
-                    {status === 'ENCERRADA' && (
-                      <div className="flex items-start gap-2 mt-1 p-[11px] rounded-xl text-[13px] font-semibold leading-relaxed bg-gray-50 text-gray-500">
-                        <LockIcon className="w-4 h-4 shrink-0 mt-px" />
-                        <div>{motivoEncerradaLabel(c)}</div>
-                      </div>
-                    )}
+                    {/* Barrinha de progresso + explicação, juntas num painel só na cor do status */}
+                    <div className={`rounded-[14px] px-3.5 pt-3.5 pb-3 ${painelBg}`}>
+                      <StepperCandidatura passos={passosDaCandidatura(c, status)} />
+                      {status === 'PENDENTE' && (
+                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-amber-800">
+                          <ClockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> Aguardando resposta da clínica.
+                        </div>
+                      )}
+                      {status === 'ACEITO' && (
+                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-primaryDeep">
+                          <CheckCircleIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> {v ? mensagemAceito(v) : 'Plantão confirmado!'}
+                        </div>
+                      )}
+                      {status === 'CONCLUIDA' && v && (
+                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-secondary">
+                          <CheckCircleIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> Plantão realizado em {formatDataBR(v.data)}.
+                        </div>
+                      )}
+                      {status === 'RECUSADO' && (
+                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-gray-500">
+                          <XCircleIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> {motivoRecusaLabel(c)}
+                        </div>
+                      )}
+                      {status === 'ENCERRADA' && (
+                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-gray-500">
+                          <LockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> {motivoEncerradaLabel(c)}
+                        </div>
+                      )}
+                    </div>
 
                     {status === 'CONCLUIDA' && (
                       <AvaliacaoCandidatura
@@ -894,7 +997,7 @@ function ProfissionalPageInner() {
 
                     {status === 'PENDENTE' && (
                       cancelandoId === c.id ? (
-                        <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3">
+                        <div className="bg-red-50 border border-red-100 rounded-xl p-3">
                           <div className="text-[12.5px] font-semibold text-red-800 mb-2">Desistir dessa candidatura? A clínica vai ver que você não está mais concorrendo à vaga.</div>
                           <div className="flex gap-2">
                             <button
@@ -910,7 +1013,7 @@ function ProfissionalPageInner() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex justify-end mt-3">
+                        <div className="flex justify-end">
                           <button onClick={() => setCancelandoId(c.id)} className="text-xs font-bold text-danger inline-flex items-center gap-1 hover:underline">
                             <CloseIcon className="w-3 h-3" /> Cancelar candidatura
                           </button>
@@ -959,11 +1062,16 @@ function ProfissionalPageInner() {
             <div className="flex flex-col items-center text-center gap-2.5 sm:flex-row sm:items-end sm:text-left sm:gap-5 mb-6">
               <div className="relative w-[108px] h-[108px] shrink-0">
                 <div className="w-full h-full rounded-full p-1 bg-white/90 shadow-lg">
-                  <div className="w-full h-full rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center overflow-hidden">
+                  <div className="relative w-full h-full rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center overflow-hidden">
                     {perfil.fotoUrl ? (
                       <img src={perfil.fotoUrl} alt={perfil.nome} className="w-full h-full object-cover" />
                     ) : (
                       <UserIcon className="w-10 h-10" />
+                    )}
+                    {uploadingFoto && (
+                      <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
+                        <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1002,9 +1110,6 @@ function ProfissionalPageInner() {
                 </button>
               )}
             </div>
-
-            {uploadingFoto && <div className="text-center text-sm font-semibold text-white/85 mb-4">Enviando foto...</div>}
-            {actionError && <div className="text-sm font-semibold text-danger bg-red-50 rounded-lg p-3 mb-4">{actionError}</div>}
 
             {!editandoPerfil ? (
               <>

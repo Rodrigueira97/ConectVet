@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import { AuthService } from './auth.service';
 import { RegisterClinicaDto } from './dto/register-clinica.dto';
 import { RegisterProfissionalDto } from './dto/register-profissional.dto';
 import { LoginDto } from './dto/login.dto';
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser, AuthUser } from './decorators/current-user.decorator';
 
@@ -38,5 +40,11 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
     return this.authService.me(user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('senha')
+  alterarSenha(@CurrentUser() user: AuthUser, @Body() dto: AlterarSenhaDto) {
+    return this.authService.alterarSenha(user.userId, dto);
   }
 }

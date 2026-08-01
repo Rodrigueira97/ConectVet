@@ -1,7 +1,8 @@
 'use client';
-import { ReactNode, useEffect, useState } from 'react';
-import { BuildingIcon, ChevronLeftIcon, CloseIcon, LogoutIcon, MenuIcon, UserIcon } from './icons';
+import { ReactNode, useEffect, useRef, useState } from 'react';
+import { BuildingIcon, ChevronLeftIcon, CloseIcon, LockIcon, LogoutIcon, MenuIcon, UserIcon } from './icons';
 import { clearSession } from '@/lib/api';
+import { AlterarSenhaModal } from './AlterarSenhaModal';
 
 export type SidebarItem = {
   key: string;
@@ -35,9 +36,30 @@ export function Sidebar({
   const c = ACCENT[accent];
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [senhaModalOpen, setSenhaModalOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const temPerfil = items.some((item) => item.key === 'perfil');
 
   useEffect(() => {
     if (localStorage.getItem(COLLAPSE_KEY) === '1') setCollapsed(true);
+  }, []);
+
+  // Menu de "Ver perfil" / "Sair" que abre a partir do rodapé — mesmo padrão de
+  // clique-fora do NotificationBell, só que ancorado pra cima (o rodapé fica na base da tela).
+  useEffect(() => {
+    function onClickFora(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onClickFora);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onClickFora);
+      document.removeEventListener('keydown', onEsc);
+    };
   }, []);
 
   function toggleCollapsed() {
@@ -77,9 +99,9 @@ export function Sidebar({
     );
   }
 
-  function renderFooter(hideText: boolean) {
+  function renderIdentidade(hideText: boolean) {
     return (
-      <div className={`flex items-center gap-2.5 rounded-xl mt-1.5 ${hideText ? 'justify-center py-2.5' : 'bg-gray-100 px-2.5 py-2.5'}`}>
+      <>
         <div className="w-[30px] h-[30px] rounded-lg bg-white border border-gray-200 text-gray-400 flex items-center justify-center shrink-0 overflow-hidden">
           {footerPhotoUrl ? (
             <img src={footerPhotoUrl} alt={footerName} className="w-full h-full object-cover" />
@@ -88,20 +110,93 @@ export function Sidebar({
           )}
         </div>
         {!hideText && (
-          <>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-bold text-gray-800 truncate leading-tight">{footerName}</div>
-              {footerSubtitle && <div className="text-[11px] text-gray-400 leading-tight truncate">{footerSubtitle}</div>}
-            </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-gray-800 truncate leading-tight">{footerName}</div>
+            {footerSubtitle && <div className="text-[11px] text-gray-400 leading-tight truncate">{footerSubtitle}</div>}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // No mobile o rodapé já mora dentro do menu hambúrguer aberto — nada de empilhar
+  // um segundo menu ali dentro, as duas ações aparecem direto, sempre visíveis.
+  function renderFooterMobile() {
+    return (
+      <div className="mt-1.5 rounded-xl bg-gray-100 overflow-hidden">
+        <div className="flex items-center gap-2.5 px-2.5 py-2.5">{renderIdentidade(false)}</div>
+        {temPerfil && (
+          <button
+            onClick={() => handleSelect('perfil')}
+            className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-gray-600 border-t border-white/70 hover:bg-white/60"
+          >
+            <UserIcon className="w-4 h-4 text-gray-400" /> Ver perfil
+          </button>
+        )}
+        <button
+          onClick={() => { setOpen(false); setSenhaModalOpen(true); }}
+          className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-gray-600 border-t border-white/70 hover:bg-white/60"
+        >
+          <LockIcon className="w-4 h-4 text-gray-400" /> Alterar senha
+        </button>
+        <button
+          onClick={() => { clearSession(); window.location.href = '/'; }}
+          className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-danger border-t border-white/70 hover:bg-white/60"
+        >
+          <LogoutIcon className="w-4 h-4" /> Sair
+        </button>
+      </div>
+    );
+  }
+
+  // Desktop: o rodapé vira um botão só, que abre um menu ancorado pra cima
+  // (bottom-full) com "Ver perfil" e "Sair" — substitui o ícone de sair que ficava sempre solto.
+  function renderFooterDesktop(hideText: boolean) {
+    return (
+      <div className="relative mt-1.5" ref={menuRef}>
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          className={`flex items-center gap-2.5 rounded-xl w-full border transition-colors duration-150 ${
+            hideText ? 'justify-center py-2.5' : 'px-2.5 py-2.5'
+          } ${menuOpen ? 'bg-white border-gray-200 shadow-sm' : 'bg-gray-100 border-transparent hover:bg-gray-200/70'}`}
+        >
+          {renderIdentidade(hideText)}
+          {!hideText && (
+            <ChevronLeftIcon
+              className={`w-3 h-3 text-gray-400 shrink-0 transition-transform duration-150 ${menuOpen ? '-rotate-90' : 'rotate-90'}`}
+            />
+          )}
+        </button>
+
+        {menuOpen && (
+          <div
+            className={`absolute bottom-full mb-2 bg-white border border-gray-200 rounded-2xl shadow-[0_12px_32px_rgba(4,45,76,0.14)] overflow-hidden z-30 ${
+              hideText ? 'left-0 w-48' : 'left-0 right-0'
+            }`}
+          >
+            {temPerfil && (
+              <button
+                onClick={() => { onSelect('perfil'); setMenuOpen(false); }}
+                className="flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50"
+              >
+                <UserIcon className="w-4 h-4 text-gray-400" /> Ver perfil
+              </button>
+            )}
+            <button
+              onClick={() => { setMenuOpen(false); setSenhaModalOpen(true); }}
+              className="flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50"
+            >
+              <LockIcon className="w-4 h-4 text-gray-400" /> Alterar senha
+            </button>
             <button
               onClick={() => { clearSession(); window.location.href = '/'; }}
-              aria-label="Sair"
-              title="Sair"
-              className="shrink-0 w-[26px] h-[26px] rounded-md flex items-center justify-center text-gray-400 hover:bg-white hover:text-danger transition-colors duration-150"
+              className="flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 text-[13px] font-bold text-danger border-t border-gray-100 hover:bg-red-50"
             >
-              <LogoutIcon className="w-[15px] h-[15px]" />
+              <LogoutIcon className="w-4 h-4" /> Sair
             </button>
-          </>
+          </div>
         )}
       </div>
     );
@@ -135,7 +230,7 @@ export function Sidebar({
         {open && (
           <div className="border-t border-gray-100 px-3 pb-3 pt-2 flex flex-col gap-1">
             {items.map((item) => renderNavItem(item, () => handleSelect(item.key), false))}
-            {renderFooter(false)}
+            {renderFooterMobile()}
           </div>
         )}
       </div>
@@ -188,8 +283,10 @@ export function Sidebar({
 
         <div className="flex-1" />
 
-        {renderFooter(collapsed)}
+        {renderFooterDesktop(collapsed)}
       </aside>
+
+      <AlterarSenhaModal open={senhaModalOpen} onClose={() => setSenhaModalOpen(false)} />
     </>
   );
 }

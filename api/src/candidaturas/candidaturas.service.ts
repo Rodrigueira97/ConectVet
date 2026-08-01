@@ -61,7 +61,9 @@ export class CandidaturasService {
     });
     return this.prisma.candidatura.findMany({
       where: { profissionalId: profissional.id },
-      include: { vaga: { include: { clinica: { select: { nome: true } } } } },
+      include: {
+        vaga: { include: { clinica: { select: { nome: true, logoUrl: true } } } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

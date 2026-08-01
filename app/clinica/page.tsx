@@ -1,7 +1,7 @@
 'use client';
 import { ReactNode, Suspense, useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil } from '@/lib/mockData';
+import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
 import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon } from '@/app/components/icons';
@@ -15,6 +15,7 @@ import { EmptyState } from '@/app/components/EmptyState';
 import { NotificationBell } from '@/app/components/NotificationBell';
 import { DateField } from '@/app/components/DateField';
 import { TimeField } from '@/app/components/TimeField';
+import { useToast } from '@/app/components/Toast';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE,
   Vaga, Candidatura, Clinica, Avaliacao,
@@ -49,8 +50,9 @@ function localDaVaga(v: { rua: string; numero: string; complemento?: string | nu
 
 // Uma vaga aberta cuja data já passou sem ninguém contratado nunca muda de status no backend
 // (continua ABERTA) — aqui ela é tratada como encerrada só pra exibição/filtro no Painel.
-function vagaExpirada(v: { data: string; status: string }) {
-  return v.status === 'ABERTA' && v.data.slice(0, 10) <= hojeBrasil();
+// Plantões que atravessam a madrugada só encerram depois do horaFim, não na virada do dia.
+function vagaExpirada(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
+  return v.status === 'ABERTA' && plantaoEncerrado(v);
 }
 
 function buildVagaDetalhe(mv: Vaga): VagaDetalheData {
@@ -98,6 +100,7 @@ function ClinicaPageInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const toast = useToast();
 
   // Tab, vaga/candidatura selecionada e filtro do painel moram na URL (não em estado local):
   // refresh, botão voltar do navegador e links compartilhados/vindos de notificação continuam
@@ -120,7 +123,9 @@ function ClinicaPageInner() {
   const painelFiltro = (searchParams.get('filtro') as PainelFiltro | null) || 'todas';
   const vagaDetalheId = searchParams.get('detalhe');
 
-  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next }); }
+  // Trocar de aba pela sidebar precisa fechar o detalhe de vaga aberto — ele é
+  // renderizado com prioridade sobre as abas, então sem isso a tela ficava "presa".
+  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next, detalhe: null }); }
   function setPainelFiltro(next: PainelFiltro) { goTo({ filtro: next === 'todas' ? null : next }); }
   function irParaCandidatos(mvId: string) { goTo({ vaga: mvId, tab: 'candidatos' }); }
   function irParaPagamento(mvId: string, candId: string) { goTo({ vaga: mvId, cand: candId, tab: 'pagamento' }); }
@@ -135,7 +140,6 @@ function ClinicaPageInner() {
   const [candidatosLoading, setCandidatosLoading] = useState(false);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState('');
 
   const vagaSelecionadaMv = vagaDetalheId ? minhasVagas.find((m) => m.id === vagaDetalheId) : undefined;
   const vagaSelecionada = vagaSelecionadaMv ? buildVagaDetalhe(vagaSelecionadaMv) : null;
@@ -290,7 +294,6 @@ function ClinicaPageInner() {
     setVagaErrors(errosValidacao);
     if (Object.keys(errosValidacao).length > 0 || !clinica) return;
     setPublishing(true);
-    setActionError('');
     const endereco = vagaForm.outroEndereco
       ? { cep: vagaForm.cep || undefined, estado: vagaForm.estado, cidade: vagaForm.cidade, bairro: vagaForm.bairro || undefined, rua: vagaForm.rua, numero: vagaForm.numero, complemento: vagaForm.complemento || undefined }
       : { cep: clinica.cep || undefined, estado: clinica.estado, cidade: clinica.cidade, bairro: clinica.bairro || undefined, rua: clinica.rua, numero: clinica.numero, complemento: clinica.complemento || undefined };
@@ -304,6 +307,7 @@ function ClinicaPageInner() {
       descricao: vagaForm.descricao || undefined,
     };
     try {
+      const eraEdicao = !!editingId;
       if (editingId) {
         await atualizarVaga(editingId, payload);
         setEditingId(null);
@@ -315,8 +319,14 @@ function ClinicaPageInner() {
       setVagaErrors({});
       await refreshMinhasVagas();
       voltarAoPainel();
+      toast.success(eraEdicao ? 'Vaga atualizada' : 'Vaga publicada', {
+        message: eraEdicao ? 'As alterações já estão visíveis pros profissionais.' : 'Profissionais da região já podem se candidatar.',
+      });
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível publicar a vaga.');
+      toast.error('Não foi possível publicar a vaga', {
+        message: err instanceof ApiError ? err.message : undefined,
+        action: { label: 'Tentar novamente', onClick: publicarVaga },
+      });
     } finally {
       setPublishing(false);
     }
@@ -335,12 +345,12 @@ function ClinicaPageInner() {
   }
 
   async function cancelarVaga(id: string) {
-    setActionError('');
     try {
       await apiCancelarVaga(id);
       await refreshMinhasVagas();
+      toast.success('Vaga cancelada');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível cancelar a vaga.');
+      toast.error('Não foi possível cancelar a vaga', { message: err instanceof ApiError ? err.message : undefined });
     }
   }
 
@@ -351,40 +361,39 @@ function ClinicaPageInner() {
   }
 
   async function recusarCandidato(candId: string) {
-    setActionError('');
     try {
       await recusarCandidatura(candId);
       if (selectedMvId) setCandidatos(await getCandidatosDaVaga(selectedMvId));
+      toast.success('Candidato recusado');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível recusar o candidato.');
+      toast.error('Não foi possível recusar o candidato', { message: err instanceof ApiError ? err.message : undefined });
     }
   }
 
   async function confirmarPagamento() {
     if (!selectedCandId) return;
-    setActionError('');
     try {
       await aceitarCandidatura(selectedCandId);
       await refreshMinhasVagas();
       voltarAoPainel();
+      toast.success('Profissional contratado', { message: 'O pagamento fica retido até você confirmar a presença.' });
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível confirmar o pagamento.');
+      toast.error('Não foi possível confirmar o pagamento', { message: err instanceof ApiError ? err.message : undefined });
     }
   }
 
   async function handleLiberarPagamento(pagamentoId: string) {
-    setActionError('');
     try {
       await apiLiberarPagamento(pagamentoId);
       await refreshMinhasVagas();
+      toast.success('Pagamento liberado');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível liberar o pagamento.');
+      toast.error('Não foi possível liberar o pagamento', { message: err instanceof ApiError ? err.message : undefined });
     }
   }
 
   async function salvarPerfil() {
     setSavingPerfil(true);
-    setActionError('');
     try {
       const atualizado = await updateClinicaMe({
         nome: perfilForm.nome,
@@ -399,8 +408,9 @@ function ClinicaPageInner() {
       });
       setClinica(atualizado);
       setPerfilForm(perfilFormFromClinica(atualizado));
+      toast.success('Perfil atualizado');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível salvar o perfil.');
+      toast.error('Não foi possível salvar o perfil', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setSavingPerfil(false);
     }
@@ -410,13 +420,13 @@ function ClinicaPageInner() {
     const file = files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    setActionError('');
     try {
       const logoUrl = await uploadArquivo(file);
       const atualizado = await updateClinicaMe({ logoUrl });
       setClinica(atualizado);
+      toast.success('Logo atualizada');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível enviar a logo.');
+      toast.error('Não foi possível enviar a logo', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setUploadingLogo(false);
     }
@@ -427,14 +437,14 @@ function ClinicaPageInner() {
     const vagas = 3 - clinica.fotosEstrutura.length;
     if (vagas <= 0) return;
     setUploadingFotos(true);
-    setActionError('');
     try {
       const novasUrls = await uploadArquivos(Array.from(files).slice(0, vagas));
       const fotosEstrutura = [...clinica.fotosEstrutura, ...novasUrls.map((url) => ({ url, descricao: '' }))];
       const atualizado = await updateClinicaMe({ fotosEstrutura });
       setClinica(atualizado);
+      toast.success(novasUrls.length > 1 ? 'Fotos adicionadas' : 'Foto adicionada');
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível enviar as fotos.');
+      toast.error('Não foi possível enviar as fotos', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setUploadingFotos(false);
     }
@@ -447,7 +457,7 @@ function ClinicaPageInner() {
       const atualizado = await updateClinicaMe({ fotosEstrutura });
       setClinica(atualizado);
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível remover a foto.');
+      toast.error('Não foi possível remover a foto', { message: err instanceof ApiError ? err.message : undefined });
     }
   }
 
@@ -462,7 +472,7 @@ function ClinicaPageInner() {
       const atualizado = await updateClinicaMe({ fotosEstrutura: clinica.fotosEstrutura });
       setClinica(atualizado);
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Não foi possível salvar a descrição.');
+      toast.error('Não foi possível salvar a descrição', { message: err instanceof ApiError ? err.message : undefined });
     }
   }
 
@@ -526,12 +536,6 @@ function ClinicaPageInner() {
           <VagaDetalheView vaga={vagaSelecionada} onBack={fecharDetalheVaga} />
         ) : (
         <>
-        {actionError && (
-          <div className="max-w-3xl mx-auto pt-6 px-8">
-            <div className="text-sm font-semibold text-danger bg-red-50 rounded-lg p-3">{actionError}</div>
-          </div>
-        )}
-
         {tab === 'home' && (
             <div className="max-w-[1080px] mx-auto p-8">
               <h1 className="text-2xl font-extrabold mb-1 text-white">Painel</h1>
@@ -1073,11 +1077,16 @@ function ClinicaPageInner() {
             <div className="flex flex-col items-center text-center gap-2.5 sm:flex-row sm:items-end sm:text-left sm:gap-5 mb-6">
               <div className="relative w-[100px] h-[100px] shrink-0">
                 <div className="w-full h-full rounded-2xl p-1 bg-white/90 shadow-lg">
-                  <div className="w-full h-full rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
+                  <div className="relative w-full h-full rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
                     {clinica.logoUrl ? (
                       <img src={clinica.logoUrl} alt={clinica.nome} className="w-full h-full object-cover" />
                     ) : (
                       <BuildingIcon className="w-9 h-9" />
+                    )}
+                    {uploadingLogo && (
+                      <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
+                        <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1101,9 +1110,6 @@ function ClinicaPageInner() {
                 </button>
               )}
             </div>
-
-            {uploadingLogo && <div className="text-center text-sm font-semibold text-white/85 mb-4">Enviando logo...</div>}
-            {actionError && <div className="text-sm font-semibold text-danger bg-red-50 rounded-lg p-3 mb-4">{actionError}</div>}
 
             {!editandoPerfil ? (
               <>

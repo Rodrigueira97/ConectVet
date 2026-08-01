@@ -34,7 +34,11 @@ export class VagasService {
           : undefined,
         data: filtros.data ? new Date(filtros.data) : undefined,
       },
-      include: { clinica: { select: { id: true, nome: true } } },
+      include: {
+        clinica: {
+          select: { id: true, nome: true, logoUrl: true, fotosEstrutura: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
 

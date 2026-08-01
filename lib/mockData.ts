@@ -37,6 +37,24 @@ export function somarDiasISO(dataISO: string, dias: number) {
   return new Date(Date.UTC(ano, mes - 1, dia + dias)).toISOString().slice(0, 10);
 }
 
+// Horário atual no relógio do Brasil (America/Sao_Paulo), no formato HH:MM.
+export function agoraBrasil() {
+  return new Date().toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+}
+
+// Um plantão só termina de fato quando o horário de fim passa — nunca só porque
+// virou o dia. Plantões que atravessam a madrugada (ex.: 19:00–07:00) continuam
+// em andamento na manhã seguinte até bater o horaFim.
+export function plantaoEncerrado(v: { data: string; horaInicio: string; horaFim: string }) {
+  const dataInicio = v.data.slice(0, 10);
+  const overnight = v.horaFim <= v.horaInicio;
+  const dataFim = overnight ? somarDiasISO(dataInicio, 1) : dataInicio;
+  const hoje = hojeBrasil();
+  if (dataFim < hoje) return true;
+  if (dataFim > hoje) return false;
+  return agoraBrasil() >= v.horaFim;
+}
+
 export function buildEndereco(form: {
   rua?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; cidade?: string | null; estado?: string | null;
 }) {

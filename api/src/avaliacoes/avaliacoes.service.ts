@@ -68,7 +68,8 @@ export class AvaliacoesService {
         profissionalId: candidatura.profissionalId,
         autor,
         nota: dto.nota,
-        comentario: dto.comentario,
+        comentario:
+          autor === AvaliacaoAutor.CLINICA ? null : dto.comentario,
       },
     });
 

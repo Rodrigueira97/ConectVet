@@ -201,7 +201,14 @@ export type Vaga = {
   descricao?: string | null;
   status: 'ABERTA' | 'PREENCHIDA' | 'CONCLUIDA' | 'CANCELADA';
   createdAt: string;
-  clinica?: { id?: string; nome: string; notaMedia?: number | null; totalAvaliacoes?: number };
+  clinica?: {
+    id?: string;
+    nome: string;
+    notaMedia?: number | null;
+    totalAvaliacoes?: number;
+    logoUrl?: string | null;
+    fotosEstrutura?: FotoEstrutura[];
+  };
   candidaturas?: Candidatura[];
   pagamento?: Pagamento | null;
 };
@@ -271,6 +278,10 @@ export function registrarProfissional(payload: Record<string, unknown>) {
 
 export function me() {
   return get<{ id: string; email: string; role: string; clinica: Clinica | null; profissional: Profissional | null }>('/auth/me');
+}
+
+export function alterarSenha(senhaAtual: string, novaSenha: string) {
+  return patch<{ ok: true }>('/auth/senha', { senhaAtual, novaSenha });
 }
 
 // ---------- Uploads ----------

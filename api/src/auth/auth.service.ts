@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -10,6 +11,7 @@ import { Role } from '../../generated/prisma/enums';
 import { RegisterClinicaDto } from './dto/register-clinica.dto';
 import { RegisterProfissionalDto } from './dto/register-profissional.dto';
 import { LoginDto } from './dto/login.dto';
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { Prisma } from '../../generated/prisma/client';
 
 @Injectable()
@@ -131,6 +133,18 @@ export class AuthService {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
 
     return this.emitirToken(user);
+  }
+
+  async alterarSenha(userId: string, dto: AlterarSenhaDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+
+    const senhaValida = await bcrypt.compare(dto.senhaAtual, user.senhaHash);
+    if (!senhaValida) throw new BadRequestException('Senha atual incorreta.');
+
+    const senhaHash = await bcrypt.hash(dto.novaSenha, 10);
+    await this.prisma.user.update({ where: { id: userId }, data: { senhaHash } });
+    return { ok: true };
   }
 
   async me(userId: string) {

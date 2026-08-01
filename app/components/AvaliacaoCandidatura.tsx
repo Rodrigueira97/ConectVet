@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { ApiError, Avaliacao, criarAvaliacao } from '@/lib/api';
+import { useToast } from './Toast';
 
 export function AvaliacaoCandidatura({
   candidaturaId, autorProprio, labelForm, labelFeita, labelOutra, avaliacoesIniciais,
@@ -12,23 +13,31 @@ export function AvaliacaoCandidatura({
   labelOutra: string;
   avaliacoesIniciais: Avaliacao[];
 }) {
+  const toast = useToast();
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>(avaliacoesIniciais);
   const [nota, setNota] = useState(5);
   const [comentario, setComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const [erro, setErro] = useState('');
 
   const minha = avaliacoes.find((a) => a.autor === autorProprio);
   const daOutraParte = avaliacoes.find((a) => a.autor !== autorProprio);
+  const podeComentar = autorProprio === 'PROFISSIONAL';
 
   async function enviar() {
-    setErro('');
     setEnviando(true);
     try {
-      const nova = await criarAvaliacao({ candidaturaId, nota, comentario: comentario || undefined });
+      const nova = await criarAvaliacao({
+        candidaturaId,
+        nota,
+        comentario: podeComentar && comentario ? comentario : undefined,
+      });
       setAvaliacoes((prev) => [...prev, nova]);
+      toast.success('Avaliação enviada', { message: 'Obrigado pelo feedback — isso ajuda outros profissionais e clínicas na plataforma.' });
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Não foi possível enviar a avaliação.');
+      toast.error('Não foi possível enviar a avaliação', {
+        message: err instanceof ApiError ? err.message : undefined,
+        action: { label: 'Tentar novamente', onClick: enviar },
+      });
     } finally {
       setEnviando(false);
     }
@@ -44,7 +53,7 @@ export function AvaliacaoCandidatura({
             <span className="text-[12.5px] font-extrabold text-ink">{labelFeita}</span>
             <span className="text-amber-500 text-sm tracking-widest">{'★'.repeat(minha.nota)}{'☆'.repeat(5 - minha.nota)}</span>
           </div>
-          {minha.comentario && <div className="text-[13px] text-gray-700 leading-relaxed">{minha.comentario}</div>}
+          {podeComentar && minha.comentario && <div className="text-[13px] text-gray-700 leading-relaxed">{minha.comentario}</div>}
         </div>
       ) : (
         <div className="mb-2.5">
@@ -62,14 +71,15 @@ export function AvaliacaoCandidatura({
               </button>
             ))}
           </div>
-          <textarea
-            value={comentario}
-            onChange={(e) => setComentario(e.target.value)}
-            placeholder="Como foi o plantão? (opcional)"
-            rows={2}
-            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm mb-2 outline-none focus:border-primary focus:ring-4 focus:ring-primaryTint"
-          />
-          {erro && <div className="text-xs font-semibold text-danger mb-2">{erro}</div>}
+          {podeComentar && (
+            <textarea
+              value={comentario}
+              onChange={(e) => setComentario(e.target.value)}
+              placeholder="Como foi o plantão? (opcional)"
+              rows={2}
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm mb-2 outline-none focus:border-primary focus:ring-4 focus:ring-primaryTint"
+            />
+          )}
           <button onClick={enviar} disabled={enviando} className="px-4 py-2 rounded-lg bg-primary hover:bg-primaryDark text-white text-xs font-bold disabled:opacity-60">
             {enviando ? 'Enviando...' : 'Enviar avaliação'}
           </button>

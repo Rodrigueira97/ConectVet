@@ -1,10 +1,14 @@
 'use client';
+import { useState } from 'react';
 import { buildEndereco, mapsLink } from '@/lib/mockData';
-import { CalendarIcon, ChevronLeftIcon, CheckCircleIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
+import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CloseIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
 import { PawTrailInline } from '@/app/components/PawTrailLoader';
+import { FotoEstrutura } from '@/lib/api';
 
 export type VagaDetalheData = {
   clinica?: string;
+  clinicaLogoUrl?: string | null;
+  clinicaFotos?: FotoEstrutura[];
   categoria: string;
   rua: string;
   numero: string;
@@ -57,6 +61,7 @@ export function VagaDetalheView({
   const horasLabel = horas % 1 === 0 ? `${horas}h` : `${horas.toFixed(1)}h`;
 
   const mostrarCta = !!(onAction && actionLabel);
+  const [fotoAberta, setFotoAberta] = useState<FotoEstrutura | null>(null);
 
   return (
     <div className="max-w-[1080px] mx-auto p-8">
@@ -68,16 +73,32 @@ export function VagaDetalheView({
         <span className="text-white bg-white/15 text-xs font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">{vaga.categoria}</span>
         {vaga.perto && <span className="bg-secondary text-white text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full">Perto de você</span>}
       </div>
-      <h1 className="text-white text-2xl font-extrabold mb-2">{vaga.clinica || 'Detalhes da vaga'}</h1>
-      <div className="mb-6 text-white/90 text-sm font-bold">
-        {vaga.notaMedia && vaga.totalAvaliacoes ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
-            <span className="text-white/65 font-semibold">({vaga.totalAvaliacoes} avaliações)</span>
-          </span>
-        ) : (
-          <span className="text-white/70 font-semibold">Sem avaliações ainda</span>
+
+      <div className="flex items-center gap-3.5 mb-6">
+        {vaga.clinica && (
+          <div className="w-14 h-14 rounded-2xl bg-white/90 p-[3px] shadow-lg shrink-0">
+            <div className="w-full h-full rounded-[13px] bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
+              {vaga.clinicaLogoUrl ? (
+                <img src={vaga.clinicaLogoUrl} alt={vaga.clinica} className="w-full h-full object-cover" />
+              ) : (
+                <BuildingIcon className="w-6 h-6" />
+              )}
+            </div>
+          </div>
         )}
+        <div>
+          <h1 className="text-white text-2xl font-extrabold mb-1">{vaga.clinica || 'Detalhes da vaga'}</h1>
+          <div className="text-white/90 text-sm font-bold">
+            {vaga.notaMedia && vaga.totalAvaliacoes ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
+                <span className="text-white/65 font-semibold">({vaga.totalAvaliacoes} avaliações)</span>
+              </span>
+            ) : (
+              <span className="text-white/70 font-semibold">Sem avaliações ainda</span>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
@@ -136,6 +157,52 @@ export function VagaDetalheView({
           Ver no Google Maps →
         </a>
       </div>
+
+      {vaga.clinicaFotos && vaga.clinicaFotos.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
+          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-3">Conheça a clínica</div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {vaga.clinicaFotos.map((foto) => (
+              <button
+                key={foto.url}
+                onClick={() => setFotoAberta(foto)}
+                className="relative aspect-square rounded-xl overflow-hidden bg-gray-100"
+              >
+                <img src={foto.url} alt={foto.descricao || 'Foto da clínica'} className="w-full h-full object-cover" />
+                {foto.descricao && (
+                  <span
+                    className="absolute left-0 right-0 bottom-0 px-2 py-1.5 text-[10.5px] font-bold text-white text-left"
+                    style={{ background: 'linear-gradient(to top, rgba(4,20,25,.72), transparent)' }}
+                  >
+                    {foto.descricao}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {fotoAberta && (
+        <div
+          className="fixed inset-0 z-50 bg-[rgba(4,20,25,0.7)] flex items-center justify-center p-6"
+          onClick={() => setFotoAberta(null)}
+        >
+          <div className="w-full max-w-[420px]" onClick={(e) => e.stopPropagation()}>
+            <div className="relative">
+              <img src={fotoAberta.url} alt={fotoAberta.descricao || 'Foto da clínica'} className="w-full aspect-[4/3] object-cover rounded-2xl" />
+              <button
+                onClick={() => setFotoAberta(null)}
+                aria-label="Fechar"
+                className="absolute -top-3.5 -right-3.5 w-8 h-8 rounded-full bg-white text-ink flex items-center justify-center shadow-lg"
+              >
+                <CloseIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {fotoAberta.descricao && <div className="text-white text-sm font-bold text-center mt-3">{fotoAberta.descricao}</div>}
+          </div>
+        </div>
+      )}
 
       {vaga.descricao && (
         <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
