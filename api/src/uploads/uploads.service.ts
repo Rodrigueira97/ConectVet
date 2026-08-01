@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
 
@@ -41,5 +41,19 @@ export class UploadsService {
       }),
     );
     return `${this.publicUrl}/${key}`;
+  }
+
+  // Limpa um arquivo que deixou de ser usado (foto de perfil trocada, foto da
+  // estrutura removida). Silencioso de propósito: a atualização no banco já foi
+  // salva quando isso roda, então uma falha aqui não pode derrubar a resposta.
+  async deleteByUrl(url: string | null | undefined): Promise<void> {
+    if (!url || !url.startsWith(`${this.publicUrl}/`)) return;
+    const key = url.slice(this.publicUrl.length + 1);
+    if (!key) return;
+    try {
+      await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    } catch (err) {
+      console.error(`Falha ao remover arquivo do R2 (${key}):`, err);
+    }
   }
 }

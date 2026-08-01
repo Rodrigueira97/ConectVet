@@ -18,6 +18,7 @@ import { DateField } from '@/app/components/DateField';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import { EmptyState } from '@/app/components/EmptyState';
+import { RecorteFotoModal } from '@/app/components/RecorteFotoModal';
 import { useToast } from '@/app/components/Toast';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS,
@@ -235,6 +236,7 @@ function ProfissionalPageInner() {
   const [perfilForm, setPerfilForm] = useState({ nome: '', telefone: '', dataNascimento: '', especialidade: '', especialidadeOutra: '', areaAtuacao: '', regioesAtendimento: '', observacoes: '' });
   const [savingPerfil, setSavingPerfil] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [fotoParaCortar, setFotoParaCortar] = useState<File | null>(null);
   const [editandoPerfil, setEditandoPerfil] = useState(false);
   const [curriculoNovo, setCurriculoNovo] = useState<File | null>(null);
   const [curriculoRemovido, setCurriculoRemovido] = useState(false);
@@ -479,12 +481,17 @@ function ProfissionalPageInner() {
     }
   }
 
-  async function handleFotoChange(files: FileList | null) {
+  function handleFotoSelecionada(files: FileList | null) {
     const file = files?.[0];
-    if (!file) return;
+    if (file) setFotoParaCortar(file);
+  }
+
+  async function handleFotoCortada(blob: Blob) {
+    setFotoParaCortar(null);
     setUploadingFoto(true);
     try {
-      const fotoUrl = await uploadArquivo(file);
+      const arquivo = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
+      const fotoUrl = await uploadArquivo(arquivo);
       const atualizado = await updateProfissionalMe({ fotoUrl });
       setPerfil(atualizado);
       toast.success('Foto atualizada');
@@ -589,7 +596,7 @@ function ProfissionalPageInner() {
           <button
             onClick={(e) => { e.stopPropagation(); alternarFavorito(v.id); }}
             aria-label={favorita ? 'Remover dos favoritos' : 'Favoritar vaga'}
-            className={`w-10 h-10 rounded-[11px] flex items-center justify-center shrink-0 transition-colors ${favorita ? 'text-rose-500' : 'text-gray-300 hover:text-rose-400'}`}
+            className={`w-10 h-10 rounded-[11px] flex items-center justify-center shrink-0 transition-colors ${favorita ? 'bg-rose-100 text-rose-500' : 'bg-gray-100 text-gray-400 hover:bg-rose-100 hover:text-rose-400'}`}
           >
             <HeartIcon className="w-4 h-4" filled={favorita} />
           </button>
@@ -673,7 +680,7 @@ function ProfissionalPageInner() {
             <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas disponíveis</h1>
             <p className="text-sm text-white/85 mb-5">Plantões publicados por clínicas parceiras</p>
             <div className="relative mb-3">
-              <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <SearchIcon className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${filtros.busca ? 'text-primary' : 'text-gray-400'}`} />
               <input
                 value={filtros.busca}
                 onChange={(e) => atualizarFiltro({ busca: e.target.value })}
@@ -684,7 +691,7 @@ function ProfissionalPageInner() {
             {/* Filtros: linha inline no desktop */}
             <div className="hidden md:flex gap-2.5 flex-wrap items-center mb-4">
               <div className="relative">
-                <PinIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <PinIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.cidade ? 'text-primary' : 'text-gray-400'}`} />
                 <input
                   value={filtros.cidade}
                   onChange={(e) => atualizarFiltro({ cidade: e.target.value })}
@@ -692,17 +699,18 @@ function ProfissionalPageInner() {
                   className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white w-32"
                 />
               </div>
+              <DateField
+                label="Data"
+                hideLabel
+                compact
+                clearable
+                value={filtros.data}
+                onChange={(v) => atualizarFiltro({ data: v })}
+                min={hojeBrasil()}
+                placeholder="Qualquer data"
+              />
               <div className="relative">
-                <CalendarIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="date"
-                  value={filtros.data}
-                  onChange={(e) => atualizarFiltro({ data: e.target.value })}
-                  className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white"
-                />
-              </div>
-              <div className="relative">
-                <FilterIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <FilterIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.categoria ? 'text-primary' : 'text-gray-400'}`} />
                 <select
                   value={filtros.categoria}
                   onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
@@ -745,7 +753,7 @@ function ProfissionalPageInner() {
                   <div>
                     <div className="text-xs font-bold text-gray-500 mb-1">Cidade</div>
                     <div className="relative">
-                      <PinIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <PinIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.cidade ? 'text-primary' : 'text-gray-400'}`} />
                       <input
                         value={filtros.cidade}
                         onChange={(e) => atualizarFiltro({ cidade: e.target.value })}
@@ -755,21 +763,19 @@ function ProfissionalPageInner() {
                     </div>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-gray-500 mb-1">Data</div>
-                    <div className="relative min-w-0">
-                      <CalendarIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="date"
-                        value={filtros.data}
-                        onChange={(e) => atualizarFiltro({ data: e.target.value })}
-                        className="w-full min-w-0 pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm"
-                      />
-                    </div>
+                    <DateField
+                      label="Data"
+                      value={filtros.data}
+                      onChange={(v) => atualizarFiltro({ data: v })}
+                      min={hojeBrasil()}
+                      placeholder="Qualquer data"
+                      clearable
+                    />
                   </div>
                   <div>
                     <div className="text-xs font-bold text-gray-500 mb-1">Categoria</div>
                     <div className="relative">
-                      <FilterIcon className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <FilterIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.categoria ? 'text-primary' : 'text-gray-400'}`} />
                       <select
                         value={filtros.categoria}
                         onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
@@ -1077,7 +1083,7 @@ function ProfissionalPageInner() {
                 </div>
                 <label className="absolute right-0 bottom-0.5 w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center cursor-pointer border-[3px] border-primary shadow-md">
                   <PencilIcon className="w-3.5 h-3.5" />
-                  <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto} onChange={(e) => handleFotoChange(e.target.files)} />
+                  <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto} onChange={(e) => handleFotoSelecionada(e.target.files)} />
                 </label>
               </div>
               <div className="flex-1 min-w-0">
@@ -1326,6 +1332,13 @@ function ProfissionalPageInner() {
         </>
         )}
       </main>
+
+      <RecorteFotoModal
+        file={fotoParaCortar}
+        shape="circle"
+        onCancel={() => setFotoParaCortar(null)}
+        onConfirm={handleFotoCortada}
+      />
     </div>
   );
 }

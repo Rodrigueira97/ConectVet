@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { UploadsService } from '../uploads/uploads.service';
 import { UpdateProfissionalDto } from './dto/update-profissional.dto';
 
 @Injectable()
 export class ProfissionaisService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private uploads: UploadsService,
+  ) {}
 
   async buscarPorUserId(userId: string) {
     const profissional = await this.prisma.profissional.findUnique({
@@ -27,14 +31,22 @@ export class ProfissionaisService {
   }
 
   async atualizar(userId: string, dto: UpdateProfissionalDto) {
-    await this.buscarPorUserId(userId);
+    const existente = await this.buscarPorUserId(userId);
     const { dataNascimento, ...resto } = dto;
-    return this.prisma.profissional.update({
+    const atualizado = await this.prisma.profissional.update({
       where: { userId },
       data: {
         ...resto,
         ...(dataNascimento ? { dataNascimento: new Date(dataNascimento) } : {}),
       },
     });
+
+    // Some a foto antiga do R2 quando é substituída por uma nova — só depois
+    // do update salvar, pra nunca apagar um arquivo que ainda está em uso.
+    if (dto.fotoUrl !== undefined && existente.fotoUrl && existente.fotoUrl !== dto.fotoUrl) {
+      await this.uploads.deleteByUrl(existente.fotoUrl);
+    }
+
+    return atualizado;
   }
 }

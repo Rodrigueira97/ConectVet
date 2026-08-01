@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { hojeBrasil } from '@/lib/mockData';
-import { CalendarIcon, ChevronLeftIcon } from './icons';
+import { CalendarIcon, ChevronLeftIcon, CloseIcon } from './icons';
 
 function formatDataLonga(iso: string) {
   const [ano, mes, dia] = iso.split('-').map(Number);
@@ -20,6 +20,7 @@ const NOMES_MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', '
 
 export function DateField({
   label, value, onChange, error, required, min, max, placeholder = 'Selecione a data',
+  hideLabel, compact, clearable,
 }: {
   label: string;
   value: string;
@@ -29,6 +30,12 @@ export function DateField({
   min?: string;
   max?: string;
   placeholder?: string;
+  /** Esconde o rótulo acima do campo — pra usar dentro de uma barra de filtros que já tem seu próprio rótulo, ou nenhum. */
+  hideLabel?: boolean;
+  /** Botão em formato de pílula (rounded-full, mais baixo) em vez do campo de formulário padrão. */
+  compact?: boolean;
+  /** Mostra um "x" pra voltar a value: '' — útil em filtro, onde "nenhuma data" é uma opção válida. */
+  clearable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => (value || min || hojeBrasil()).slice(0, 7) + '-01');
@@ -56,19 +63,30 @@ export function DateField({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 relative" ref={ref}>
-      <span className="text-sm font-bold">{label}{required && <span className="text-danger"> *</span>}</span>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm text-left bg-white ${
-          error ? 'border-danger' : open ? 'border-primary ring-4 ring-primaryTint' : 'border-gray-300'
-        } ${value ? 'text-ink' : 'text-gray-400'}`}
-      >
-        <CalendarIcon className="w-4 h-4 text-primary shrink-0" />
-        {value ? formatDataLonga(value) : placeholder}
-      </button>
-      {open && (
+    <div className="flex flex-col gap-1.5" ref={ref}>
+      {!hideLabel && <span className="text-sm font-bold">{label}{required && <span className="text-danger"> *</span>}</span>}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={`flex items-center gap-2 border text-sm text-left bg-white ${compact ? 'px-3 py-2 rounded-full' : 'px-3 py-2.5 rounded-lg'} ${clearable && value ? 'pr-8' : ''} ${
+            error ? 'border-danger' : open ? 'border-primary ring-4 ring-primaryTint' : 'border-gray-300'
+          } ${value ? 'text-ink' : 'text-gray-400'}`}
+        >
+          <CalendarIcon className={`w-4 h-4 shrink-0 ${value ? 'text-primary' : 'text-gray-400'}`} />
+          {value ? formatDataLonga(value) : placeholder}
+        </button>
+        {clearable && value && (
+          <button
+            type="button"
+            aria-label="Limpar data"
+            onClick={(e) => { e.stopPropagation(); onChange(''); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <CloseIcon className="w-3 h-3" />
+          </button>
+        )}
+        {open && (
         <div className="absolute z-20 top-full mt-1.5 w-[260px] bg-white border border-gray-200 rounded-2xl shadow-lg p-3">
           <div className="flex items-center gap-1.5 mb-2">
             <button
@@ -135,6 +153,7 @@ export function DateField({
           </div>
         </div>
       )}
+      </div>
       {error && <span className="text-xs font-semibold text-danger">{error}</span>}
     </div>
   );

@@ -13,6 +13,7 @@ import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import { EmptyState } from '@/app/components/EmptyState';
 import { NotificationBell } from '@/app/components/NotificationBell';
+import { RecorteFotoModal } from '@/app/components/RecorteFotoModal';
 import { DateField } from '@/app/components/DateField';
 import { TimeField } from '@/app/components/TimeField';
 import { useToast } from '@/app/components/Toast';
@@ -165,6 +166,9 @@ function ClinicaPageInner() {
   const [perfilCepStatus, setPerfilCepStatus] = useState<CepStatus>('idle');
   const [savingPerfil, setSavingPerfil] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoParaCortar, setLogoParaCortar] = useState<File | null>(null);
+  const [filaFotosParaCortar, setFilaFotosParaCortar] = useState<File[]>([]);
+  const [fotosCortadas, setFotosCortadas] = useState<Blob[]>([]);
   const [uploadingFotos, setUploadingFotos] = useState(false);
   const [editandoPerfil, setEditandoPerfil] = useState(false);
 
@@ -416,12 +420,17 @@ function ClinicaPageInner() {
     }
   }
 
-  async function handleLogoChange(files: FileList | null) {
+  function handleLogoSelecionada(files: FileList | null) {
     const file = files?.[0];
-    if (!file) return;
+    if (file) setLogoParaCortar(file);
+  }
+
+  async function handleLogoCortada(blob: Blob) {
+    setLogoParaCortar(null);
     setUploadingLogo(true);
     try {
-      const logoUrl = await uploadArquivo(file);
+      const arquivo = new File([blob], 'logo.jpg', { type: 'image/jpeg' });
+      const logoUrl = await uploadArquivo(arquivo);
       const atualizado = await updateClinicaMe({ logoUrl });
       setClinica(atualizado);
       toast.success('Logo atualizada');
@@ -432,13 +441,35 @@ function ClinicaPageInner() {
     }
   }
 
-  async function handleFotosAdd(files: FileList | null) {
+  // Corta uma foto de cada vez: ao confirmar o corte da atual, ela sai da fila
+  // e a próxima assume — só sobem de verdade quando a fila esvazia.
+  function handleFotosSelecionadas(files: FileList | null) {
     if (!files || !files.length || !clinica) return;
     const vagas = 3 - clinica.fotosEstrutura.length;
     if (vagas <= 0) return;
+    setFilaFotosParaCortar(Array.from(files).slice(0, vagas));
+    setFotosCortadas([]);
+  }
+
+  function cancelarFilaFotos() {
+    setFilaFotosParaCortar([]);
+    setFotosCortadas([]);
+  }
+
+  function handleFotoEstruturaCortada(blob: Blob) {
+    const novaLista = [...fotosCortadas, blob];
+    const restante = filaFotosParaCortar.slice(1);
+    setFotosCortadas(novaLista);
+    setFilaFotosParaCortar(restante);
+    if (restante.length === 0) enviarFotosEstrutura(novaLista);
+  }
+
+  async function enviarFotosEstrutura(blobs: Blob[]) {
+    if (!clinica) return;
     setUploadingFotos(true);
     try {
-      const novasUrls = await uploadArquivos(Array.from(files).slice(0, vagas));
+      const arquivos = blobs.map((b, i) => new File([b], `estrutura-${i}.jpg`, { type: 'image/jpeg' }));
+      const novasUrls = await uploadArquivos(arquivos);
       const fotosEstrutura = [...clinica.fotosEstrutura, ...novasUrls.map((url) => ({ url, descricao: '' }))];
       const atualizado = await updateClinicaMe({ fotosEstrutura });
       setClinica(atualizado);
@@ -1092,7 +1123,7 @@ function ClinicaPageInner() {
                 </div>
                 <label className="absolute right-0 bottom-0.5 w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center cursor-pointer border-[3px] border-primary shadow-md">
                   <PencilIcon className="w-3.5 h-3.5" />
-                  <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={(e) => handleLogoChange(e.target.files)} />
+                  <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={(e) => handleLogoSelecionada(e.target.files)} />
                 </label>
               </div>
               <div className="flex-1 min-w-0">
@@ -1292,7 +1323,7 @@ function ClinicaPageInner() {
                   <label className="cursor-pointer aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-400 hover:bg-gray-50 hover:text-gray-500">
                     <PlusIcon className="w-5 h-5" />
                     <span className="text-xs font-bold">{uploadingFotos ? 'Enviando...' : 'Adicionar'}</span>
-                    <input type="file" accept="image/*" multiple className="hidden" disabled={uploadingFotos} onChange={(e) => handleFotosAdd(e.target.files)} />
+                    <input type="file" accept="image/*" multiple className="hidden" disabled={uploadingFotos} onChange={(e) => handleFotosSelecionadas(e.target.files)} />
                   </label>
                 )}
               </div>
@@ -1302,6 +1333,19 @@ function ClinicaPageInner() {
         </>
         )}
       </main>
+
+      <RecorteFotoModal
+        file={logoParaCortar}
+        shape="square"
+        onCancel={() => setLogoParaCortar(null)}
+        onConfirm={handleLogoCortada}
+      />
+      <RecorteFotoModal
+        file={filaFotosParaCortar[0] || null}
+        shape="square"
+        onCancel={cancelarFilaFotos}
+        onConfirm={handleFotoEstruturaCortada}
+      />
     </div>
   );
 }
