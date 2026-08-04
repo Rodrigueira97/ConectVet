@@ -59,6 +59,7 @@ function vagaExpirada(v: { data: string; horaInicio: string; horaFim: string; st
 function buildVagaDetalhe(mv: Vaga): VagaDetalheData {
   return {
     categoria: CATEGORIA_LABEL[mv.categoria],
+    status: mv.status,
     rua: mv.rua, numero: mv.numero, complemento: mv.complemento, bairro: mv.bairro, cidade: mv.cidade, estado: mv.estado,
     data: mv.data, horaInicio: mv.horaInicio, horaFim: mv.horaFim,
     valor: mv.valor, descricao: mv.descricao,

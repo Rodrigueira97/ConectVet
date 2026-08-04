@@ -431,6 +431,19 @@ export function getAvaliacoesPorCandidatura(candidaturaId: string) {
   return get<Avaliacao[]>(`/avaliacoes/candidatura/${candidaturaId}`);
 }
 
+export type AvaliacaoClinica = {
+  id: string;
+  nota: number;
+  comentario: string | null;
+  profissionalNome: string;
+  data: string;
+  createdAt: string;
+};
+
+export function getUltimasAvaliacoesClinica(clinicaId: string) {
+  return get<AvaliacaoClinica[]>(`/avaliacoes/clinica/${clinicaId}`);
+}
+
 // ---------- Notificações ----------
 
 export type NotificacaoTipo =

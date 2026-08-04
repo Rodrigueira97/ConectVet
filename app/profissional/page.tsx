@@ -678,9 +678,11 @@ function ProfissionalPageInner() {
             <VagaDetalheView
               vaga={{
                 clinica: vagaSelecionada.clinica?.nome,
+                clinicaId: vagaSelecionada.clinica?.id,
                 clinicaLogoUrl: vagaSelecionada.clinica?.logoUrl,
                 clinicaFotos: vagaSelecionada.clinica?.fotosEstrutura,
                 categoria: CATEGORIA_LABEL[vagaSelecionada.categoria],
+                status: vagaSelecionada.status,
                 rua: vagaSelecionada.rua, numero: vagaSelecionada.numero, complemento: vagaSelecionada.complemento,
                 bairro: vagaSelecionada.bairro, cidade: vagaSelecionada.cidade, estado: vagaSelecionada.estado,
                 data: vagaSelecionada.data, horaInicio: vagaSelecionada.horaInicio, horaFim: vagaSelecionada.horaFim,

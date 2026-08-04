@@ -25,4 +25,9 @@ export class AvaliacoesController {
   porCandidatura(@Param('candidaturaId') candidaturaId: string) {
     return this.avaliacoesService.porCandidatura(candidaturaId);
   }
+
+  @Get('clinica/:clinicaId')
+  ultimasPorClinica(@Param('clinicaId') clinicaId: string) {
+    return this.avaliacoesService.ultimasPorClinica(clinicaId);
+  }
 }

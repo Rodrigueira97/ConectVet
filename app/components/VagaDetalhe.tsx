@@ -1,15 +1,17 @@
 'use client';
-import { useState } from 'react';
-import { buildEndereco, mapsLink } from '@/lib/mockData';
+import { useEffect, useRef, useState } from 'react';
+import { buildEndereco, mapsLink, plantaoEncerrado } from '@/lib/mockData';
 import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CloseIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
 import { PawTrailInline } from '@/app/components/PawTrailLoader';
-import { FotoEstrutura } from '@/lib/api';
+import { FotoEstrutura, AvaliacaoClinica, getUltimasAvaliacoesClinica } from '@/lib/api';
 
 export type VagaDetalheData = {
   clinica?: string;
+  clinicaId?: string;
   clinicaLogoUrl?: string | null;
   clinicaFotos?: FotoEstrutura[];
   categoria: string;
+  status?: 'ABERTA' | 'PREENCHIDA' | 'CONCLUIDA' | 'CANCELADA';
   rua: string;
   numero: string;
   complemento?: string | null;
@@ -34,11 +36,27 @@ function calcDuracaoHoras(inicio: string, fim: string) {
   return mins / 60;
 }
 
+function formatDataBR(iso: string) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+}
+
 function formatQuando(dataIso: string) {
   const semData = new Date(dataIso)
     .toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: 'short' })
     .replace(/\./g, '');
   return semData.charAt(0).toUpperCase() + semData.slice(1);
+}
+
+// Combina o status salvo com a data/hora do plantão — uma vaga "Aberta" cuja
+// data já passou sem ninguém preenchido também conta como encerrada.
+function statusVagaInfo(vaga: VagaDetalheData): { label: string; className: string; dotClassName: string } | null {
+  if (!vaga.status) return null;
+  if (vaga.status === 'CANCELADA') return { label: 'Cancelada', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
+  if (vaga.status === 'CONCLUIDA') return { label: 'Concluída', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
+  if (vaga.status === 'PREENCHIDA') return { label: 'Aguardando presença', className: 'bg-white text-amber-700', dotClassName: 'bg-amber-500' };
+  if (plantaoEncerrado(vaga)) return { label: 'Encerrada', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
+  return { label: 'Aberta', className: 'bg-white text-primaryDeep', dotClassName: 'bg-primary' };
 }
 
 export function VagaDetalheView({
@@ -61,6 +79,25 @@ export function VagaDetalheView({
 
   const mostrarCta = !!(onAction && actionLabel);
   const [fotoAberta, setFotoAberta] = useState<FotoEstrutura | null>(null);
+  const status = statusVagaInfo(vaga);
+
+  const [avaliacoesClinica, setAvaliacoesClinica] = useState<AvaliacaoClinica[]>([]);
+  const [avaliacoesCarregadas, setAvaliacoesCarregadas] = useState(false);
+  const avaliacoesRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setAvaliacoesCarregadas(false);
+    setAvaliacoesClinica([]);
+    if (!vaga.clinicaId) return;
+    getUltimasAvaliacoesClinica(vaga.clinicaId)
+      .then(setAvaliacoesClinica)
+      .catch(() => {})
+      .finally(() => setAvaliacoesCarregadas(true));
+  }, [vaga.clinicaId]);
+
+  function scrollParaAvaliacoes() {
+    avaliacoesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   return (
     <div className="max-w-[1080px] mx-auto p-8">
@@ -70,6 +107,12 @@ export function VagaDetalheView({
 
       <div className="flex items-center gap-2 flex-wrap mb-2.5">
         <span className="text-white bg-white/15 text-xs font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">{vaga.categoria}</span>
+        {status && (
+          <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold pl-2 pr-2.5 py-1 rounded-full ${status.className}`}>
+            <span className={`w-[6px] h-[6px] rounded-full shrink-0 ${status.dotClassName}`} />
+            {status.label}
+          </span>
+        )}
         {vaga.perto && <span className="bg-secondary text-white text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full">Perto de você</span>}
       </div>
 
@@ -89,10 +132,20 @@ export function VagaDetalheView({
           <h1 className="text-white text-2xl font-extrabold mb-1">{vaga.clinica || 'Detalhes da vaga'}</h1>
           <div className="text-white/90 text-sm font-bold">
             {vaga.notaMedia && vaga.totalAvaliacoes ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
-                <span className="text-white/65 font-semibold">({vaga.totalAvaliacoes} avaliações)</span>
-              </span>
+              avaliacoesClinica.length > 0 ? (
+                <button
+                  onClick={scrollParaAvaliacoes}
+                  className="inline-flex items-center gap-1.5 -m-1 p-1 rounded-full hover:bg-white/10 transition-colors"
+                >
+                  <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
+                  <span className="text-white/65 font-semibold hover:underline">({vaga.totalAvaliacoes} avaliações)</span>
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
+                  <span className="text-white/65 font-semibold">({vaga.totalAvaliacoes} avaliações)</span>
+                </span>
+              )
             ) : (
               <span className="text-white/70 font-semibold">Sem avaliações ainda</span>
             )}
@@ -206,6 +259,26 @@ export function VagaDetalheView({
         <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
           <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-2">Descrição da vaga</div>
           <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{vaga.descricao}</div>
+        </div>
+      )}
+
+      {vaga.clinicaId && avaliacoesCarregadas && (
+        <div ref={avaliacoesRef} className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
+          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-1">Últimas 5 avaliações</div>
+          {avaliacoesClinica.length === 0 ? (
+            <div className="text-sm text-gray-400 py-3">Essa clínica ainda não tem avaliações de outros profissionais.</div>
+          ) : (
+            avaliacoesClinica.map((a) => (
+              <div key={a.id} className="py-3.5 border-b border-gray-100 last:border-b-0 last:pb-0 first:pt-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[13.5px] font-extrabold text-ink">{a.profissionalNome}</div>
+                  <div className="text-amber-500 text-sm tracking-widest shrink-0">{'★'.repeat(a.nota)}{'☆'.repeat(5 - a.nota)}</div>
+                </div>
+                {a.comentario && <div className="text-[13.5px] leading-relaxed text-gray-700 mt-1">{a.comentario}</div>}
+                {a.data && <div className="text-xs text-gray-400 mt-1.5">Plantão de {formatDataBR(a.data)}</div>}
+              </div>
+            ))
+          )}
         </div>
       )}
 

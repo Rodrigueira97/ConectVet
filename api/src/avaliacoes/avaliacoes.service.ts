@@ -116,6 +116,31 @@ export class AvaliacoesService {
     return mapa;
   }
 
+  /** Últimas avaliações (feitas por profissionais) recebidas por uma clínica. */
+  async ultimasPorClinica(clinicaId: string, limite = 5) {
+    const avaliacoes = await this.prisma.avaliacao.findMany({
+      where: {
+        autor: AvaliacaoAutor.PROFISSIONAL,
+        candidatura: { vaga: { clinicaId } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limite,
+      include: {
+        profissional: { select: { nome: true } },
+        candidatura: { select: { vaga: { select: { data: true } } } },
+      },
+    });
+
+    return avaliacoes.map((a) => ({
+      id: a.id,
+      nota: a.nota,
+      comentario: a.comentario,
+      profissionalNome: a.profissional.nome,
+      data: a.candidatura.vaga.data,
+      createdAt: a.createdAt,
+    }));
+  }
+
   /** Nota média (dada por profissionais) para cada clínica informada. */
   async mediaPorClinicas(clinicaIds: string[]) {
     const ids = [...new Set(clinicaIds)];
