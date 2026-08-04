@@ -163,7 +163,7 @@ export type Candidatura = {
   id: string;
   vagaId: string;
   profissionalId: string;
-  status: 'PENDENTE' | 'ACEITO' | 'RECUSADO';
+  status: 'PENDENTE' | 'ACEITO' | 'RECUSADO' | 'DESISTIU';
   createdAt: string;
   profissional?: ProfissionalResumo;
   vaga?: Vaga;
@@ -375,6 +375,10 @@ export function cancelarCandidatura(id: string) {
   return request<{ ok: true }>(`/candidaturas/${id}`, { method: 'DELETE' });
 }
 
+export function desistirCandidatura(id: string) {
+  return patch<{ ok: true }>(`/candidaturas/${id}/desistir`);
+}
+
 // ---------- Pagamentos ----------
 
 export function listarPagamentos() {
@@ -412,7 +416,9 @@ export type NotificacaoTipo =
   | 'CANDIDATURA_RECUSADA'
   | 'VAGA_PREENCHIDA_OUTRO'
   | 'PAGAMENTO_LIBERADO'
-  | 'AVALIACAO_RECEBIDA';
+  | 'AVALIACAO_RECEBIDA'
+  | 'PROFISSIONAL_DESISTIU'
+  | 'VAGA_REABERTA';
 
 export type Notificacao = {
   id: string;

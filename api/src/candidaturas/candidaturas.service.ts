@@ -17,6 +17,22 @@ import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 const TAXA_PLATAFORMA = 0.05;
 
+// Só dá pra desistir antes do plantão começar — depois disso já é um caso de
+// não comparecimento (fluxo diferente, que não reabre a vaga). Mesmo critério
+// de fuso horário (America/Sao_Paulo) usado no front pra "hoje"/"agora".
+function plantaoAindaNaoComecou(vaga: { data: Date; horaInicio: string }): boolean {
+  const hojeBrasil = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const dataVaga = vaga.data.toISOString().slice(0, 10);
+  if (dataVaga > hojeBrasil) return true;
+  if (dataVaga < hojeBrasil) return false;
+  const agoraBrasil = new Date().toLocaleTimeString('en-GB', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return agoraBrasil < vaga.horaInicio;
+}
+
 @Injectable()
 export class CandidaturasService {
   constructor(
@@ -213,6 +229,83 @@ export class CandidaturasService {
     }
 
     return pagamento;
+  }
+
+  /**
+   * Desistência de uma candidatura já aceita, pelo próprio profissional — só
+   * antes do plantão começar. Reabre a vaga (ainda dá tempo de achar outro
+   * profissional) e devolve pra PENDENTE quem tinha sido recusado só porque
+   * essa candidatura foi aceita, já que a constraint única de candidatura por
+   * vaga+profissional impede que eles se candidatem de novo do zero.
+   */
+  async desistir(profissionalUserId: string, candidaturaId: string) {
+    const profissional = await this.prisma.profissional.findUniqueOrThrow({
+      where: { userId: profissionalUserId },
+    });
+    const candidatura = await this.prisma.candidatura.findUnique({
+      where: { id: candidaturaId },
+      include: { vaga: { include: { clinica: true } } },
+    });
+    if (!candidatura)
+      throw new NotFoundException('Candidatura não encontrada.');
+    if (candidatura.profissionalId !== profissional.id) {
+      throw new ForbiddenException('Esta candidatura não pertence a você.');
+    }
+    if (candidatura.status !== CandidaturaStatus.ACEITO) {
+      throw new ConflictException(
+        'Só é possível desistir de uma candidatura aceita.',
+      );
+    }
+    if (!plantaoAindaNaoComecou(candidatura.vaga)) {
+      throw new ConflictException(
+        'O plantão já começou — não é mais possível desistir por aqui.',
+      );
+    }
+
+    const recusadosParaReabrir = await this.prisma.candidatura.findMany({
+      where: { vagaId: candidatura.vagaId, status: CandidaturaStatus.RECUSADO },
+      include: { profissional: { select: { userId: true } } },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.candidatura.update({
+        where: { id: candidaturaId },
+        data: { status: CandidaturaStatus.DESISTIU },
+      });
+
+      if (recusadosParaReabrir.length) {
+        await tx.candidatura.updateMany({
+          where: { id: { in: recusadosParaReabrir.map((c) => c.id) } },
+          data: { status: CandidaturaStatus.PENDENTE },
+        });
+      }
+
+      // Nenhum valor chegou a ser pago de fato (RETIDO é só controle interno
+      // hoje, sem gateway) — o registro some junto com a desistência, pra
+      // abrir espaço pro pagamento da próxima aceitação nessa mesma vaga.
+      await tx.pagamento.deleteMany({ where: { candidaturaId } });
+
+      await tx.vaga.update({
+        where: { id: candidatura.vagaId },
+        data: { status: VagaStatus.ABERTA },
+      });
+    });
+
+    const clinicaNome = candidatura.vaga.clinica.nome;
+    await this.notificacoesService.criar(
+      candidatura.vaga.clinica.userId,
+      NotificacaoTipo.PROFISSIONAL_DESISTIU,
+      `${profissional.nome} desistiu do plantão marcado — a vaga já está aberta de novo.`,
+    );
+    for (const c of recusadosParaReabrir) {
+      await this.notificacoesService.criar(
+        c.profissional.userId,
+        NotificacaoTipo.VAGA_REABERTA,
+        `A vaga em ${clinicaNome} reabriu — você pode ser considerado de novo.`,
+      );
+    }
+
+    return { ok: true };
   }
 
   private async buscarComDono(clinicaUserId: string, candidaturaId: string) {

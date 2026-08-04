@@ -42,6 +42,12 @@ export class CandidaturasController {
     return this.candidaturasService.cancelar(user.userId, id);
   }
 
+  @Roles(Role.PROFISSIONAL)
+  @Patch(':id/desistir')
+  desistir(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.candidaturasService.desistir(user.userId, id);
+  }
+
   @Roles(Role.CLINICA)
   @Get('vaga/:vagaId')
   candidatosDaVaga(

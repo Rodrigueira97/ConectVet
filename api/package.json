@@ -19,6 +19,7 @@
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio",
     "limpar:uploads": "ts-node -r tsconfig-paths/register scripts/limpar-uploads.ts",
+    "whatsapp:template": "ts-node -r tsconfig-paths/register scripts/whatsapp-template.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

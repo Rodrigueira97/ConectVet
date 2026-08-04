@@ -1,7 +1,7 @@
 'use client';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { getNotificacoes, marcarNotificacoesLidas, Notificacao, NotificacaoTipo } from '@/lib/api';
-import { BellIcon, CheckCircleIcon, MoneyIcon, HeartIcon, XCircleIcon } from './icons';
+import { BellIcon, CheckCircleIcon, MoneyIcon, HeartIcon, XCircleIcon, WarningIcon } from './icons';
 
 const ICON_POR_TIPO: Record<NotificacaoTipo, { icon: (c: string) => ReactNode; bg: string; fg: string }> = {
   CANDIDATURA_ACEITA: { icon: (c) => <CheckCircleIcon className={c} />, bg: 'bg-primaryTint', fg: 'text-primaryDeep' },
@@ -9,6 +9,8 @@ const ICON_POR_TIPO: Record<NotificacaoTipo, { icon: (c: string) => ReactNode; b
   VAGA_PREENCHIDA_OUTRO: { icon: (c) => <XCircleIcon className={c} />, bg: 'bg-gray-100', fg: 'text-gray-500' },
   PAGAMENTO_LIBERADO: { icon: (c) => <MoneyIcon className={c} />, bg: 'bg-amber-100', fg: 'text-amber-700' },
   AVALIACAO_RECEBIDA: { icon: (c) => <HeartIcon className={c} />, bg: 'bg-amber-100', fg: 'text-amber-700' },
+  PROFISSIONAL_DESISTIU: { icon: (c) => <WarningIcon className={c} />, bg: 'bg-amber-100', fg: 'text-amber-700' },
+  VAGA_REABERTA: { icon: (c) => <BellIcon className={c} />, bg: 'bg-primaryTint', fg: 'text-primaryDeep' },
 };
 
 function tempoRelativo(iso: string) {

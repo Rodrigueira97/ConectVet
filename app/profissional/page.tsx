@@ -1,7 +1,7 @@
 'use client';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { buildEndereco, mapsLink, onlyDigits, hojeBrasil, somarDiasISO, agoraBrasil, plantaoEncerrado } from '@/lib/mockData';
+import { buildEndereco, mapsLink, onlyDigits, hojeBrasil, somarDiasISO, agoraBrasil, plantaoEncerrado, plantaoAindaNaoComecou } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import {
@@ -24,7 +24,7 @@ import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS,
   Vaga, Candidatura, Profissional, Avaliacao,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
-  getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura,
+  getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura, desistirCandidatura,
 } from '@/lib/api';
 
 const VAGAS_POR_PAGINA = 6;
@@ -81,7 +81,7 @@ function motivoVagaFechada(v: { status: string }) {
 
 const FAVORITOS_KEY = 'conectvet_vagas_favoritas';
 
-type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'RECUSADO' | 'ENCERRADA';
+type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'RECUSADO' | 'ENCERRADA' | 'DESISTIU';
 
 function statusDaCandidatura(c: Candidatura): StatusCandidatura {
   if (c.status === 'ACEITO') return c.vaga?.status === 'CONCLUIDA' ? 'CONCLUIDA' : 'ACEITO';
@@ -117,6 +117,13 @@ function passosDaCandidatura(c: Candidatura, status: StatusCandidatura): PassoJo
       { label: 'Enviada', state: 'done' },
       { label: 'Em análise', state: 'done' },
       { label: 'Aceita', state: 'current' },
+    ];
+  }
+  if (status === 'DESISTIU') {
+    return [
+      { label: 'Enviada', state: 'done' },
+      { label: 'Aceita', state: 'done' },
+      { label: 'Você desistiu', state: 'fail' },
     ];
   }
   return [
@@ -268,6 +275,8 @@ function ProfissionalPageInner() {
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
   const [cancelandoProcessandoId, setCancelandoProcessandoId] = useState<string | null>(null);
+  const [desistindoId, setDesistindoId] = useState<string | null>(null);
+  const [desistindoProcessandoId, setDesistindoProcessandoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getToken()) { router.push('/'); return; }
@@ -337,6 +346,20 @@ function ProfissionalPageInner() {
     }
   }
 
+  async function confirmarDesistencia(candidaturaId: string) {
+    setDesistindoProcessandoId(candidaturaId);
+    try {
+      await desistirCandidatura(candidaturaId);
+      setCandidaturas((prev) => prev.map((c) => (c.id === candidaturaId ? { ...c, status: 'DESISTIU' } : c)));
+      setDesistindoId(null);
+      toast.success('Você desistiu do plantão', { message: 'A vaga já está aberta de novo pra outros profissionais.' });
+    } catch (err) {
+      toast.error('Não foi possível registrar a desistência', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setDesistindoProcessandoId(null);
+    }
+  }
+
   const regioesTokens = (perfil?.regioesAtendimento || '')
     .split(/[,\s]+/)
     .map((t) => t.trim().toLowerCase())
@@ -387,6 +410,7 @@ function ProfissionalPageInner() {
     CONCLUIDA: candidaturasComStatus.filter((c) => c.statusExibido === 'CONCLUIDA').length,
     RECUSADO: candidaturasComStatus.filter((c) => c.statusExibido === 'RECUSADO').length,
     ENCERRADA: candidaturasComStatus.filter((c) => c.statusExibido === 'ENCERRADA').length,
+    DESISTIU: candidaturasComStatus.filter((c) => c.statusExibido === 'DESISTIU').length,
   };
 
   function selecionarFiltroCandidaturas(f: 'TODAS' | StatusCandidatura) {
@@ -861,7 +885,7 @@ function ProfissionalPageInner() {
 
             <div className="flex gap-2 flex-wrap mb-5">
               {([
-                ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['RECUSADO', 'Recusadas'], ['ENCERRADA', 'Encerradas'],
+                ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['RECUSADO', 'Recusadas'], ['ENCERRADA', 'Encerradas'], ['DESISTIU', 'Desistências'],
               ] as const).map(([key, label]) => (
                 <button
                   key={key}
@@ -881,7 +905,7 @@ function ProfissionalPageInner() {
             <div className="flex flex-col gap-[14px]">
               {candidaturasPaginadas.map((c) => {
                 const status = c.statusExibido;
-                const fechada = status === 'RECUSADO' || status === 'ENCERRADA';
+                const fechada = status === 'RECUSADO' || status === 'ENCERRADA' || status === 'DESISTIU';
                 const v = c.vaga;
                 const local = v ? [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ') : '';
                 const STATUS_CHIP: Record<StatusCandidatura, { label: string; className: string }> = {
@@ -890,6 +914,7 @@ function ProfissionalPageInner() {
                   CONCLUIDA: { label: 'Concluída', className: 'bg-secondary text-white' },
                   RECUSADO: { label: 'Recusada', className: 'bg-gray-100 text-gray-500' },
                   ENCERRADA: { label: 'Encerrada', className: 'bg-gray-100 text-gray-500' },
+                  DESISTIU: { label: 'Desistência', className: 'bg-gray-100 text-gray-500' },
                 };
                 const statusChip = STATUS_CHIP[status];
                 const painelBg =
@@ -988,6 +1013,11 @@ function ProfissionalPageInner() {
                           <LockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> {motivoEncerradaLabel(c)}
                         </div>
                       )}
+                      {status === 'DESISTIU' && (
+                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-gray-500">
+                          <CloseIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> Você desistiu desse plantão antes da data — a vaga voltou a ficar aberta pra outro profissional.
+                        </div>
+                      )}
                     </div>
 
                     {status === 'CONCLUIDA' && (
@@ -1022,6 +1052,32 @@ function ProfissionalPageInner() {
                         <div className="flex justify-end">
                           <button onClick={() => setCancelandoId(c.id)} className="text-xs font-bold text-danger inline-flex items-center gap-1 hover:underline">
                             <CloseIcon className="w-3 h-3" /> Cancelar candidatura
+                          </button>
+                        </div>
+                      )
+                    )}
+
+                    {status === 'ACEITO' && v && plantaoAindaNaoComecou(v) && (
+                      desistindoId === c.id ? (
+                        <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+                          <div className="text-[12.5px] font-semibold text-red-800 mb-2">Desistir desse plantão? A vaga volta a ficar aberta pra outro profissional, e a clínica é avisada.</div>
+                          <div className="flex gap-2">
+                            <button
+                              disabled={desistindoProcessandoId === c.id}
+                              onClick={() => confirmarDesistencia(c.id)}
+                              className="px-3.5 py-1.5 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-60"
+                            >
+                              {desistindoProcessandoId === c.id ? 'Enviando...' : 'Sim, desistir'}
+                            </button>
+                            <button onClick={() => setDesistindoId(null)} className="px-3.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 text-xs font-bold">
+                              Voltar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end">
+                          <button onClick={() => setDesistindoId(c.id)} className="text-xs font-bold text-danger inline-flex items-center gap-1 hover:underline">
+                            <CloseIcon className="w-3 h-3" /> Desistir do plantão
                           </button>
                         </div>
                       )

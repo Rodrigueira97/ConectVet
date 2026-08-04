@@ -33,6 +33,10 @@ enum CandidaturaStatus {
   PENDENTE
   ACEITO
   RECUSADO
+  // Profissional aceito que desistiu antes da data do plantão — diferente de
+  // RECUSADO (que é a clínica recusando) e diferente de não comparecer
+  // (que só se sabe depois do plantão já ter passado, e não reabre a vaga).
+  DESISTIU
 }
 
 enum PagamentoStatus {
@@ -51,6 +55,8 @@ enum NotificacaoTipo {
   VAGA_PREENCHIDA_OUTRO
   PAGAMENTO_LIBERADO
   AVALIACAO_RECEBIDA
+  PROFISSIONAL_DESISTIU
+  VAGA_REABERTA
 }
 
 model User {

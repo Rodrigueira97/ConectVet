@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
@@ -925,49 +925,94 @@ function ClinicaPageInner() {
                     <div
                       key={mv.id}
                       onClick={() => abrirDetalheVaga(mv.id)}
-                      className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150"
+                      className={`flex flex-col gap-3 bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150 ${expirada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}
                     >
-                      <div className="flex justify-between items-start gap-3">
-                        <div>
-                          <div className="text-xs font-bold text-primary uppercase">{CATEGORIA_LABEL[mv.categoria]}</div>
-                          <a
-                            href={mapsLink(local)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-start gap-1 text-lg font-extrabold mt-1 hover:text-primary hover:underline"
-                          >
-                            <PinIcon className="w-4 h-4 shrink-0 text-primary mt-1.5" />
-                            {local}
-                          </a>
-                        </div>
-                        <div className={badge.className}>{badge.label}</div>
+                      {/* Categoria e status, mesma linguagem de chip do card de vaga do profissional */}
+                      <div className="flex gap-1.5 flex-wrap">
+                        <span className="bg-primaryTint text-primaryDeep text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">
+                          {CATEGORIA_LABEL[mv.categoria]}
+                        </span>
+                        <span className={`${badge.className} rounded-full`}>{badge.label}</span>
                       </div>
-                      <div className="flex gap-2 flex-wrap mt-3">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg">Data <b className="text-ink font-extrabold">{formatDataBR(mv.data)}</b></span>
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg">Horário <b className="text-ink font-extrabold">{mv.horaInicio} - {mv.horaFim}</b></span>
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-primaryDeep bg-primaryTint px-2.5 py-1 rounded-lg">R$ {mv.valor}</span>
-                      </div>
-                      {mv.descricao && <div className="text-sm text-gray-600 mt-3">{mv.descricao}</div>}
-                      {mv.status === 'PREENCHIDA' && mv.pagamento && mv.pagamento.status === 'RETIDO' && (
-                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2.5 justify-between flex-wrap bg-amber-50 rounded-xl px-3.5 py-3 mt-3">
-                          <div className="flex items-center gap-2 text-xs font-bold text-amber-700">
-                            <WarningIcon className="w-4 h-4 shrink-0" />
-                            {hired?.profissional?.nome || 'O profissional'} concluiu o plantão — confirme a presença pra liberar o pagamento.
+
+                      <a
+                        href={mapsLink(local)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-start gap-1.5 text-lg font-extrabold hover:text-primary hover:underline"
+                      >
+                        <PinIcon className="w-4 h-4 shrink-0 text-primary mt-1" />
+                        {local}
+                      </a>
+
+                      {/* Mesma faixa de fatos com ícones usada no resto do app */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 rounded-[13px] bg-gray-50 overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+                          <CalendarIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                          <div className="flex items-baseline gap-1.5 min-w-0">
+                            <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Data</span>
+                            <span className="text-[12.5px] font-bold text-ink truncate">{formatDataBR(mv.data)}</span>
                           </div>
-                          <button onClick={() => handleLiberarPagamento(mv.pagamento!.id)} className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-extrabold shrink-0">Confirmar presença e liberar pagamento</button>
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+                          <ClockIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                          <div className="flex items-baseline gap-1.5 min-w-0">
+                            <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Horário</span>
+                            <span className="text-[12.5px] font-bold text-ink truncate">{mv.horaInicio} – {mv.horaFim}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-2.5">
+                          <MoneyIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                          <div className="flex items-baseline gap-1.5 min-w-0">
+                            <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Valor</span>
+                            <span className="text-[12.5px] font-bold text-ink truncate">R$ {mv.valor}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {mv.descricao && <div className="text-[12.5px] text-gray-500 leading-relaxed line-clamp-2">{mv.descricao}</div>}
+
+                      {mv.status === 'PREENCHIDA' && mv.pagamento && mv.pagamento.status === 'RETIDO' && (
+                        <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2.5 bg-amber-50 rounded-[13px] px-3.5 py-3">
+                          <div className="flex items-start gap-2 text-xs font-bold text-amber-700">
+                            <WarningIcon className="w-4 h-4 shrink-0 mt-px" />
+                            {hired?.profissional?.nome || 'O profissional'} concluiu o plantão — confirme se ele compareceu.
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            <button onClick={() => handleLiberarPagamento(mv.pagamento!.id)} className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-extrabold">
+                              Confirmar presença
+                            </button>
+                            {/* Fluxo de "não compareceu" ainda em desenho (depende de como o pagamento vai
+                                funcionar quando integrarmos um gateway de verdade) — botão fica visível,
+                                sem ação por enquanto. */}
+                            <button className="px-4 py-2 rounded-lg bg-white border border-red-200 text-danger text-xs font-extrabold">
+                              Não compareceu
+                            </button>
+                          </div>
                         </div>
                       )}
-                      <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100 flex-wrap gap-2">
-                        <div className="text-sm text-gray-500">{(mv.candidaturas || []).length === 0 ? 'Nenhum candidato ainda' : `${mv.candidaturas!.length} candidato(s) · ${pend} pendente(s)`}</div>
-                        <div className="flex gap-2 flex-wrap">
+
+                      <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center pt-3 border-t border-gray-100 flex-wrap gap-2">
+                        <div className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-gray-500">
+                          <UsersIcon className="w-[15px] h-[15px] text-gray-400" />
+                          {(mv.candidaturas || []).length === 0 ? (
+                            'Nenhum candidato ainda'
+                          ) : (
+                            <>
+                              <b className="text-ink font-extrabold">{mv.candidaturas!.length}</b> candidato{mv.candidaturas!.length > 1 ? 's' : ''}
+                              {pend > 0 && <span className="text-amber-600"> · {pend} pendente{pend > 1 ? 's' : ''}</span>}
+                            </>
+                          )}
+                        </div>
+                        <div className="flex gap-1 flex-wrap items-center">
                           {mv.status === 'ABERTA' && !expirada && (mv.candidaturas || []).length === 0 && (
-                            <button onClick={() => editarVaga(mv)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Editar</button>
+                            <button onClick={() => editarVaga(mv)} className="px-3 py-2 rounded-lg text-gray-500 text-xs font-bold hover:bg-gray-50">Editar</button>
                           )}
                           {mv.status === 'ABERTA' && !expirada && (
-                            <button onClick={() => cancelarVaga(mv.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold text-danger">Cancelar</button>
+                            <button onClick={() => cancelarVaga(mv.id)} className="px-3 py-2 rounded-lg text-danger text-xs font-bold hover:bg-red-50">Cancelar</button>
                           )}
-                          <button onClick={() => irParaCandidatos(mv.id)} className="px-4 py-2 rounded-lg bg-secondary text-white text-sm font-bold">Ver candidatos</button>
+                          <button onClick={() => irParaCandidatos(mv.id)} className="px-4 py-2 rounded-lg bg-secondary text-white text-xs font-extrabold">Ver candidatos</button>
                         </div>
                       </div>
                       {mv.status === 'CONCLUIDA' && hired && (

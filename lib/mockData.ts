@@ -55,6 +55,17 @@ export function plantaoEncerrado(v: { data: string; horaInicio: string; horaFim:
   return agoraBrasil() >= v.horaFim;
 }
 
+// Uma desistência (do profissional aceito) só faz sentido antes do plantão
+// começar — depois disso já é caso de não comparecimento, que segue outro
+// fluxo (não reabre a vaga, só encerra).
+export function plantaoAindaNaoComecou(v: { data: string; horaInicio: string }) {
+  const dataInicio = v.data.slice(0, 10);
+  const hoje = hojeBrasil();
+  if (dataInicio > hoje) return true;
+  if (dataInicio < hoje) return false;
+  return agoraBrasil() < v.horaInicio;
+}
+
 export function buildEndereco(form: {
   rua?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; cidade?: string | null; estado?: string | null;
 }) {
@@ -81,6 +92,7 @@ export function statusBadge(status: string) {
     pendente: ['bg-amber-100', 'text-amber-700', 'Pendente'],
     aceito: ['bg-primaryTint', 'text-primaryDeep', 'Aceito'],
     recusado: ['bg-danger/10', 'text-danger', 'Recusado'],
+    desistiu: ['bg-gray-100', 'text-gray-500', 'Desistiu'],
     retido: ['bg-amber-100', 'text-amber-700', 'Retido'],
     liberado: ['bg-primaryTint', 'text-primaryDeep', 'Liberado'],
   };
