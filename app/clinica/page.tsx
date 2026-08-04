@@ -18,7 +18,7 @@ import { DateField } from '@/app/components/DateField';
 import { TimeField } from '@/app/components/TimeField';
 import { useToast } from '@/app/components/Toast';
 import {
-  ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE,
+  ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE, isVeterinarioFormado,
   Vaga, Candidatura, Clinica, Avaliacao,
   getClinicaMe, updateClinicaMe, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
   getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
@@ -1091,7 +1091,8 @@ function ClinicaPageInner() {
                             <div className="mt-0.5"><RatingBadge notaMedia={c.profissional?.notaMedia} totalAvaliacoes={c.profissional?.totalAvaliacoes} /></div>
                             <div className="text-sm text-gray-500 mt-1">
                               {c.profissional && CATEGORIA_LABEL[c.profissional.funcao]}
-                              {c.profissional?.especialidade ? ` (${c.profissional.especialidade})` : ''} · {c.profissional?.areaAtuacao}
+                              {c.profissional?.especialidade ? ` (${c.profissional.especialidade})` : ''}
+                              {isVeterinarioFormado(c.profissional?.funcao) && c.profissional?.areaAtuacao ? ` · ${c.profissional.areaAtuacao}` : ''}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">Região: {c.profissional?.regioesAtendimento}</div>
                           </div>

@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CATEGORIAS, ESTADOS_CIDADES, onlyDigits, hojeBrasil } from '@/lib/mockData';
+import { CATEGORIAS, ESTADOS_CIDADES, isVeterinarioFormado, onlyDigits, hojeBrasil } from '@/lib/mockData';
 import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefone } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
-import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE, ESPECIALIDADES_VETERINARIAS } from '@/lib/api';
+import { uploadArquivos, registrarClinica, registrarProfissional, ApiError, CATEGORIA_VALUE, ESPECIALIDADES_VETERINARIAS } from '@/lib/api';
 import { FileField } from '@/app/components/FileField';
 import { DateField } from '@/app/components/DateField';
 import { BuildingIcon, CheckIcon, CloseIcon, PlusIcon, UserIcon } from '@/app/components/icons';
@@ -233,7 +233,7 @@ export default function CadastroPage() {
       if (prof.funcao && !comprovante) e.comprovante = `Anexe: ${COMPROVACAO_POR_FUNCAO[prof.funcao].label}.`;
       if (!idDocFrente) e.idDocFrente = 'Anexe a foto da frente do documento de identidade.';
       if (!idDocVerso) e.idDocVerso = 'Anexe a foto do verso do documento de identidade.';
-      if (!prof.areaAtuacao.trim()) e.areaAtuacao = 'Informe sua área de atuação.';
+      if (isVeterinarioFormado(prof.funcao) && !prof.areaAtuacao.trim()) e.areaAtuacao = 'Informe sua área de atuação.';
       if (!prof.regioes.trim()) e.regioes = 'Informe as regiões de atendimento.';
     }
     return e;
@@ -253,7 +253,7 @@ export default function CadastroPage() {
         const fotosEstrutura = urlsFotos.map((url, i) => ({ url, descricao: fotos[i].descricao || undefined }));
         const logoUrl = logo ? (await uploadArquivos([logo]))[0] : undefined;
 
-        const { accessToken, role: contaRole } = await registrarClinica({
+        await registrarClinica({
           email, senha,
           nome: clinica.nome,
           cnpj: onlyDigits(clinica.cnpj),
@@ -274,15 +274,14 @@ export default function CadastroPage() {
           sistemas: clinica.sistemas || undefined,
           observacoes: clinica.observacoes || undefined,
         });
-        setSession(accessToken, contaRole);
-        router.push('/clinica');
+        router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}&enviado=1`);
       } else {
         const [comprovanteUrl] = await uploadArquivos([comprovante as File]);
         const idDocUrls = await uploadArquivos([idDocFrente as File, idDocVerso as File]);
         const curriculoUrl = curriculo ? (await uploadArquivos([curriculo]))[0] : undefined;
         const fotoUrl = fotoPerfil ? (await uploadArquivos([fotoPerfil]))[0] : undefined;
 
-        const { accessToken, role: contaRole } = await registrarProfissional({
+        await registrarProfissional({
           email, senha,
           nome: prof.nome,
           documento: onlyDigits(prof.doc),
@@ -297,12 +296,11 @@ export default function CadastroPage() {
           idDocUrls,
           curriculoUrl,
           fotoUrl,
-          areaAtuacao: prof.areaAtuacao,
+          areaAtuacao: isVeterinarioFormado(prof.funcao) ? prof.areaAtuacao : undefined,
           regioesAtendimento: prof.regioes,
           observacoes: prof.observacoes || undefined,
         });
-        setSession(accessToken, contaRole);
-        router.push('/profissional');
+        router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}&enviado=1`);
       }
     } catch (err) {
       setApiError(err instanceof ApiError ? err.message : 'Não foi possível concluir o cadastro. Tente novamente.');
@@ -557,7 +555,9 @@ export default function CadastroPage() {
             </SectionCard>
 
             <SectionCard id="atuacao" sectionRef={(el) => { sectionRefs.current.atuacao = el; }} title="Atuação">
-              <TextField label="Área de atuação" value={prof.areaAtuacao} onChange={(v) => pField('areaAtuacao', v)} error={errors.areaAtuacao} placeholder="Ex.: Clínica geral, cirurgia, dermatologia" required />
+              {isVeterinarioFormado(prof.funcao) && (
+                <TextField label="Área de atuação" value={prof.areaAtuacao} onChange={(v) => pField('areaAtuacao', v)} error={errors.areaAtuacao} placeholder="Ex.: Clínica geral, cirurgia, dermatologia" required />
+              )}
               <TextField label="Regiões de atendimento" value={prof.regioes} onChange={(v) => pField('regioes', v)} error={errors.regioes} placeholder="Ex.: Pinheiros, Zona Oeste - SP" required />
               <TextArea label="Observações e demais informações" value={prof.observacoes} onChange={(v) => pField('observacoes', v)} />
             </SectionCard>

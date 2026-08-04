@@ -13,6 +13,8 @@ import { RegisterClinicaDto } from './dto/register-clinica.dto';
 import { RegisterProfissionalDto } from './dto/register-profissional.dto';
 import { LoginDto } from './dto/login.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import { ConfirmarEmailDto } from './dto/confirmar-email.dto';
+import { ReenviarConfirmacaoDto } from './dto/reenviar-confirmacao.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser, AuthUser } from './decorators/current-user.decorator';
 
@@ -34,6 +36,18 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('confirmar-email')
+  confirmarEmail(@Body() dto: ConfirmarEmailDto) {
+    return this.authService.confirmarEmail(dto.token);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('reenviar-confirmacao')
+  reenviarConfirmacao(@Body() dto: ReenviarConfirmacaoDto) {
+    return this.authService.reenviarConfirmacao(dto.email);
   }
 
   @UseGuards(JwtAuthGuard)

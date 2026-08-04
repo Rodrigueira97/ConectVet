@@ -2,6 +2,12 @@ import { Categoria } from './types';
 
 export const CATEGORIAS: Categoria[] = ['Veterinário Clínico', 'Veterinário Especialista', 'Estagiário', 'Auxiliar'];
 
+// Área de atuação só se aplica a veterinários já formados (clínico ou especialista);
+// estagiários e auxiliares ainda não têm registro profissional pra atuar por área.
+export function isVeterinarioFormado(funcao: Categoria | ''): boolean {
+  return funcao === 'Veterinário Clínico' || funcao === 'Veterinário Especialista';
+}
+
 export const MIN_VALORES: Record<Categoria, number> = {
   'Veterinário Clínico': 150,
   'Veterinário Especialista': 250,

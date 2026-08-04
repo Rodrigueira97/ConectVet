@@ -23,6 +23,10 @@ export default function LoginPage() {
       const destino = contaRole === 'CLINICA' ? '/clinica' : contaRole === 'PROFISSIONAL' ? '/profissional' : '/admin';
       router.push(destino);
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'EMAIL_NAO_CONFIRMADO') {
+        router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
       setError(err instanceof ApiError ? err.message : 'Não foi possível entrar. Tente novamente.');
     } finally {
       setLoading(false);

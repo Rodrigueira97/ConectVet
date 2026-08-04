@@ -21,7 +21,7 @@ import { EmptyState } from '@/app/components/EmptyState';
 import { RecorteFotoModal } from '@/app/components/RecorteFotoModal';
 import { useToast } from '@/app/components/Toast';
 import {
-  ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS,
+  ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS, isVeterinarioFormado,
   Vaga, Candidatura, Profissional, Avaliacao,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
   getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura, desistirCandidatura,
@@ -287,7 +287,7 @@ function ProfissionalPageInner() {
         setPerfilForm({
           nome: p.nome, telefone: p.telefone || '', dataNascimento: p.dataNascimento ? p.dataNascimento.slice(0, 10) : '',
           ...especialidadeFormFromProfissional(p),
-          areaAtuacao: p.areaAtuacao, regioesAtendimento: p.regioesAtendimento, observacoes: p.observacoes || '',
+          areaAtuacao: p.areaAtuacao || '', regioesAtendimento: p.regioesAtendimento, observacoes: p.observacoes || '',
         });
         setFeed(f);
         setCandidaturas(c);
@@ -483,7 +483,7 @@ function ProfissionalPageInner() {
         nome: perfilForm.nome,
         telefone: onlyDigits(perfilForm.telefone),
         dataNascimento: perfilForm.dataNascimento || undefined,
-        areaAtuacao: perfilForm.areaAtuacao,
+        ...(isVeterinarioFormado(perfil?.funcao) ? { areaAtuacao: perfilForm.areaAtuacao } : {}),
         regioesAtendimento: perfilForm.regioesAtendimento,
         observacoes: perfilForm.observacoes,
         ...(especialidade !== undefined ? { especialidade } : {}),
@@ -493,7 +493,7 @@ function ProfissionalPageInner() {
       setPerfilForm({
         nome: atualizado.nome, telefone: atualizado.telefone || '', dataNascimento: atualizado.dataNascimento ? atualizado.dataNascimento.slice(0, 10) : '',
         ...especialidadeFormFromProfissional(atualizado),
-        areaAtuacao: atualizado.areaAtuacao, regioesAtendimento: atualizado.regioesAtendimento, observacoes: atualizado.observacoes || '',
+        areaAtuacao: atualizado.areaAtuacao || '', regioesAtendimento: atualizado.regioesAtendimento, observacoes: atualizado.observacoes || '',
       });
       setCurriculoNovo(null);
       setCurriculoRemovido(false);
@@ -1196,11 +1196,15 @@ function ProfissionalPageInner() {
                 </div>
 
                 {/* Sobre */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
-                  <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Sobre</div>
-                  <span className="inline-flex bg-primaryTint text-primaryDeep text-[12.5px] font-bold px-3 py-1.5 rounded-full">{perfil.areaAtuacao}</span>
-                  {perfil.observacoes && <p className="text-sm leading-relaxed text-gray-700 mt-3">{perfil.observacoes}</p>}
-                </div>
+                {(isVeterinarioFormado(perfil.funcao) || perfil.observacoes) && (
+                  <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
+                    <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Sobre</div>
+                    {isVeterinarioFormado(perfil.funcao) && perfil.areaAtuacao && (
+                      <span className="inline-flex bg-primaryTint text-primaryDeep text-[12.5px] font-bold px-3 py-1.5 rounded-full">{perfil.areaAtuacao}</span>
+                    )}
+                    {perfil.observacoes && <p className="text-sm leading-relaxed text-gray-700 mt-3">{perfil.observacoes}</p>}
+                  </div>
+                )}
 
                 {/* Contato */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
@@ -1315,8 +1319,10 @@ function ProfissionalPageInner() {
                   min="1900-01-01"
                   max={hojeBrasil()}
                 />
-                <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Área de atuação</span>
-                  <input value={perfilForm.areaAtuacao} onChange={(e) => setPerfilForm((f) => ({ ...f, areaAtuacao: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" /></label>
+                {isVeterinarioFormado(perfil.funcao) && (
+                  <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Área de atuação</span>
+                    <input value={perfilForm.areaAtuacao} onChange={(e) => setPerfilForm((f) => ({ ...f, areaAtuacao: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" /></label>
+                )}
                 <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Regiões de atendimento</span>
                   <input value={perfilForm.regioesAtendimento} onChange={(e) => setPerfilForm((f) => ({ ...f, regioesAtendimento: e.target.value }))} className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm" /></label>
                 <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Observações e demais informações</span>

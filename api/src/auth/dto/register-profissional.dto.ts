@@ -53,8 +53,9 @@ export class RegisterProfissionalDto {
   @IsString()
   fotoUrl?: string;
 
+  @IsOptional()
   @IsString()
-  areaAtuacao: string;
+  areaAtuacao?: string;
 
   @IsString()
   regioesAtendimento: string;

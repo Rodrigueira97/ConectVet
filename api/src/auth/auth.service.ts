@@ -1,12 +1,16 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { Role } from '../../generated/prisma/enums';
 import { RegisterClinicaDto } from './dto/register-clinica.dto';
 import { RegisterProfissionalDto } from './dto/register-profissional.dto';
@@ -14,17 +18,44 @@ import { LoginDto } from './dto/login.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { Prisma } from '../../generated/prisma/client';
 
+const CONFIRMACAO_VALIDADE_MS = 24 * 60 * 60 * 1000;
+const REENVIO_COOLDOWN_MS = 60 * 1000;
+
 @Injectable()
 export class AuthService {
+  private readonly frontendUrl: string;
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
-  ) {}
+    private mail: MailService,
+    config: ConfigService,
+  ) {
+    this.frontendUrl = (config.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
+  }
 
-  private async assertEmailDisponivel(email: string) {
+  // Cadastro nunca confirmado (emailVerificado = false) não bloqueia uma nova
+  // tentativa — a conta abandonada é apagada pra liberar o e-mail/CNPJ/CPF.
+  // Só bloqueia de fato quando alguém já confirmou o e-mail daquela conta.
+  private async liberarEmailPendente(email: string) {
     const existente = await this.prisma.user.findUnique({ where: { email } });
-    if (existente)
-      throw new ConflictException('Este e-mail já está cadastrado.');
+    if (!existente) return;
+    if (existente.emailVerificado) throw new ConflictException('Este e-mail já está cadastrado.');
+    await this.prisma.user.delete({ where: { id: existente.id } });
+  }
+
+  private async liberarCnpjPendente(cnpj: string) {
+    const clinica = await this.prisma.clinica.findUnique({ where: { cnpj }, include: { user: true } });
+    if (!clinica) return;
+    if (clinica.user.emailVerificado) throw new ConflictException('Este CNPJ já está cadastrado.');
+    await this.prisma.user.delete({ where: { id: clinica.userId } });
+  }
+
+  private async liberarDocumentoPendente(documento: string) {
+    const profissional = await this.prisma.profissional.findUnique({ where: { documento }, include: { user: true } });
+    if (!profissional) return;
+    if (profissional.user.emailVerificado) throw new ConflictException('Este CPF/CNPJ já está cadastrado.');
+    await this.prisma.user.delete({ where: { id: profissional.userId } });
   }
 
   private emitirToken(user: { id: string; email: string; role: string }) {
@@ -38,13 +69,20 @@ export class AuthService {
     };
   }
 
-  async registrarClinica(dto: RegisterClinicaDto) {
-    await this.assertEmailDisponivel(dto.email);
-
-    const cnpjEmUso = await this.prisma.clinica.findUnique({
-      where: { cnpj: dto.cnpj },
+  private async enviarConfirmacao(user: { id: string; email: string }, nome: string) {
+    const token = randomBytes(32).toString('hex');
+    const expira = new Date(Date.now() + CONFIRMACAO_VALIDADE_MS);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerificacaoToken: token, emailVerificacaoExpira: expira },
     });
-    if (cnpjEmUso) throw new ConflictException('Este CNPJ já está cadastrado.');
+    const link = `${this.frontendUrl}/confirmar-email?token=${token}`;
+    await this.mail.enviarConfirmacaoEmail(user.email, nome, link);
+  }
+
+  async registrarClinica(dto: RegisterClinicaDto) {
+    await this.liberarEmailPendente(dto.email);
+    await this.liberarCnpjPendente(dto.cnpj);
 
     const senhaHash = await bcrypt.hash(dto.senha, 10);
 
@@ -79,17 +117,13 @@ export class AuthService {
       },
     });
 
-    return this.emitirToken(user);
+    await this.enviarConfirmacao(user, dto.nome);
+    return { email: user.email };
   }
 
   async registrarProfissional(dto: RegisterProfissionalDto) {
-    await this.assertEmailDisponivel(dto.email);
-
-    const documentoEmUso = await this.prisma.profissional.findUnique({
-      where: { documento: dto.documento },
-    });
-    if (documentoEmUso)
-      throw new ConflictException('Este CPF/CNPJ já está cadastrado.');
+    await this.liberarEmailPendente(dto.email);
+    await this.liberarDocumentoPendente(dto.documento);
 
     const senhaHash = await bcrypt.hash(dto.senha, 10);
 
@@ -119,7 +153,8 @@ export class AuthService {
       },
     });
 
-    return this.emitirToken(user);
+    await this.enviarConfirmacao(user, dto.nome);
+    return { email: user.email };
   }
 
   async login(dto: LoginDto) {
@@ -132,7 +167,51 @@ export class AuthService {
     if (!senhaValida)
       throw new UnauthorizedException('E-mail ou senha inválidos.');
 
+    if (!user.emailVerificado) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'EMAIL_NAO_CONFIRMADO',
+        message: 'Confirme seu e-mail antes de entrar.',
+      });
+    }
+
     return this.emitirToken(user);
+  }
+
+  async confirmarEmail(token: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { emailVerificacaoToken: token },
+    });
+    if (!user) throw new BadRequestException('Link de confirmação inválido.');
+    if (user.emailVerificacaoExpira && user.emailVerificacaoExpira < new Date()) {
+      throw new BadRequestException('Link de confirmação expirado. Solicite um novo e-mail.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerificado: true, emailVerificacaoToken: null, emailVerificacaoExpira: null },
+    });
+    return { ok: true, email: user.email };
+  }
+
+  async reenviarConfirmacao(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { clinica: true, profissional: true },
+    });
+    // Resposta genérica pra não vazar se o e-mail existe ou já foi confirmado.
+    if (!user || user.emailVerificado) return { ok: true };
+
+    const tokenCriadoEm = user.emailVerificacaoExpira
+      ? user.emailVerificacaoExpira.getTime() - CONFIRMACAO_VALIDADE_MS
+      : 0;
+    if (Date.now() - tokenCriadoEm < REENVIO_COOLDOWN_MS) {
+      throw new BadRequestException('Aguarde um minuto antes de reenviar o e-mail.');
+    }
+
+    const nome = user.clinica?.nome ?? user.profissional?.nome ?? 'usuário';
+    await this.enviarConfirmacao(user, nome);
+    return { ok: true };
   }
 
   async alterarSenha(userId: string, dto: AlterarSenhaDto) {
@@ -153,8 +232,9 @@ export class AuthService {
       include: { clinica: true, profissional: true },
     });
     if (!user) throw new UnauthorizedException();
-    const { senhaHash, ...safeUser } = user;
+    const { senhaHash, emailVerificacaoToken, ...safeUser } = user;
     void senhaHash;
+    void emailVerificacaoToken;
     return safeUser;
   }
 }

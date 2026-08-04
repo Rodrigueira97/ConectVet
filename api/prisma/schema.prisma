@@ -67,6 +67,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Login fica bloqueado enquanto emailVerificado = false. O token é gerado
+  // no cadastro e a cada reenvio, e some assim que a confirmação é concluída.
+  emailVerificado        Boolean   @default(false)
+  emailVerificacaoToken  String?   @unique
+  emailVerificacaoExpira DateTime?
+
   clinica       Clinica?
   profissional  Profissional?
   notificacoes  Notificacao[]
@@ -131,7 +137,8 @@ model Profissional {
   curriculoUrl    String?
   fotoUrl         String?
 
-  areaAtuacao        String
+  // Só se aplica a veterinários já formados (VETERINARIO_CLINICO ou VETERINARIO_ESPECIALISTA).
+  areaAtuacao        String?
   regioesAtendimento String
   observacoes        String?
 

@@ -2,9 +2,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333/api';
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -81,7 +83,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const message = Array.isArray(data?.message) ? data.message.join(' ') : data?.message || 'Erro inesperado.';
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, data?.code);
   }
 
   return data as T;
@@ -113,6 +115,12 @@ export const CATEGORIA_VALUE: Record<string, Categoria> = Object.fromEntries(
 ) as Record<string, Categoria>;
 
 export const CATEGORIAS: Categoria[] = ['VETERINARIO_CLINICO', 'VETERINARIO_ESPECIALISTA', 'ESTAGIARIO', 'AUXILIAR'];
+
+// Área de atuação só se aplica a veterinários já formados (clínico ou especialista);
+// estagiários e auxiliares ainda não têm registro profissional pra atuar por área.
+export function isVeterinarioFormado(funcao?: Categoria | string | null): boolean {
+  return funcao === 'VETERINARIO_CLINICO' || funcao === 'VETERINARIO_ESPECIALISTA';
+}
 
 export const MIN_VALORES: Record<Categoria, number> = {
   VETERINARIO_CLINICO: 150,
@@ -153,7 +161,7 @@ export type ProfissionalResumo = {
   nome: string;
   funcao: Categoria;
   especialidade?: string | null;
-  areaAtuacao: string;
+  areaAtuacao?: string | null;
   regioesAtendimento: string;
   notaMedia?: number | null;
   totalAvaliacoes?: number;
@@ -256,7 +264,7 @@ export type Profissional = {
   idDocUrls: string[];
   curriculoUrl?: string | null;
   fotoUrl?: string | null;
-  areaAtuacao: string;
+  areaAtuacao?: string | null;
   regioesAtendimento: string;
   observacoes?: string | null;
   createdAt: string;
@@ -268,12 +276,22 @@ export function login(email: string, senha: string) {
   return post<{ accessToken: string; role: string }>('/auth/login', { email, senha });
 }
 
+// Cadastro não loga o usuário automaticamente — a conta só é ativada depois
+// que o link enviado por e-mail é confirmado (ver /auth/confirmar-email).
 export function registrarClinica(payload: Record<string, unknown>) {
-  return post<{ accessToken: string; role: string }>('/auth/register/clinica', payload);
+  return post<{ email: string }>('/auth/register/clinica', payload);
 }
 
 export function registrarProfissional(payload: Record<string, unknown>) {
-  return post<{ accessToken: string; role: string }>('/auth/register/profissional', payload);
+  return post<{ email: string }>('/auth/register/profissional', payload);
+}
+
+export function confirmarEmail(token: string) {
+  return post<{ ok: true; email: string }>('/auth/confirmar-email', { token });
+}
+
+export function reenviarConfirmacao(email: string) {
+  return post<{ ok: true }>('/auth/reenviar-confirmacao', { email });
 }
 
 export function me() {
