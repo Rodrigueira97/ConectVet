@@ -57,7 +57,6 @@ export function VagaDetalheView({
   const localCurto = [vaga.bairro, vaga.cidade].filter(Boolean).join(', ') || vaga.cidade;
   const valorNum = typeof vaga.valor === 'string' ? parseFloat(vaga.valor) : vaga.valor;
   const horas = calcDuracaoHoras(vaga.horaInicio, vaga.horaFim);
-  const porHora = valorNum / horas;
   const horasLabel = horas % 1 === 0 ? `${horas}h` : `${horas.toFixed(1)}h`;
 
   const mostrarCta = !!(onAction && actionLabel);
@@ -108,7 +107,6 @@ export function VagaDetalheView({
           </div>
           <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-primaryDeep/75 mb-1">Valor do plantão</div>
           <div className="text-[22px] font-extrabold text-ink leading-tight">R$ {valorNum}</div>
-          <div className="text-[13px] font-semibold text-primaryDeep/80 mt-1">≈ R$ {porHora.toFixed(0)}/hora</div>
         </div>
         <div className="bg-primaryTint rounded-2xl p-[18px]">
           <div className="w-[34px] h-[34px] rounded-[10px] bg-primary text-white flex items-center justify-center mb-3">
