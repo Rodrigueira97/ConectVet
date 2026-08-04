@@ -59,7 +59,16 @@ export class MailService {
     const senhaApp = config.get<string>('GMAIL_APP_PASSWORD') || '';
     this.remetente = config.get<string>('MAIL_FROM') || (usuario ? `ConectVet <${usuario}>` : '');
     this.transporter = usuario && senhaApp
-      ? nodemailer.createTransport({ service: 'gmail', auth: { user: usuario, pass: senhaApp } })
+      ? nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user: usuario, pass: senhaApp },
+          // Se o servidor não conseguir alcançar o Gmail (comum em alguns
+          // hosts que restringem SMTP de saída), falha rápido em vez de
+          // ficar pendurado por minutos.
+          connectionTimeout: 10_000,
+          greetingTimeout: 10_000,
+          socketTimeout: 10_000,
+        })
       : null;
   }
 

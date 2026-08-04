@@ -77,7 +77,10 @@ export class AuthService {
       data: { emailVerificacaoToken: token, emailVerificacaoExpira: expira },
     });
     const link = `${this.frontendUrl}/confirmar-email?token=${token}`;
-    await this.mail.enviarConfirmacaoEmail(user.email, nome, link);
+    // Não é "await" de propósito: o SMTP do Gmail pode demorar (ou travar) a
+    // partir do servidor de produção, e isso não pode prender a resposta do
+    // cadastro. O envio roda em segundo plano; erro só vai pro log.
+    void this.mail.enviarConfirmacaoEmail(user.email, nome, link);
   }
 
   async registrarClinica(dto: RegisterClinicaDto) {
