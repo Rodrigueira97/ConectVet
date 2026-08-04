@@ -653,8 +653,8 @@ function ProfissionalPageInner() {
         subtitle="Profissional"
         items={[
           { key: 'home', label: 'Home', icon: <HomeIcon /> },
-          { key: 'favoritas', label: 'Favoritas', icon: <HeartIcon />, count: vagasFavoritas.length },
           { key: 'historico', label: 'Minhas candidaturas', icon: <ClockIcon /> },
+          { key: 'favoritas', label: 'Favoritas', icon: <HeartIcon />, count: vagasFavoritas.length },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
         ]}
         activeKey={tab}

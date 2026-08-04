@@ -39,7 +39,6 @@ export function Sidebar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [senhaModalOpen, setSenhaModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const temPerfil = items.some((item) => item.key === 'perfil');
 
   useEffect(() => {
     if (localStorage.getItem(COLLAPSE_KEY) === '1') setCollapsed(true);
@@ -125,14 +124,6 @@ export function Sidebar({
     return (
       <div className="mt-1.5 rounded-xl bg-gray-100 overflow-hidden">
         <div className="flex items-center gap-2.5 px-2.5 py-2.5">{renderIdentidade(false)}</div>
-        {temPerfil && (
-          <button
-            onClick={() => handleSelect('perfil')}
-            className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-gray-600 border-t border-white/70 hover:bg-white/60"
-          >
-            <UserIcon className="w-4 h-4 text-gray-400" /> Ver perfil
-          </button>
-        )}
         <button
           onClick={() => { setOpen(false); setSenhaModalOpen(true); }}
           className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-gray-600 border-t border-white/70 hover:bg-white/60"
@@ -176,14 +167,6 @@ export function Sidebar({
               hideText ? 'left-0 w-48' : 'left-0 right-0'
             }`}
           >
-            {temPerfil && (
-              <button
-                onClick={() => { onSelect('perfil'); setMenuOpen(false); }}
-                className="flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50"
-              >
-                <UserIcon className="w-4 h-4 text-gray-400" /> Ver perfil
-              </button>
-            )}
             <button
               onClick={() => { setMenuOpen(false); setSenhaModalOpen(true); }}
               className="flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50"
