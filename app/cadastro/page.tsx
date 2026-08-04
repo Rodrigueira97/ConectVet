@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { CATEGORIAS, ESTADOS_CIDADES, isVeterinarioFormado, onlyDigits, hojeBrasil } from '@/lib/mockData';
 import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefone } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
-import { uploadArquivos, registrarClinica, registrarProfissional, ApiError, CATEGORIA_VALUE, ESPECIALIDADES_VETERINARIAS } from '@/lib/api';
+import { uploadArquivos, registrarClinica, registrarProfissional, setSession, ApiError, CATEGORIA_VALUE, ESPECIALIDADES_VETERINARIAS } from '@/lib/api';
 import { FileField } from '@/app/components/FileField';
 import { DateField } from '@/app/components/DateField';
 import { BuildingIcon, CheckIcon, CloseIcon, PlusIcon, UserIcon } from '@/app/components/icons';
@@ -253,7 +253,7 @@ export default function CadastroPage() {
         const fotosEstrutura = urlsFotos.map((url, i) => ({ url, descricao: fotos[i].descricao || undefined }));
         const logoUrl = logo ? (await uploadArquivos([logo]))[0] : undefined;
 
-        await registrarClinica({
+        const resultadoClinica = await registrarClinica({
           email, senha,
           nome: clinica.nome,
           cnpj: onlyDigits(clinica.cnpj),
@@ -274,14 +274,19 @@ export default function CadastroPage() {
           sistemas: clinica.sistemas || undefined,
           observacoes: clinica.observacoes || undefined,
         });
-        router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}&enviado=1`);
+        if ('accessToken' in resultadoClinica) {
+          setSession(resultadoClinica.accessToken, resultadoClinica.role);
+          router.push('/clinica');
+        } else {
+          router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}&enviado=1`);
+        }
       } else {
         const [comprovanteUrl] = await uploadArquivos([comprovante as File]);
         const idDocUrls = await uploadArquivos([idDocFrente as File, idDocVerso as File]);
         const curriculoUrl = curriculo ? (await uploadArquivos([curriculo]))[0] : undefined;
         const fotoUrl = fotoPerfil ? (await uploadArquivos([fotoPerfil]))[0] : undefined;
 
-        await registrarProfissional({
+        const resultadoProf = await registrarProfissional({
           email, senha,
           nome: prof.nome,
           documento: onlyDigits(prof.doc),
@@ -300,7 +305,12 @@ export default function CadastroPage() {
           regioesAtendimento: prof.regioes,
           observacoes: prof.observacoes || undefined,
         });
-        router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}&enviado=1`);
+        if ('accessToken' in resultadoProf) {
+          setSession(resultadoProf.accessToken, resultadoProf.role);
+          router.push('/profissional');
+        } else {
+          router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}&enviado=1`);
+        }
       }
     } catch (err) {
       setApiError(err instanceof ApiError ? err.message : 'Não foi possível concluir o cadastro. Tente novamente.');

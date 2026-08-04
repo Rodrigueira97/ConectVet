@@ -276,14 +276,18 @@ export function login(email: string, senha: string) {
   return post<{ accessToken: string; role: string }>('/auth/login', { email, senha });
 }
 
-// Cadastro não loga o usuário automaticamente — a conta só é ativada depois
-// que o link enviado por e-mail é confirmado (ver /auth/confirmar-email).
+// Com a confirmação de e-mail ligada (EMAIL_CONFIRMATION_ENABLED=true no
+// backend), o cadastro não loga o usuário automaticamente — a conta só é
+// ativada depois que o link enviado por e-mail é confirmado. Com a flag
+// desligada, o backend já libera o login na hora, retornando accessToken.
+export type RegistroResultado = { email: string } | { accessToken: string; role: string };
+
 export function registrarClinica(payload: Record<string, unknown>) {
-  return post<{ email: string }>('/auth/register/clinica', payload);
+  return post<RegistroResultado>('/auth/register/clinica', payload);
 }
 
 export function registrarProfissional(payload: Record<string, unknown>) {
-  return post<{ email: string }>('/auth/register/profissional', payload);
+  return post<RegistroResultado>('/auth/register/profissional', payload);
 }
 
 export function confirmarEmail(token: string) {

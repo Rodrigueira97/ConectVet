@@ -24,6 +24,11 @@ const REENVIO_COOLDOWN_MS = 60 * 1000;
 @Injectable()
 export class AuthService {
   private readonly frontendUrl: string;
+  // Desliga a exigência de confirmação de e-mail sem remover o fluxo (rotas,
+  // páginas, envio) — só liga de novo mudando essa variável de ambiente.
+  // Hoje está desligada porque o Render free tier bloqueia SMTP de saída
+  // (ver MailService), então ninguém confirmado conseguiria se cadastrar.
+  private readonly confirmacaoHabilitada: boolean;
 
   constructor(
     private prisma: PrismaService,
@@ -32,6 +37,7 @@ export class AuthService {
     config: ConfigService,
   ) {
     this.frontendUrl = (config.get<string>('FRONTEND_URL') || 'http://localhost:3000').replace(/\/$/, '');
+    this.confirmacaoHabilitada = config.get<string>('EMAIL_CONFIRMATION_ENABLED') !== 'false';
   }
 
   // Cadastro nunca confirmado (emailVerificado = false) não bloqueia uma nova
@@ -120,6 +126,11 @@ export class AuthService {
       },
     });
 
+    if (!this.confirmacaoHabilitada) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { emailVerificado: true } });
+      return this.emitirToken(user);
+    }
+
     await this.enviarConfirmacao(user, dto.nome);
     return { email: user.email };
   }
@@ -156,6 +167,11 @@ export class AuthService {
       },
     });
 
+    if (!this.confirmacaoHabilitada) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { emailVerificado: true } });
+      return this.emitirToken(user);
+    }
+
     await this.enviarConfirmacao(user, dto.nome);
     return { email: user.email };
   }
@@ -170,7 +186,7 @@ export class AuthService {
     if (!senhaValida)
       throw new UnauthorizedException('E-mail ou senha inválidos.');
 
-    if (!user.emailVerificado) {
+    if (this.confirmacaoHabilitada && !user.emailVerificado) {
       throw new ForbiddenException({
         statusCode: 403,
         code: 'EMAIL_NAO_CONFIRMADO',
