@@ -264,7 +264,7 @@ export function VagaDetalheView({
 
       {vaga.clinicaId && avaliacoesCarregadas && (
         <div ref={avaliacoesRef} className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
-          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-1">Últimas 5 avaliações</div>
+          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-1">Últimas avaliações</div>
           {avaliacoesClinica.length === 0 ? (
             <div className="text-sm text-gray-400 py-3">Essa clínica ainda não tem avaliações de outros profissionais.</div>
           ) : (
