@@ -110,7 +110,7 @@ export function VagaDetalheView({
           <div className="text-[22px] font-extrabold text-ink leading-tight">R$ {valorNum}</div>
           <div className="text-[13px] font-semibold text-primaryDeep/80 mt-1">≈ R$ {porHora.toFixed(0)}/hora</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-2xl p-[18px]">
+        <div className="bg-primaryTint rounded-2xl p-[18px]">
           <div className="w-[34px] h-[34px] rounded-[10px] bg-primary text-white flex items-center justify-center mb-3">
             <CalendarIcon className="w-[18px] h-[18px]" />
           </div>
@@ -118,7 +118,7 @@ export function VagaDetalheView({
           <div className="text-[22px] font-extrabold text-ink leading-tight">{formatQuando(vaga.data)}</div>
           <div className="text-[13px] font-bold text-gray-500 mt-1">{vaga.horaInicio} – {vaga.horaFim} · {horasLabel}</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-2xl p-[18px]">
+        <div className="bg-primaryTint rounded-2xl p-[18px]">
           <div className="w-[34px] h-[34px] rounded-[10px] bg-primary text-white flex items-center justify-center mb-3">
             <PinIcon className="w-[18px] h-[18px]" />
           </div>
