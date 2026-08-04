@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { resolve4 } from 'dns/promises';
+
+const GMAIL_SMTP_HOST = 'smtp.gmail.com';
+const GMAIL_SMTP_PORT = 465;
 
 function templateConfirmacaoEmail(nome: string, link: string): string {
   return `
@@ -51,33 +55,44 @@ function templateConfirmacaoEmailTexto(nome: string, link: string): string {
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private readonly transporter: nodemailer.Transporter | null;
+  private readonly usuario: string;
+  private readonly senhaApp: string;
   private readonly remetente: string;
 
   constructor(config: ConfigService) {
-    const usuario = config.get<string>('GMAIL_USER') || '';
-    const senhaApp = config.get<string>('GMAIL_APP_PASSWORD') || '';
-    this.remetente = config.get<string>('MAIL_FROM') || (usuario ? `ConectVet <${usuario}>` : '');
-    this.transporter = usuario && senhaApp
-      ? nodemailer.createTransport({
-          service: 'gmail',
-          auth: { user: usuario, pass: senhaApp },
-          // Se o servidor não conseguir alcançar o Gmail (comum em alguns
-          // hosts que restringem SMTP de saída), falha rápido em vez de
-          // ficar pendurado por minutos.
-          connectionTimeout: 10_000,
-          greetingTimeout: 10_000,
-          socketTimeout: 10_000,
-        })
-      : null;
+    this.usuario = config.get<string>('GMAIL_USER') || '';
+    this.senhaApp = config.get<string>('GMAIL_APP_PASSWORD') || '';
+    this.remetente = config.get<string>('MAIL_FROM') || (this.usuario ? `ConectVet <${this.usuario}>` : '');
   }
 
   get configurado(): boolean {
-    return !!this.transporter;
+    return !!this.usuario && !!this.senhaApp;
+  }
+
+  // Cria um transportador novo a cada envio, resolvendo o IP do Gmail via
+  // IPv4 na mão (dns.resolve4). Necessário porque o nodemailer resolve tanto
+  // IPv4 quanto IPv6 e escolhe um endereço aleatório entre eles — em hosts
+  // como o Render, que têm uma interface IPv6 local mas sem rota de saída de
+  // verdade, isso derruba o envio com ENETUNREACH sempre que calha de pegar
+  // o endereço IPv6. Conectando direto pelo IPv4 resolvido, evita a loteria.
+  private async criarTransportador() {
+    const [ip] = await resolve4(GMAIL_SMTP_HOST);
+    return nodemailer.createTransport({
+      host: ip,
+      port: GMAIL_SMTP_PORT,
+      secure: true,
+      auth: { user: this.usuario, pass: this.senhaApp },
+      tls: { servername: GMAIL_SMTP_HOST },
+      // Se o servidor não conseguir alcançar o Gmail, falha rápido em vez de
+      // ficar pendurado por minutos.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 10_000,
+    });
   }
 
   async enviarConfirmacaoEmail(to: string, nome: string, link: string) {
-    if (!this.transporter) {
+    if (!this.configurado) {
       // Sem GMAIL_USER/GMAIL_APP_PASSWORD (comum em dev local): imprime o link
       // no log em vez de falhar o cadastro, pra dar pra testar o fluxo sem
       // configurar e-mail.
@@ -88,7 +103,8 @@ export class MailService {
     }
 
     try {
-      await this.transporter.sendMail({
+      const transportador = await this.criarTransportador();
+      await transportador.sendMail({
         from: this.remetente,
         to,
         subject: 'Confirme seu e-mail para ativar sua conta',
