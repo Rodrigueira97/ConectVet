@@ -54,7 +54,7 @@ function statusVagaInfo(vaga: VagaDetalheData): { label: string; className: stri
   if (!vaga.status) return null;
   if (vaga.status === 'CANCELADA') return { label: 'Cancelada', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
   if (vaga.status === 'CONCLUIDA') return { label: 'Concluída', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
-  if (vaga.status === 'PREENCHIDA') return { label: 'Aguardando presença', className: 'bg-white text-amber-700', dotClassName: 'bg-amber-500' };
+  if (vaga.status === 'PREENCHIDA') return null;
   if (plantaoEncerrado(vaga)) return { label: 'Encerrada', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
   return { label: 'Aberta', className: 'bg-white text-primaryDeep', dotClassName: 'bg-primary' };
 }

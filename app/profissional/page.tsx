@@ -1122,10 +1122,11 @@ function ProfissionalPageInner() {
 
         {tab === 'perfil' && (
           <div className="max-w-[880px] mx-auto p-8">
+          <div className="bg-[#eef7f6] rounded-[28px] p-6 sm:p-8">
             {/* Cabeçalho */}
             <div className="flex flex-col items-center text-center gap-2.5 sm:flex-row sm:items-end sm:text-left sm:gap-5 mb-6">
               <div className="relative w-[108px] h-[108px] shrink-0">
-                <div className="w-full h-full rounded-full p-1 bg-white/90 shadow-lg">
+                <div className="w-full h-full rounded-full p-1 bg-white shadow-md">
                   <div className="relative w-full h-full rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center overflow-hidden">
                     {perfil.fotoUrl ? (
                       <img src={perfil.fotoUrl} alt={perfil.nome} className="w-full h-full object-cover" />
@@ -1146,21 +1147,21 @@ function ProfissionalPageInner() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-center sm:justify-start gap-2.5 flex-wrap">
-                  <div className="text-white text-2xl font-extrabold">{perfil.nome}</div>
+                  <div className="text-ink text-2xl font-extrabold">{perfil.nome}</div>
                 </div>
                 <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap mt-2">
-                  <span className="bg-white/15 text-white text-xs font-extrabold uppercase tracking-wide px-3 py-1.5 rounded-full">
+                  <span className="bg-primaryTint text-primaryDeep text-xs font-extrabold uppercase tracking-wide px-3 py-1.5 rounded-full">
                     {CATEGORIA_LABEL[perfil.funcao]}
                   </span>
                   {perfil.funcao === 'VETERINARIO_ESPECIALISTA' && perfil.especialidade && (
-                    <span className="bg-white/15 text-white text-xs font-bold px-3 py-1.5 rounded-full">
+                    <span className="bg-primaryTint text-primaryDeep text-xs font-bold px-3 py-1.5 rounded-full">
                       {perfil.especialidade}
                     </span>
                   )}
                   {notaMediaRecebida !== null && (
-                    <span className="inline-flex items-center gap-1.5 text-white/90 text-[13.5px] font-bold">
-                      <span className="text-[#FFD666]">★</span> {notaMediaRecebida.toFixed(1)}
-                      <span className="text-white/65 font-semibold">({avaliacoesRecebidas.length} avaliações)</span>
+                    <span className="inline-flex items-center gap-1.5 text-ink text-[13.5px] font-bold">
+                      <span className="text-amber-500">★</span> {notaMediaRecebida.toFixed(1)}
+                      <span className="text-gray-400 font-semibold">({avaliacoesRecebidas.length} avaliações)</span>
                     </span>
                   )}
                 </div>
@@ -1168,7 +1169,7 @@ function ProfissionalPageInner() {
               {!editandoPerfil && (
                 <button
                   onClick={() => setEditandoPerfil(true)}
-                  className="inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[13.5px] font-extrabold px-[18px] py-2.5 rounded-xl shadow-lg hover:bg-primaryTint shrink-0"
+                  className="inline-flex items-center gap-1.5 bg-primary text-white text-[13.5px] font-extrabold px-[18px] py-2.5 rounded-xl shadow-md hover:bg-primaryDark shrink-0"
                 >
                   <PencilIcon className="w-3.5 h-3.5" /> Editar perfil
                 </button>
@@ -1199,7 +1200,7 @@ function ProfissionalPageInner() {
 
                 {/* Sobre */}
                 {(isVeterinarioFormado(perfil.funcao) || perfil.observacoes) && (
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
+                  <div className="bg-white rounded-2xl p-5 mb-3.5">
                     <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Sobre</div>
                     {isVeterinarioFormado(perfil.funcao) && perfil.areaAtuacao && (
                       <span className="inline-flex bg-primaryTint text-primaryDeep text-[12.5px] font-bold px-3 py-1.5 rounded-full">{perfil.areaAtuacao}</span>
@@ -1209,7 +1210,7 @@ function ProfissionalPageInner() {
                 )}
 
                 {/* Contato */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
+                <div className="bg-white rounded-2xl p-5 mb-3.5">
                   <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Contato e disponibilidade</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="flex items-start gap-2.5">
@@ -1230,7 +1231,7 @@ function ProfissionalPageInner() {
                 </div>
 
                 {/* Documentação */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
+                <div className="bg-white rounded-2xl p-5 mb-3.5">
                   <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-1">Documentação</div>
                   <div className="flex items-center justify-between gap-3 py-3 border-b border-gray-100">
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -1260,7 +1261,7 @@ function ProfissionalPageInner() {
 
                 {/* Avaliações recebidas */}
                 {avaliacoesRecebidas.length > 0 && (
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                  <div className="bg-white rounded-2xl p-5">
                     <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-1">
                       <HeartIcon className="w-3.5 h-3.5 text-primary" /> Avaliações recebidas
                     </div>
@@ -1391,6 +1392,7 @@ function ProfissionalPageInner() {
                 </div>
               </div>
             )}
+          </div>
           </div>
         )}
         </>

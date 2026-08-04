@@ -1152,9 +1152,10 @@ function ClinicaPageInner() {
 
         {tab === 'perfil' && (
           <div className="max-w-[880px] mx-auto p-8">
+          <div className="bg-[#eef7f6] rounded-[28px] p-6 sm:p-8">
             <div className="flex flex-col items-center text-center gap-2.5 sm:flex-row sm:items-end sm:text-left sm:gap-5 mb-6">
               <div className="relative w-[100px] h-[100px] shrink-0">
-                <div className="w-full h-full rounded-2xl p-1 bg-white/90 shadow-lg">
+                <div className="w-full h-full rounded-2xl p-1 bg-white shadow-md">
                   <div className="relative w-full h-full rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
                     {clinica.logoUrl ? (
                       <img src={clinica.logoUrl} alt={clinica.nome} className="w-full h-full object-cover" />
@@ -1175,14 +1176,14 @@ function ClinicaPageInner() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-center sm:justify-start gap-2.5 flex-wrap">
-                  <div className="text-white text-2xl font-extrabold">{clinica.nome}</div>
+                  <div className="text-ink text-2xl font-extrabold">{clinica.nome}</div>
                 </div>
-                <div className="text-white/85 text-sm font-semibold mt-1.5">{buildEndereco(clinica)}</div>
+                <div className="text-gray-500 text-sm font-semibold mt-1.5">{buildEndereco(clinica)}</div>
               </div>
               {!editandoPerfil && (
                 <button
                   onClick={() => setEditandoPerfil(true)}
-                  className="inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[13.5px] font-extrabold px-[18px] py-2.5 rounded-xl shadow-lg hover:bg-primaryTint shrink-0"
+                  className="inline-flex items-center gap-1.5 bg-primary text-white text-[13.5px] font-extrabold px-[18px] py-2.5 rounded-xl shadow-md hover:bg-primaryDark shrink-0"
                 >
                   <PencilIcon className="w-3.5 h-3.5" /> Editar perfil
                 </button>
@@ -1210,7 +1211,7 @@ function ClinicaPageInner() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
+                <div className="bg-white rounded-2xl p-5 mb-3.5">
                   <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Dados de contato</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="flex items-start gap-2.5">
@@ -1230,14 +1231,14 @@ function ClinicaPageInner() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-3.5">
+                <div className="bg-white rounded-2xl p-5 mb-3.5">
                   <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-2">Endereço</div>
                   <div className="text-sm font-bold text-ink mb-2">{buildEndereco(clinica)}</div>
                   <a href={mapsLink(buildEndereco(clinica))} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline">Ver no mapa →</a>
                 </div>
 
                 {avaliacoesRecebidas.length > 0 && (
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                  <div className="bg-white rounded-2xl p-5">
                     <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-1">
                       <HeartIcon className="w-3.5 h-3.5 text-primary" /> Avaliações recebidas
                     </div>
@@ -1339,7 +1340,7 @@ function ClinicaPageInner() {
               </div>
             )}
 
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 mt-6 flex flex-col gap-4">
+            <div className="bg-white rounded-2xl p-7 mt-6 flex flex-col gap-4">
               <div>
                 <div className="text-sm font-extrabold text-gray-800">Fotos da clínica</div>
                 <div className="text-xs text-gray-400 mt-0.5">Opcional, até 3 fotos ({clinica.fotosEstrutura.length}/3)</div>
@@ -1375,6 +1376,7 @@ function ClinicaPageInner() {
                 )}
               </div>
             </div>
+          </div>
           </div>
         )}
         </>
