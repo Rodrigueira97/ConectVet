@@ -4,9 +4,10 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado, isPlantaoNoturno, valorSugeridoNoturno } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, FilterIcon, DownloadIcon, LockIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, FilterIcon, DownloadIcon, LockIcon, PawIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
+import { QuemSomosView } from '@/app/components/QuemSomos';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { FeedPageSkeleton } from '@/app/components/skeletons/FeedPageSkeleton';
 import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
@@ -30,7 +31,7 @@ import {
   getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos, getFeed, getProfissionalPorId, getUltimasAvaliacoesProfissional,
 } from '@/lib/api';
 
-type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'perfil';
+type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'perfil' | 'quem-somos';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
 type PainelFiltro = 'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido';
 
@@ -938,6 +939,7 @@ function ClinicaPageInner() {
           { key: 'criar-vaga', label: 'Criar vaga', icon: <PlusIcon /> },
           { key: 'painel', label: 'Painel', icon: <GridIcon />, count: pendingTotal },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
+          { key: 'quem-somos', label: 'Quem somos', icon: <PawIcon className="w-[18px] h-4" /> },
         ]}
         activeKey={tab}
         onSelect={(key) => setTab(key as Tab)}
@@ -2053,6 +2055,10 @@ function ClinicaPageInner() {
             </div>
           </div>
           </div>
+        )}
+
+        {tab === 'quem-somos' && (
+          <QuemSomosView ctaLabel="Ver vagas disponíveis" onCta={() => setTab('home')} />
         )}
         </>
         )}

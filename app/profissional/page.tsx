@@ -7,9 +7,10 @@ import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, MailIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
-  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon,
+  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
+import { QuemSomosView } from '@/app/components/QuemSomos';
 import { FileField } from '@/app/components/FileField';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { PawTrailLoader } from '@/app/components/PawTrailLoader';
@@ -38,7 +39,7 @@ function especialidadeFormFromProfissional(p: { especialidade?: string | null })
 }
 const CANDIDATURAS_POR_PAGINA = 10;
 
-type Tab = 'home' | 'favoritas' | 'historico' | 'perfil';
+type Tab = 'home' | 'favoritas' | 'historico' | 'perfil' | 'quem-somos';
 
 function formatDataBR(iso: string) {
   if (!iso) return '';
@@ -713,6 +714,7 @@ function ProfissionalPageInner() {
           { key: 'historico', label: 'Minhas candidaturas', icon: <ClockIcon /> },
           { key: 'favoritas', label: 'Favoritas', icon: <HeartIcon />, count: vagasFavoritas.length },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
+          { key: 'quem-somos', label: 'Quem somos', icon: <PawIcon className="w-[18px] h-4" /> },
         ]}
         activeKey={tab}
         onSelect={(key) => setTab(key as Tab)}
@@ -1467,6 +1469,10 @@ function ProfissionalPageInner() {
             )}
           </div>
           </div>
+        )}
+
+        {tab === 'quem-somos' && (
+          <QuemSomosView ctaLabel="Ver vagas disponíveis" onCta={() => setTab('home')} />
         )}
         </>
         )}
