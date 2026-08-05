@@ -10,10 +10,27 @@ export function isVeterinarioFormado(funcao: Categoria | ''): boolean {
 
 export const MIN_VALORES: Record<Categoria, number> = {
   'Veterinário Clínico': 150,
-  'Veterinário Especialista': 250,
-  'Estagiário': 60,
-  'Auxiliar': 90,
+  'Veterinário Especialista': 200,
+  'Estagiário': 100,
+  'Auxiliar': 100,
 };
+
+// Plantão noturno custa mais caro pro profissional (rotina, deslocamento,
+// horário de sono) — por convenção, quem publica é avisado se o valor não
+// cobrir esse acréscimo, mas isso não é bloqueado, só sugerido/confirmado.
+// A janela noturna é quem começa às 22h ou depois, até quem começa de
+// madrugada (antes das 5h) — cobre plantões que atravessam a virada do dia.
+export const ADICIONAL_NOTURNO = 0.2;
+export const HORA_INICIO_NOTURNO = '22:00';
+export const HORA_FIM_JANELA_NOTURNA = '05:00';
+
+export function isPlantaoNoturno(horaInicio: string): boolean {
+  return !!horaInicio && (horaInicio >= HORA_INICIO_NOTURNO || horaInicio < HORA_FIM_JANELA_NOTURNA);
+}
+
+export function valorSugeridoNoturno(minimo: number): number {
+  return Math.round(minimo * (1 + ADICIONAL_NOTURNO));
+}
 
 export const TAXA_PLATAFORMA = 0.05;
 

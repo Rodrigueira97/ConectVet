@@ -6,7 +6,7 @@ import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
-  PencilIcon, PhoneIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
+  PencilIcon, PhoneIcon, MailIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
   CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
@@ -209,7 +209,7 @@ function ProfissionalPageInner() {
   // `goTo` funde um patch nos query params atuais numa única navegação (mode 'replace'
   // pra ajustes de filtro, que não devem empilhar histórico a cada tecla/clique;
   // 'push' — o padrão — pra navegação de verdade entre abas).
-  function goTo(patch: Record<string, string | null | undefined>, mode: 'push' | 'replace' = 'push') {
+  function goTo(patch: Record<string, string | null | undefined>, mode: 'push' | 'replace' = 'push', opts?: { scroll?: boolean }) {
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(patch)) {
       if (value === null || value === undefined || value === '') params.delete(key);
@@ -217,7 +217,7 @@ function ProfissionalPageInner() {
     }
     const qs = params.toString();
     const url = qs ? `${pathname}?${qs}` : pathname;
-    if (mode === 'replace') router.replace(url); else router.push(url);
+    if (mode === 'replace') router.replace(url, opts); else router.push(url, opts);
   }
 
   const tab = (searchParams.get('tab') as Tab | null) || 'home';
@@ -235,8 +235,37 @@ function ProfissionalPageInner() {
 
   const filtroCandidaturas = (searchParams.get('statusCand') as 'TODAS' | StatusCandidatura | null) || 'TODAS';
   const vagaDetalheId = searchParams.get('detalhe');
-  function abrirDetalheVaga(vagaId: string) { goTo({ detalhe: vagaId }); }
-  function fecharDetalheVaga() { goTo({ detalhe: null }); }
+
+  // Abrir/fechar o detalhe da vaga troca o conteúdo dentro do mesmo <main>, sem
+  // recarregar a página — então o navegador não reseta o scroll sozinho, e o
+  // Next também não sabe restaurá-lo (o container relevante não é sempre a
+  // janela, ver comentário do efeito de scroll infinito abaixo). Por isso
+  // guardamos a posição na ida e devolvemos na volta na mão, com `scroll:
+  // false` pra impedir o Next de "ajudar" jogando tudo pro topo no meio disso.
+  const scrollFeedRef = useRef<number | null>(null);
+  function medirScroll() {
+    const el = mainRef.current;
+    if (el && el.scrollHeight > el.clientHeight + 1) return el.scrollTop;
+    return window.scrollY;
+  }
+  function aplicarScroll(pos: number) {
+    const el = mainRef.current;
+    if (el && el.scrollHeight > el.clientHeight + 1) el.scrollTop = pos; else window.scrollTo(0, pos);
+  }
+  function abrirDetalheVaga(vagaId: string) {
+    scrollFeedRef.current = medirScroll();
+    goTo({ detalhe: vagaId }, 'push', { scroll: false });
+    requestAnimationFrame(() => aplicarScroll(0));
+  }
+  function fecharDetalheVaga() {
+    goTo({ detalhe: null }, 'push', { scroll: false });
+  }
+  useEffect(() => {
+    if (vagaDetalheId || scrollFeedRef.current === null) return;
+    const pos = scrollFeedRef.current;
+    scrollFeedRef.current = null;
+    requestAnimationFrame(() => aplicarScroll(pos));
+  }, [vagaDetalheId]);
 
   const [loading, setLoading] = useState(true);
   const [perfil, setPerfil] = useState<Profissional | null>(null);
@@ -531,6 +560,11 @@ function ProfissionalPageInner() {
     const applied = hasApplied(v.id);
     const perto = pertoDeVoce(v);
     const encerrada = vagaEncerrada(v);
+    // Vaga fechada porque o próprio profissional foi o escolhido: é uma notícia boa,
+    // não um beco sem saída — o card mantém as cores normais e ganha um banner de
+    // confirmação, em vez do tratamento apagado que as outras vagas fechadas recebem.
+    const preenchidaPorMim = candidaturas.some((c) => c.vagaId === v.id && c.status === 'ACEITO');
+    const fechada = encerrada && !preenchidaPorMim;
     const urgencia = urgenciaLabel(v);
     const favorita = favoritos.has(v.id);
     const local = localDaVaga(v);
@@ -539,12 +573,16 @@ function ProfissionalPageInner() {
       <div
         key={v.id}
         onClick={() => abrirDetalheVaga(v.id)}
-        className={`flex flex-col gap-3 bg-white border border-gray-200 rounded-2xl shadow-sm p-4 cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150 ${encerrada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}
+        className={`flex flex-col gap-3 border rounded-2xl p-4 cursor-pointer transition-[border-color,box-shadow] duration-150 ${
+          fechada
+            ? 'bg-gray-50 border-gray-100 hover:border-secondary/30'
+            : 'bg-white border-gray-200 shadow-sm hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)]'
+        }`}
       >
         {/* Identidade da clínica + preço — só isso disputa a primeira linha */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex gap-2.5 min-w-0">
-            <div className="w-[42px] h-[42px] rounded-xl bg-white border border-gray-200 text-gray-300 flex items-center justify-center shrink-0 overflow-hidden">
+            <div className={`w-[42px] h-[42px] rounded-xl border flex items-center justify-center shrink-0 overflow-hidden ${fechada ? 'bg-gray-100 border-gray-100 text-gray-300 grayscale opacity-70' : 'bg-white border-gray-200 text-gray-300'}`}>
               {v.clinica?.logoUrl ? (
                 <img src={v.clinica.logoUrl} alt={v.clinica.nome} className="w-full h-full object-cover" />
               ) : (
@@ -552,25 +590,28 @@ function ProfissionalPageInner() {
               )}
             </div>
             <div className="min-w-0">
-              <div className="text-[16.5px] font-extrabold text-ink truncate">{v.clinica?.nome}</div>
-              <div className="mt-0.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+              <div className={`text-[16.5px] font-extrabold truncate ${fechada ? 'text-gray-400' : 'text-ink'}`}>{v.clinica?.nome}</div>
+              <div className={`mt-0.5 ${fechada ? 'opacity-50 grayscale' : ''}`}><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
             </div>
           </div>
-          <div className={`font-extrabold text-[15px] px-3 py-1.5 rounded-[11px] whitespace-nowrap shrink-0 ${encerrada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>
+          <div className={`font-extrabold text-[15px] px-3 py-1.5 rounded-[11px] whitespace-nowrap shrink-0 ${fechada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>
             R$ {v.valor}
           </div>
         </div>
 
-        {/* Categoria e selos de status — uma única linguagem de chip, só muda a cor */}
+        {/* Categoria e selos de status — uma única linguagem de chip, só muda a cor.
+            O selo "Encerrada" some daqui: o banner escuro no rodapé já cobre esse
+            recado, com muito mais destaque do que um chip pequeno conseguiria. */}
         <div className="flex gap-1.5 flex-wrap">
-          <span className="bg-primaryTint text-primaryDeep text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">
+          <span className={`text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full ${fechada ? 'bg-gray-100 text-gray-400' : 'bg-primaryTint text-primaryDeep'}`}>
             {CATEGORIA_LABEL[v.categoria]}
           </span>
-          {encerrada ? (
-            <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">
-              <LockIcon className="w-2.5 h-2.5" /> Encerrada
+          {preenchidaPorMim && (
+            <span className="inline-flex items-center gap-1 bg-primaryTint text-primaryDeep text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">
+              <CheckCircleIcon className="w-2.5 h-2.5" /> Preenchida por você
             </span>
-          ) : perto && (
+          )}
+          {!encerrada && perto && (
             <span className="bg-secondary text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">Perto de você</span>
           )}
           {urgencia && (
@@ -580,19 +621,19 @@ function ProfissionalPageInner() {
 
         {/* Data, horário e local — colunas fixas no desktop, empilhado no mobile,
             nunca uma frase corrida que quebra linha de forma imprevisível */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 rounded-[13px] bg-gray-50 overflow-hidden">
+        <div className={`grid grid-cols-1 sm:grid-cols-3 rounded-[13px] overflow-hidden ${fechada ? 'bg-gray-100' : 'bg-gray-50'}`}>
           <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
-            <CalendarIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <CalendarIcon className={`w-[15px] h-[15px] shrink-0 ${fechada ? 'text-gray-400' : 'text-primary'}`} />
             <div className="flex items-baseline gap-1.5 min-w-0">
               <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Data</span>
-              <span className="text-[12.5px] font-bold text-ink truncate">{formatDataBR(v.data)}</span>
+              <span className={`text-[12.5px] font-bold truncate ${fechada ? 'text-gray-500' : 'text-ink'}`}>{formatDataBR(v.data)}</span>
             </div>
           </div>
           <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
-            <ClockIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <ClockIcon className={`w-[15px] h-[15px] shrink-0 ${fechada ? 'text-gray-400' : 'text-primary'}`} />
             <div className="flex items-baseline gap-1.5 min-w-0">
               <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Horário</span>
-              <span className="text-[12.5px] font-bold text-ink truncate">{v.horaInicio} – {v.horaFim}</span>
+              <span className={`text-[12.5px] font-bold truncate ${fechada ? 'text-gray-500' : 'text-ink'}`}>{v.horaInicio} – {v.horaFim}</span>
             </div>
           </div>
           <a
@@ -602,10 +643,10 @@ function ProfissionalPageInner() {
             onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-100"
           >
-            <PinIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <PinIcon className={`w-[15px] h-[15px] shrink-0 ${fechada ? 'text-gray-400' : 'text-primary'}`} />
             <div className="flex items-baseline gap-1.5 min-w-0">
               <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Local</span>
-              <span className="text-[12.5px] font-bold text-ink truncate">{localCurto}</span>
+              <span className={`text-[12.5px] font-bold truncate ${fechada ? 'text-gray-500' : 'text-ink'}`}>{localCurto}</span>
             </div>
           </a>
         </div>
@@ -624,9 +665,25 @@ function ProfissionalPageInner() {
           >
             <HeartIcon className="w-4 h-4" filled={favorita} />
           </button>
-          {!applied && encerrada ? (
-            <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[11px] bg-gray-50 text-gray-500 text-[12.5px] font-bold">
-              <LockIcon className="w-3.5 h-3.5" /> {motivoVagaFechada(v)}
+          {preenchidaPorMim ? (
+            <div className="flex-1 min-w-0 flex items-center gap-2.5 py-2.5 px-3.5 rounded-[11px] bg-primary">
+              <div className="w-7 h-7 rounded-[9px] bg-white/20 flex items-center justify-center shrink-0">
+                <CheckCircleIcon className="w-[15px] h-[15px] text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-extrabold uppercase tracking-wide text-white/70">Confirmada</div>
+                <div className="text-[13.5px] font-extrabold text-white leading-snug">Preenchida por você</div>
+              </div>
+            </div>
+          ) : fechada ? (
+            <div className="flex-1 min-w-0 flex items-center gap-2.5 py-2.5 px-3.5 rounded-[11px] bg-ink">
+              <div className="w-7 h-7 rounded-[9px] bg-white/15 flex items-center justify-center shrink-0">
+                <LockIcon className="w-[15px] h-[15px] text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-extrabold uppercase tracking-wide text-white/60">Encerrada</div>
+                <div className="text-[13.5px] font-extrabold text-white leading-snug">{motivoVagaFechada(v)}</div>
+              </div>
             </div>
           ) : (
             <button
@@ -674,6 +731,7 @@ function ProfissionalPageInner() {
           const applied = hasApplied(vagaSelecionada.id);
           const perto = pertoDeVoce(vagaSelecionada);
           const encerrada = vagaEncerrada(vagaSelecionada);
+          const preenchidaPorMim = candidaturas.some((c) => c.vagaId === vagaSelecionada.id && c.status === 'ACEITO');
           return (
             <VagaDetalheView
               vaga={{
@@ -691,12 +749,13 @@ function ProfissionalPageInner() {
                 perto,
               }}
               onBack={fecharDetalheVaga}
-              actionLabel={applied ? 'Candidatura enviada' : encerrada ? 'Vaga encerrada' : compat ? 'Candidatar-se' : 'Perfil incompatível'}
+              actionLabel={preenchidaPorMim ? 'Você foi confirmado' : encerrada ? 'Vaga encerrada' : applied ? 'Candidatura enviada' : compat ? 'Candidatar-se' : 'Perfil incompatível'}
               actionDisabled={applied || encerrada || !compat}
               actionLoading={candidatandoId === vagaSelecionada.id}
               onAction={() => candidatar(vagaSelecionada)}
-              compatStatus={applied ? 'aplicada' : encerrada ? 'encerrada' : compat ? 'compativel' : 'incompativel'}
+              compatStatus={encerrada ? 'encerrada' : applied ? 'aplicada' : compat ? 'compativel' : 'incompativel'}
               perfilFuncao={CATEGORIA_LABEL[perfil.funcao]}
+              preenchidaPorMim={preenchidaPorMim}
             />
           );
         })() : (
@@ -952,7 +1011,10 @@ function ProfissionalPageInner() {
                           {CATEGORIA_LABEL[v.categoria]}
                         </span>
                       )}
-                      <span className={`text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full ${statusChip.className}`}>{statusChip.label}</span>
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full ${statusChip.className}`}>
+                        {status === 'ENCERRADA' && <LockIcon className="w-2.5 h-2.5" />}
+                        {statusChip.label}
+                      </span>
                     </div>
 
                     {/* Data, horário e local — mesma faixa de fatos do card de vaga */}
@@ -1011,8 +1073,12 @@ function ProfissionalPageInner() {
                         </div>
                       )}
                       {status === 'ENCERRADA' && (
-                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-gray-500">
-                          <LockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> {motivoEncerradaLabel(c)}
+                        <div className="flex items-start gap-2 text-gray-500">
+                          <LockIcon className="w-[15px] h-[15px] shrink-0 mt-[3px]" />
+                          <div>
+                            <div className="text-[13px] font-extrabold text-gray-700 mb-0.5">Vaga encerrada</div>
+                            <div className="text-[12.5px] font-semibold leading-relaxed">{motivoEncerradaLabel(c)}</div>
+                          </div>
                         </div>
                       )}
                       {status === 'DESISTIU' && (
@@ -1213,6 +1279,13 @@ function ProfissionalPageInner() {
                 <div className="bg-white rounded-2xl p-5 mb-3.5">
                   <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Contato e disponibilidade</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-[30px] h-[30px] rounded-[9px] bg-primaryTint text-primaryDeep flex items-center justify-center shrink-0"><MailIcon className="w-3.5 h-3.5" /></div>
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">E-mail</div>
+                        <div className="text-sm font-bold text-ink mt-0.5 truncate">{perfil.email}</div>
+                      </div>
+                    </div>
                     <div className="flex items-start gap-2.5">
                       <div className="w-[30px] h-[30px] rounded-[9px] bg-primaryTint text-primaryDeep flex items-center justify-center shrink-0"><PhoneIcon className="w-3.5 h-3.5" /></div>
                       <div>

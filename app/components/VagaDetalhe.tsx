@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { buildEndereco, mapsLink, plantaoEncerrado } from '@/lib/mockData';
-import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CloseIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
+import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CloseIcon, LockIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
 import { PawTrailInline } from '@/app/components/PawTrailLoader';
 import { FotoEstrutura, AvaliacaoClinica, getUltimasAvaliacoesClinica } from '@/lib/api';
 
@@ -48,19 +48,36 @@ function formatQuando(dataIso: string) {
   return semData.charAt(0).toUpperCase() + semData.slice(1);
 }
 
-// Combina o status salvo com a data/hora do plantão — uma vaga "Aberta" cuja
-// data já passou sem ninguém preenchido também conta como encerrada.
-function statusVagaInfo(vaga: VagaDetalheData): { label: string; className: string; dotClassName: string } | null {
-  if (!vaga.status) return null;
-  if (vaga.status === 'CANCELADA') return { label: 'Cancelada', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
-  if (vaga.status === 'CONCLUIDA') return { label: 'Concluída', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
-  if (vaga.status === 'PREENCHIDA') return null;
-  if (plantaoEncerrado(vaga)) return { label: 'Encerrada', className: 'bg-[rgba(4,20,25,0.32)] text-white', dotClassName: 'bg-white/60' };
-  return { label: 'Aberta', className: 'bg-white text-primaryDeep', dotClassName: 'bg-primary' };
+function formatDiaMes(dataIso: string) {
+  return new Date(dataIso)
+    .toLocaleDateString('pt-BR', { timeZone: 'UTC', day: '2-digit', month: 'short' })
+    .replace('.', '');
+}
+
+// Do ponto de vista de quem navega pelas vagas, "encerrada" é qualquer vaga
+// que não aceita mais candidatura: preenchida, cancelada, concluída, ou
+// aberta cuja data/hora já passou sem ninguém confirmado. Cada motivo tem
+// seu próprio texto — mas todos ganham o mesmo tratamento visual (painel
+// escuro, selo com cadeado, aviso em destaque, cards apagados) porque pra
+// quem está vendo, o resultado prático é sempre o mesmo: não dá mais.
+//
+// A exceção é quando o próprio profissional foi o escolhido: aí "encerrada"
+// significa "você conseguiu o plantão", então ganha `tom: 'confirmada'` e o
+// resto do componente troca o visual apagado por um destaque positivo.
+function encerramentoInfo(vaga: VagaDetalheData, preenchidaPorMim?: boolean): { pill: string; titulo: string; motivo: string; tom: 'fechada' | 'confirmada' } | null {
+  const encerrada = vaga.status ? (vaga.status !== 'ABERTA' || plantaoEncerrado(vaga)) : plantaoEncerrado(vaga);
+  if (!encerrada) return null;
+  if (vaga.status === 'PREENCHIDA' && preenchidaPorMim) {
+    return { pill: 'Preenchida por você', titulo: 'Você foi confirmado para este plantão!', motivo: 'A clínica selecionou você. Compareça no dia e horário combinados.', tom: 'confirmada' };
+  }
+  if (vaga.status === 'CANCELADA') return { pill: 'Cancelada', titulo: 'Esta vaga foi cancelada', motivo: 'A clínica cancelou este plantão.', tom: 'fechada' };
+  if (vaga.status === 'CONCLUIDA') return { pill: 'Concluída', titulo: 'Este plantão já foi concluído', motivo: `Foi realizado em ${formatDiaMes(vaga.data)}.`, tom: 'fechada' };
+  if (vaga.status === 'PREENCHIDA') return { pill: 'Preenchida', titulo: 'Esta vaga já foi preenchida', motivo: 'Outro profissional já foi confirmado para este plantão.', tom: 'fechada' };
+  return { pill: `Encerrada em ${formatDiaMes(vaga.data)}`, titulo: 'Esta vaga já foi encerrada', motivo: `O plantão de ${formatDiaMes(vaga.data)} não teve profissional confirmado a tempo.`, tom: 'fechada' };
 }
 
 export function VagaDetalheView({
-  vaga, onBack, actionLabel, onAction, actionDisabled, actionLoading, compatStatus, perfilFuncao,
+  vaga, onBack, actionLabel, onAction, actionDisabled, actionLoading, compatStatus, perfilFuncao, preenchidaPorMim,
 }: {
   vaga: VagaDetalheData;
   onBack: () => void;
@@ -70,6 +87,7 @@ export function VagaDetalheView({
   actionLoading?: boolean;
   compatStatus?: 'compativel' | 'incompativel' | 'aplicada' | 'encerrada';
   perfilFuncao?: string;
+  preenchidaPorMim?: boolean;
 }) {
   const local = buildEndereco(vaga);
   const localCurto = [vaga.bairro, vaga.cidade].filter(Boolean).join(', ') || vaga.cidade;
@@ -79,7 +97,13 @@ export function VagaDetalheView({
 
   const mostrarCta = !!(onAction && actionLabel);
   const [fotoAberta, setFotoAberta] = useState<FotoEstrutura | null>(null);
-  const status = statusVagaInfo(vaga);
+  const encerramento = encerramentoInfo(vaga, preenchidaPorMim);
+  const fechada = !!encerramento;
+  const confirmada = encerramento?.tom === 'confirmada';
+  // `apagada` é quem manda no visual "desativado" — uma vaga confirmada pra
+  // você é fechada (não aceita mais candidatura), mas não é apagada: os
+  // detalhes continuam em destaque porque você ainda precisa deles.
+  const apagada = fechada && !confirmada;
 
   const [avaliacoesClinica, setAvaliacoesClinica] = useState<AvaliacaoClinica[]>([]);
   const [avaliacoesCarregadas, setAvaliacoesCarregadas] = useState(false);
@@ -105,83 +129,105 @@ export function VagaDetalheView({
         <ChevronLeftIcon className="w-[15px] h-[15px]" /> Voltar para vagas
       </button>
 
-      <div className="flex items-center gap-2 flex-wrap mb-2.5">
-        <span className="text-white bg-white/15 text-xs font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">{vaga.categoria}</span>
-        {status && (
-          <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold pl-2 pr-2.5 py-1 rounded-full ${status.className}`}>
-            <span className={`w-[6px] h-[6px] rounded-full shrink-0 ${status.dotClassName}`} />
-            {status.label}
-          </span>
-        )}
-        {vaga.perto && <span className="bg-secondary text-white text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full">Perto de você</span>}
-      </div>
+      <div className={`rounded-3xl p-5 sm:p-6 mb-6 shadow-lg ${apagada ? 'bg-paws-header-closed' : 'bg-paws-header-open'}`}>
+        <div className="flex items-center gap-2 flex-wrap mb-2.5">
+          {encerramento ? (
+            <span className={`inline-flex items-center gap-1.5 text-[12px] font-extrabold pl-2.5 pr-3.5 py-[7px] rounded-full ${confirmada ? 'bg-white text-primaryDeep' : 'bg-white text-ink'}`}>
+              {confirmada ? <CheckCircleIcon className="w-3 h-3" /> : <LockIcon className="w-3 h-3" />} {encerramento.pill}
+            </span>
+          ) : vaga.status === 'ABERTA' && (
+            <span className="inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[11px] font-extrabold pl-2 pr-2.5 py-1 rounded-full">
+              <span className="w-[6px] h-[6px] rounded-full shrink-0 bg-primary" />
+              Aberta
+            </span>
+          )}
+          <span className="text-white bg-white/15 text-xs font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">{vaga.categoria}</span>
+          {vaga.perto && <span className="bg-secondary text-white text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full">Perto de você</span>}
+        </div>
 
-      <div className="flex items-center gap-3.5 mb-6">
-        {vaga.clinica && (
-          <div className="w-14 h-14 rounded-2xl bg-white/90 p-[3px] shadow-lg shrink-0">
-            <div className="w-full h-full rounded-[13px] bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
-              {vaga.clinicaLogoUrl ? (
-                <img src={vaga.clinicaLogoUrl} alt={vaga.clinica} className="w-full h-full object-cover" />
+        <div className="flex items-center gap-3.5">
+          {vaga.clinica && (
+            <div className="w-14 h-14 rounded-2xl bg-white/90 p-[3px] shadow-lg shrink-0">
+              <div className="w-full h-full rounded-[13px] bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
+                {vaga.clinicaLogoUrl ? (
+                  <img src={vaga.clinicaLogoUrl} alt={vaga.clinica} className="w-full h-full object-cover" />
+                ) : (
+                  <BuildingIcon className="w-6 h-6" />
+                )}
+              </div>
+            </div>
+          )}
+          <div>
+            <h1 className="text-white text-2xl font-extrabold mb-1">{vaga.clinica || 'Detalhes da vaga'}</h1>
+            <div className="text-white/90 text-sm font-bold">
+              {vaga.notaMedia && vaga.totalAvaliacoes ? (
+                avaliacoesClinica.length > 0 ? (
+                  <button
+                    onClick={scrollParaAvaliacoes}
+                    className="inline-flex items-center gap-1.5 -m-1 p-1 rounded-full hover:bg-white/10 transition-colors"
+                  >
+                    <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
+                    <span className="text-white/65 font-semibold hover:underline">({vaga.totalAvaliacoes} avaliações)</span>
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
+                    <span className="text-white/65 font-semibold">({vaga.totalAvaliacoes} avaliações)</span>
+                  </span>
+                )
               ) : (
-                <BuildingIcon className="w-6 h-6" />
+                <span className="text-white/70 font-semibold">Sem avaliações ainda</span>
               )}
             </div>
           </div>
-        )}
-        <div>
-          <h1 className="text-white text-2xl font-extrabold mb-1">{vaga.clinica || 'Detalhes da vaga'}</h1>
-          <div className="text-white/90 text-sm font-bold">
-            {vaga.notaMedia && vaga.totalAvaliacoes ? (
-              avaliacoesClinica.length > 0 ? (
-                <button
-                  onClick={scrollParaAvaliacoes}
-                  className="inline-flex items-center gap-1.5 -m-1 p-1 rounded-full hover:bg-white/10 transition-colors"
-                >
-                  <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
-                  <span className="text-white/65 font-semibold hover:underline">({vaga.totalAvaliacoes} avaliações)</span>
-                </button>
-              ) : (
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="text-[#FFD666]">★</span> {vaga.notaMedia.toFixed(1)}
-                  <span className="text-white/65 font-semibold">({vaga.totalAvaliacoes} avaliações)</span>
-                </span>
-              )
-            ) : (
-              <span className="text-white/70 font-semibold">Sem avaliações ainda</span>
-            )}
-          </div>
         </div>
       </div>
 
+      {encerramento && (
+        <div className={`flex items-start gap-3 rounded-2xl px-4 py-4 mb-4 ${confirmada ? 'bg-primaryTint text-primaryDeep' : 'bg-ink text-white'}`}>
+          {confirmada ? (
+            <CheckCircleIcon className="w-[19px] h-[19px] shrink-0 mt-px text-primaryDeep" />
+          ) : (
+            <WarningIcon className="w-[19px] h-[19px] shrink-0 mt-px text-[#ffb35c]" />
+          )}
+          <div>
+            <div className="text-[14.5px] font-extrabold mb-0.5">{encerramento.titulo}</div>
+            <div className={`text-[13px] leading-relaxed font-medium ${confirmada ? 'text-primaryDeep/80' : 'text-white/80'}`}>
+              {encerramento.motivo}{!confirmada && ' Não aceita mais candidaturas.'}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-        <div className="bg-primaryTint rounded-2xl p-[18px]">
-          <div className="w-[34px] h-[34px] rounded-[10px] bg-primaryDeep text-white flex items-center justify-center mb-3">
+        <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
+          <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primaryDeep'}`}>
             <MoneyIcon className="w-[18px] h-[18px]" />
           </div>
-          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-primaryDeep/75 mb-1">Valor do plantão</div>
-          <div className="text-[22px] font-extrabold text-ink leading-tight">R$ {valorNum}</div>
+          <div className={`text-[11.5px] font-extrabold uppercase tracking-wide mb-1 ${apagada ? 'text-gray-400' : 'text-primaryDeep/75'}`}>Valor do plantão</div>
+          <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>R$ {valorNum}</div>
         </div>
-        <div className="bg-primaryTint rounded-2xl p-[18px]">
-          <div className="w-[34px] h-[34px] rounded-[10px] bg-primary text-white flex items-center justify-center mb-3">
+        <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
+          <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primary'}`}>
             <CalendarIcon className="w-[18px] h-[18px]" />
           </div>
           <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-500 mb-1">Quando</div>
-          <div className="text-[22px] font-extrabold text-ink leading-tight">{formatQuando(vaga.data)}</div>
+          <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>{formatQuando(vaga.data)}</div>
           <div className="text-[13px] font-bold text-gray-500 mt-1">{vaga.horaInicio} – {vaga.horaFim} · {horasLabel}</div>
         </div>
-        <div className="bg-primaryTint rounded-2xl p-[18px]">
-          <div className="w-[34px] h-[34px] rounded-[10px] bg-primary text-white flex items-center justify-center mb-3">
+        <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
+          <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primary'}`}>
             <PinIcon className="w-[18px] h-[18px]" />
           </div>
           <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-500 mb-1">Onde</div>
-          <div className="text-[22px] font-extrabold text-ink leading-tight">{localCurto}</div>
-          <a href={mapsLink(local)} target="_blank" rel="noopener noreferrer" className="text-[13px] font-semibold text-primary mt-1 inline-block hover:underline">
+          <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>{localCurto}</div>
+          <a href={mapsLink(local)} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-semibold mt-1 inline-block hover:underline ${apagada ? 'text-gray-400' : 'text-primary'}`}>
             Ver no mapa →
           </a>
         </div>
       </div>
 
-      {compatStatus && (
+      {compatStatus && !(compatStatus === 'encerrada' && fechada) && (
         <div className={`flex items-start gap-2.5 rounded-2xl px-4 py-3.5 text-sm font-semibold leading-relaxed mb-5 ${
           compatStatus === 'incompativel' ? 'bg-red-50 text-[#8C2E20]' : compatStatus === 'encerrada' ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'
         }`}>
@@ -298,6 +344,11 @@ export function VagaDetalheView({
             >
               {actionLoading ? <PawTrailInline /> : actionLabel}
             </button>
+            {fechada && (
+              <button onClick={onBack} className="w-full mt-2.5 py-3 rounded-2xl text-[13.5px] font-extrabold text-white bg-white/10 hover:bg-white/15">
+                Ver outras vagas disponíveis →
+              </button>
+            )}
           </div>
           <div
             className="md:hidden sticky bottom-0 left-0 right-0 -mx-8 px-8 pt-6 pb-4"
@@ -316,6 +367,11 @@ export function VagaDetalheView({
             >
               {actionLoading ? <PawTrailInline /> : actionLabel}
             </button>
+            {fechada && (
+              <button onClick={onBack} className="w-full mt-2 py-2.5 rounded-2xl text-[13px] font-extrabold text-primaryDeep hover:underline">
+                Ver outras vagas disponíveis →
+              </button>
+            )}
           </div>
         </>
       )}

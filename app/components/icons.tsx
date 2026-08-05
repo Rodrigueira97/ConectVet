@@ -319,6 +319,15 @@ export function BellIcon({ className }: IconProps) {
   );
 }
 
+// Usada no aviso de sugestão de valor pra plantão noturno (criar-vaga da clínica).
+export function MoonIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M20.4 15.2A8.5 8.5 0 019 3.7a.7.7 0 00-.9-.85A10 10 0 1021.2 16a.7.7 0 00-.8-.8z" />
+    </svg>
+  );
+}
+
 // Mesma forma de patinha usada no padrão decorativo de fundo (.bg-paws em globals.css).
 export function PawIcon({ className, style }: IconProps & { style?: CSSProperties }) {
   return (

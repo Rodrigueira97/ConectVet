@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UploadsService } from '../uploads/uploads.service';
+import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
 import { UpdateProfissionalDto } from './dto/update-profissional.dto';
 
 @Injectable()
@@ -8,15 +9,21 @@ export class ProfissionaisService {
   constructor(
     private prisma: PrismaService,
     private uploads: UploadsService,
+    private avaliacoes: AvaliacoesService,
   ) {}
 
   async buscarPorUserId(userId: string) {
     const profissional = await this.prisma.profissional.findUnique({
       where: { userId },
+      include: { user: { select: { email: true } } },
     });
     if (!profissional)
       throw new NotFoundException('Profissional não encontrado.');
-    return profissional;
+    // O e-mail mora no User, não no Profissional — achata aqui pra manter o
+    // formato que o front já consome. É só leitura: trocar o e-mail passa
+    // pelo fluxo de autenticação, não por esse endpoint de perfil.
+    const { user, ...resto } = profissional;
+    return { ...resto, email: user.email };
   }
 
   async buscarPorId(id: string) {
@@ -25,9 +32,14 @@ export class ProfissionaisService {
     });
     if (!profissional)
       throw new NotFoundException('Profissional não encontrado.');
-    // Endpoint público: telefone e data de nascimento não são expostos por enquanto.
-    const { telefone, dataNascimento, ...publico } = profissional;
-    return publico;
+    const medias = await this.avaliacoes.mediaPorProfissionais([id]);
+    // Endpoint público (ex.: clínica vendo o perfil de quem se candidatou):
+    // telefone, data de nascimento e documento (CPF) não são expostos.
+    const { telefone, dataNascimento, documento, ...publico } = profissional;
+    return {
+      ...publico,
+      ...(medias.get(id) ?? { notaMedia: null, totalAvaliacoes: 0 }),
+    };
   }
 
   async atualizar(userId: string, dto: UpdateProfissionalDto) {
@@ -47,6 +59,9 @@ export class ProfissionaisService {
       await this.uploads.deleteByUrl(existente.fotoUrl);
     }
 
-    return atualizado;
+    // Esse update não mexe no User, então o e-mail de `existente` (que já
+    // veio achatado de buscarPorUserId) continua valendo — sem isso o front
+    // perderia o e-mail da tela assim que salvasse qualquer outra edição.
+    return { ...atualizado, email: existente.email };
   }
 }

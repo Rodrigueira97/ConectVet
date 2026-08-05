@@ -165,6 +165,7 @@ export type ProfissionalResumo = {
   regioesAtendimento: string;
   notaMedia?: number | null;
   totalAvaliacoes?: number;
+  fotoUrl?: string | null;
 };
 
 export type Candidatura = {
@@ -253,6 +254,9 @@ export type Clinica = {
 export type Profissional = {
   id: string;
   userId: string;
+  // Vem do User (relação 1:1), achatado pelo backend — só leitura aqui,
+  // trocar o e-mail é um fluxo de autenticação, não de perfil.
+  email: string;
   nome: string;
   documento: string;
   funcao: Categoria;
@@ -338,6 +342,16 @@ export function getProfissionalMe() {
 }
 export function updateProfissionalMe(payload: Partial<Profissional>) {
   return patch<Profissional>('/profissionais/me', payload);
+}
+
+// Perfil público de um profissional (ex.: clínica vendo quem se candidatou) —
+// mesmo formato de Profissional, menos e-mail, telefone e documento (CPF).
+export type ProfissionalPublico = Omit<Profissional, 'email' | 'telefone' | 'documento'> & {
+  notaMedia?: number | null;
+  totalAvaliacoes?: number;
+};
+export function getProfissionalPorId(id: string) {
+  return get<ProfissionalPublico>(`/profissionais/${id}`);
 }
 
 // ---------- Vagas ----------
@@ -442,6 +456,19 @@ export type AvaliacaoClinica = {
 
 export function getUltimasAvaliacoesClinica(clinicaId: string) {
   return get<AvaliacaoClinica[]>(`/avaliacoes/clinica/${clinicaId}`);
+}
+
+export type AvaliacaoProfissional = {
+  id: string;
+  nota: number;
+  comentario: string | null;
+  clinicaNome: string;
+  data: string;
+  createdAt: string;
+};
+
+export function getUltimasAvaliacoesProfissional(profissionalId: string) {
+  return get<AvaliacaoProfissional[]>(`/avaliacoes/profissional/${profissionalId}`);
 }
 
 // ---------- Notificações ----------

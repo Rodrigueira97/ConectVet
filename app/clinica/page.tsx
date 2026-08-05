@@ -1,10 +1,10 @@
 'use client';
-import { ReactNode, Suspense, useEffect, useState } from 'react';
+import { ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado } from '@/lib/mockData';
+import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado, isPlantaoNoturno, valorSugeridoNoturno } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, FilterIcon, DownloadIcon, LockIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
@@ -16,18 +16,25 @@ import { NotificationBell } from '@/app/components/NotificationBell';
 import { RecorteFotoModal } from '@/app/components/RecorteFotoModal';
 import { DateField } from '@/app/components/DateField';
 import { TimeField } from '@/app/components/TimeField';
+import { PawTrailLoader } from '@/app/components/PawTrailLoader';
 import { useToast } from '@/app/components/Toast';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE, isVeterinarioFormado,
-  Vaga, Candidatura, Clinica, Avaliacao,
+  // CATEGORIAS daqui vem em enum (VETERINARIO_CLINICO...), pareado com CATEGORIA_LABEL e com
+  // Vaga.categoria — só pro filtro da Home. O CATEGORIAS de @/lib/mockData (rótulo em
+  // português, pareado com MIN_VALORES) continua servindo o formulário de Criar vaga.
+  CATEGORIAS as CATEGORIAS_API,
+  Vaga, Candidatura, Clinica, Avaliacao, ProfissionalPublico, AvaliacaoProfissional,
   getClinicaMe, updateClinicaMe, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
   getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
-  getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos,
+  getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos, getFeed, getProfissionalPorId, getUltimasAvaliacoesProfissional,
 } from '@/lib/api';
 
 type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'perfil';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
 type PainelFiltro = 'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido';
+
+const VAGAS_POR_PAGINA = 6;
 
 function withCurrent(list: string[], current: string) {
   return current && !list.includes(current) ? [...list, current] : list;
@@ -45,6 +52,11 @@ function formatDataBR(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
+function formatMesAno(iso: string) {
+  const semPonto = new Date(iso).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' }).replace('.', '');
+  return semPonto.charAt(0).toUpperCase() + semPonto.slice(1);
+}
+
 function localDaVaga(v: { rua: string; numero: string; complemento?: string | null; bairro?: string | null; cidade: string; estado: string }) {
   return buildEndereco({ rua: v.rua, numero: v.numero, complemento: v.complemento || undefined, bairro: v.bairro || undefined, cidade: v.cidade, estado: v.estado });
 }
@@ -56,13 +68,25 @@ function vagaExpirada(v: { data: string; horaInicio: string; horaFim: string; st
   return v.status === 'ABERTA' && plantaoEncerrado(v);
 }
 
+// Versão mais ampla de vagaExpirada, usada só pra ordenar o feed da Home (mistura vagas de
+// todas as clínicas): qualquer vaga que não seja mais "aberta pra valer" afunda na lista —
+// preenchida, concluída e cancelada também, não só a aberta cujo prazo passou.
+function vagaFechada(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
+  return v.status !== 'ABERTA' || plantaoEncerrado(v);
+}
+
 function buildVagaDetalhe(mv: Vaga): VagaDetalheData {
   return {
+    clinica: mv.clinica?.nome,
+    clinicaId: mv.clinicaId,
+    clinicaLogoUrl: mv.clinica?.logoUrl,
+    clinicaFotos: mv.clinica?.fotosEstrutura,
     categoria: CATEGORIA_LABEL[mv.categoria],
     status: mv.status,
     rua: mv.rua, numero: mv.numero, complemento: mv.complemento, bairro: mv.bairro, cidade: mv.cidade, estado: mv.estado,
     data: mv.data, horaInicio: mv.horaInicio, horaFim: mv.horaFim,
     valor: mv.valor, descricao: mv.descricao,
+    notaMedia: mv.clinica?.notaMedia, totalAvaliacoes: mv.clinica?.totalAvaliacoes,
   };
 }
 
@@ -80,6 +104,109 @@ function SectionHead({ num, title, sub }: { num: number; title: string; sub?: st
       <div>
         <div className="text-[15px] font-extrabold text-ink">{title}</div>
         {sub && <div className="text-xs text-gray-400">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Perfil de quem se candidatou — os dados já vêm sem e-mail, telefone e documento
+// (o backend corta isso no endpoint público, ver profissionais.service.ts).
+function PerfilProfissionalView({
+  profissional, avaliacoes, onBack,
+}: {
+  profissional: ProfissionalPublico;
+  avaliacoes: AvaliacaoProfissional[];
+  onBack: () => void;
+}) {
+  const temSobre = isVeterinarioFormado(profissional.funcao) && !!profissional.areaAtuacao || !!profissional.observacoes;
+  return (
+    <div className="max-w-[1080px] mx-auto p-8">
+      <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-bold text-white/85 hover:text-white mb-4">
+        ← Voltar aos candidatos
+      </button>
+
+      <div className="rounded-3xl p-6 sm:p-7 mb-6 bg-white/10">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="w-[76px] h-[76px] rounded-full bg-white/90 text-primaryDeep flex items-center justify-center text-2xl font-extrabold shrink-0 overflow-hidden">
+            {profissional.fotoUrl ? (
+              <img src={profissional.fotoUrl} alt={profissional.nome} className="w-full h-full object-cover" />
+            ) : (
+              profissional.nome.slice(0, 1).toUpperCase()
+            )}
+          </div>
+          <div>
+            <div className="text-white text-xl font-extrabold">{profissional.nome}</div>
+            <span className="inline-block bg-white/15 text-white text-xs font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full mt-1.5 mb-1.5">
+              {CATEGORIA_LABEL[profissional.funcao]}{profissional.especialidade ? ` · ${profissional.especialidade}` : ''}
+            </span>
+            <div className="text-white/90 text-[13px] font-bold">
+              {profissional.notaMedia ? (
+                <>★ {profissional.notaMedia.toFixed(1)} <span className="text-white/65 font-semibold">({profissional.totalAvaliacoes} avaliações)</span></>
+              ) : (
+                <span className="text-white/70 font-semibold">Sem avaliações ainda</span>
+              )}
+              {' · '}Na plataforma desde {formatMesAno(profissional.createdAt)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] gap-5 items-start">
+        <div className="flex flex-col gap-3">
+          {temSobre && (
+            <div className="bg-white border border-gray-200 rounded-2xl p-5">
+              <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-2">Sobre</div>
+              {isVeterinarioFormado(profissional.funcao) && profissional.areaAtuacao && (
+                <span className="inline-flex bg-primaryTint text-primaryDeep text-[12.5px] font-bold px-3 py-1.5 rounded-full mb-2">{profissional.areaAtuacao}</span>
+              )}
+              {profissional.observacoes && <p className="text-sm leading-relaxed text-gray-700">{profissional.observacoes}</p>}
+            </div>
+          )}
+          <div className="bg-white border border-gray-200 rounded-2xl p-5">
+            <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-2">Região de atendimento</div>
+            <div className="text-sm font-semibold text-ink">{profissional.regioesAtendimento || 'Não informado'}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-2xl p-5">
+            <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-1">Avaliações recebidas</div>
+            {avaliacoes.length === 0 ? (
+              <div className="text-sm text-gray-400 py-3">Esse profissional ainda não tem avaliações de outras clínicas.</div>
+            ) : (
+              avaliacoes.map((a) => (
+                <div key={a.id} className="py-3.5 border-b border-gray-100 last:border-b-0 last:pb-0 first:pt-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[13.5px] font-extrabold text-ink">{a.clinicaNome}</div>
+                    <div className="text-amber-500 text-sm tracking-widest shrink-0">{'★'.repeat(a.nota)}{'☆'.repeat(5 - a.nota)}</div>
+                  </div>
+                  {a.comentario && <div className="text-[13.5px] leading-relaxed text-gray-700 mt-1">{a.comentario}</div>}
+                  <div className="text-xs text-gray-400 mt-1.5">Plantão de {formatDataBR(a.data)}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Documentação</div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-[30px] h-[30px] rounded-[9px] bg-primaryTint text-primaryDeep flex items-center justify-center shrink-0">
+              <CheckCircleIcon className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div className="text-[12.5px] font-bold text-ink">{profissional.tipoComprovacao}</div>
+              <div className="text-[10.5px] text-gray-400">Documento enviado no cadastro</div>
+            </div>
+          </div>
+          {profissional.curriculoUrl && (
+            <a
+              href={profissional.curriculoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg border border-gray-300 text-sm font-bold text-gray-600 hover:bg-gray-50"
+            >
+              <DownloadIcon className="w-3.5 h-3.5" /> Baixar currículo
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -109,14 +236,15 @@ function ClinicaPageInner() {
   // funcionando. `goTo` funde um patch nos query params atuais numa única navegação — chamar
   // vários setters em sequência no mesmo handler pisaria um no outro, já que cada um partiria
   // do mesmo searchParams "congelado" da renderização atual.
-  function goTo(patch: Record<string, string | null | undefined>) {
+  function goTo(patch: Record<string, string | null | undefined>, mode: 'push' | 'replace' = 'push', opts?: { scroll?: boolean }) {
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(patch)) {
       if (value === null || value === undefined || value === '') params.delete(key);
       else params.set(key, value);
     }
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    const url = qs ? `${pathname}?${qs}` : pathname;
+    if (mode === 'replace') router.replace(url, opts); else router.push(url, opts);
   }
 
   const tab = (searchParams.get('tab') as Tab | null) || 'home';
@@ -124,32 +252,96 @@ function ClinicaPageInner() {
   const selectedCandId = searchParams.get('cand');
   const painelFiltro = (searchParams.get('filtro') as PainelFiltro | null) || 'todas';
   const vagaDetalheId = searchParams.get('detalhe');
+  const profDetalheId = searchParams.get('prof');
+
+  // categoria fica como string solta (não tipada como Categoria) de propósito: essa vem da
+  // API (enum tipo VETERINARIO_CLINICO), diferente do Categoria de @/lib/types usado no
+  // formulário de Criar vaga (rótulo em português) — ver import de CATEGORIAS_API abaixo.
+  const filtros = {
+    busca: searchParams.get('busca') || '',
+    categoria: searchParams.get('categoria') || '',
+    cidade: searchParams.get('cidade') || '',
+    data: searchParams.get('data') || '',
+  };
 
   // Trocar de aba pela sidebar precisa fechar o detalhe de vaga aberto — ele é
   // renderizado com prioridade sobre as abas, então sem isso a tela ficava "presa".
-  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next, detalhe: null }); }
+  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next, detalhe: null, prof: null }); }
   function setPainelFiltro(next: PainelFiltro) { goTo({ filtro: next === 'todas' ? null : next }); }
-  function irParaCandidatos(mvId: string) { goTo({ vaga: mvId, tab: 'candidatos' }); }
+  // Sai do detalhe da vaga (se algum estiver aberto) antes de entrar nos candidatos — sem
+  // isso o detalhe, que tem prioridade de renderização sobre as abas, ficava "por cima".
+  function irParaCandidatos(mvId: string) { goTo({ vaga: mvId, tab: 'candidatos', detalhe: null, prof: null }); }
   function irParaPagamento(mvId: string, candId: string) { goTo({ vaga: mvId, cand: candId, tab: 'pagamento' }); }
-  function voltarAoPainel() { goTo({ tab: null, vaga: null, cand: null }); }
-  function abrirDetalheVaga(mvId: string) { goTo({ detalhe: mvId }); }
-  function fecharDetalheVaga() { goTo({ detalhe: null }); }
+  function voltarAoPainel() { goTo({ tab: 'painel', vaga: null, cand: null, prof: null }); }
+  function abrirPerfilProfissional(profId: string) { goTo({ prof: profId }); }
+  function fecharPerfilProfissional() { goTo({ prof: null }); }
 
   const [loading, setLoading] = useState(true);
   const [clinica, setClinica] = useState<Clinica | null>(null);
   const [minhasVagas, setMinhasVagas] = useState<Vaga[]>([]);
+  const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidatos, setCandidatos] = useState<Candidatura[]>([]);
   const [candidatosLoading, setCandidatosLoading] = useState(false);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
 
-  const vagaSelecionadaMv = vagaDetalheId ? minhasVagas.find((m) => m.id === vagaDetalheId) : undefined;
-  const vagaSelecionada = vagaSelecionadaMv ? buildVagaDetalhe(vagaSelecionadaMv) : null;
+  // Abrir/fechar o detalhe da vaga troca o conteúdo dentro do mesmo <main>, sem navegação de
+  // página de verdade — então nem o navegador nem o Next restauram o scroll sozinhos. Guardamos
+  // a posição na ida e devolvemos na volta na mão, com `scroll: false` pra impedir o Next de
+  // "ajudar" jogando tudo pro topo no meio disso (mesmo problema, mesma solução do feed do profissional).
+  const scrollFeedRef = useRef<number | null>(null);
+  function medirScroll() {
+    const el = mainRef.current;
+    if (el && el.scrollHeight > el.clientHeight + 1) return el.scrollTop;
+    return window.scrollY;
+  }
+  function aplicarScroll(pos: number) {
+    const el = mainRef.current;
+    if (el && el.scrollHeight > el.clientHeight + 1) el.scrollTop = pos; else window.scrollTo(0, pos);
+  }
+  function abrirDetalheVaga(mvId: string) {
+    scrollFeedRef.current = medirScroll();
+    goTo({ detalhe: mvId }, 'push', { scroll: false });
+    requestAnimationFrame(() => aplicarScroll(0));
+  }
+  function fecharDetalheVaga() {
+    goTo({ detalhe: null }, 'push', { scroll: false });
+  }
+  useEffect(() => {
+    if (vagaDetalheId || scrollFeedRef.current === null) return;
+    const pos = scrollFeedRef.current;
+    scrollFeedRef.current = null;
+    requestAnimationFrame(() => aplicarScroll(pos));
+  }, [vagaDetalheId]);
+
+  // A vaga aberta pode ser própria ou de outra clínica — o feed já traz as duas (é a mesma
+  // listagem pública que o profissional vê), por isso a busca sai daqui, não de minhasVagas.
+  const vagaSelecionadaFeed = vagaDetalheId ? feed.find((v) => v.id === vagaDetalheId) : undefined;
+  const vagaSelecionada = vagaSelecionadaFeed ? buildVagaDetalhe(vagaSelecionadaFeed) : null;
+  const vagaSelecionadaEhMinha = !!(vagaSelecionadaFeed && clinica && vagaSelecionadaFeed.clinicaId === clinica.id);
+
+  const [profissionalSelecionado, setProfissionalSelecionado] = useState<ProfissionalPublico | null>(null);
+  const [profissionalCarregando, setProfissionalCarregando] = useState(false);
+  const [avaliacoesProfissional, setAvaliacoesProfissional] = useState<AvaliacaoProfissional[]>([]);
+  useEffect(() => {
+    if (!profDetalheId) { setProfissionalSelecionado(null); return; }
+    setProfissionalCarregando(true);
+    Promise.all([getProfissionalPorId(profDetalheId), getUltimasAvaliacoesProfissional(profDetalheId)])
+      .then(([p, avs]) => { setProfissionalSelecionado(p); setAvaliacoesProfissional(avs); })
+      .catch(() => {})
+      .finally(() => setProfissionalCarregando(false));
+  }, [profDetalheId]);
 
   const [vagaForm, setVagaForm] = useState(vagaFormInicial);
   const [vagaCepStatus, setVagaCepStatus] = useState<CepStatus>('idle');
   const [publishing, setPublishing] = useState(false);
   const [vagaErrors, setVagaErrors] = useState<Record<string, string>>({});
+  const [avisoNoturno, setAvisoNoturno] = useState(false);
+  // Só front por enquanto — nenhum gateway de verdade integrado ainda.
+  const [formaPagamento, setFormaPagamento] = useState<'pix' | 'cartao'>('pix');
 
   function limparErroVaga(campo: string) {
     setVagaErrors((e) => {
@@ -177,10 +369,11 @@ function ClinicaPageInner() {
     if (!getToken()) { router.push('/'); return; }
     (async () => {
       try {
-        const [c, mv] = await Promise.all([getClinicaMe(), getMinhasVagas()]);
+        const [c, mv, f] = await Promise.all([getClinicaMe(), getMinhasVagas(), getFeed()]);
         setClinica(c);
         setPerfilForm(perfilFormFromClinica(c));
         setMinhasVagas(mv);
+        setFeed(f);
 
         const hiredIds = mv
           .filter((v) => v.status === 'CONCLUIDA')
@@ -201,6 +394,14 @@ function ClinicaPageInner() {
     setCandidatosLoading(true);
     getCandidatosDaVaga(selectedMvId).then(setCandidatos).catch(() => {}).finally(() => setCandidatosLoading(false));
   }, [tab, selectedMvId]);
+
+  // Cidade e data filtram no servidor (mesmo padrão do feed do profissional) — só a primeira
+  // carga (já feita acima) fica de fora, senão duplicaria a busca inicial.
+  const jaCarregouFeed = useRef(false);
+  useEffect(() => {
+    if (!jaCarregouFeed.current) { jaCarregouFeed.current = true; return; }
+    getFeed({ cidade: filtros.cidade || undefined, data: filtros.data || undefined }).then(setFeed).catch(() => {});
+  }, [filtros.cidade, filtros.data]);
 
   async function refreshMinhasVagas() {
     setMinhasVagas(await getMinhasVagas());
@@ -262,6 +463,157 @@ function ClinicaPageInner() {
     ? buildEndereco(vagaForm)
     : clinica ? buildEndereco(clinica) : '';
 
+  // Feed da Home: mesma vitrine que o profissional vê, cidade/data já vêm filtradas do
+  // servidor (efeito acima); categoria e busca livre filtram aqui, e o que já fechou
+  // (de qualquer clínica) afunda pro final em vez de sumir.
+  const feedFiltrado = feed
+    .filter((v) => {
+      if (filtros.categoria && v.categoria !== filtros.categoria) return false;
+      const local = localDaVaga(v);
+      if (filtros.busca && !`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`.toLowerCase().includes(filtros.busca.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => Number(vagaFechada(a)) - Number(vagaFechada(b)));
+  const feedPaginado = feedFiltrado.slice(0, visiveis);
+  const temMaisVagas = visiveis < feedFiltrado.length;
+
+  function atualizarFiltro(novo: Partial<typeof filtros>) {
+    const patch: Record<string, string | null> = {};
+    if ('busca' in novo) patch.busca = novo.busca || null;
+    if ('categoria' in novo) patch.categoria = novo.categoria || null;
+    if ('cidade' in novo) patch.cidade = novo.cidade || null;
+    if ('data' in novo) patch.data = novo.data || null;
+    goTo(patch, 'replace');
+    setVisiveis(VAGAS_POR_PAGINA);
+  }
+  function limparFiltros() {
+    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '' });
+  }
+  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria].filter(Boolean).length;
+  const algumFiltroAtivo = filtrosAtivos > 0 || !!filtros.busca;
+
+  // Scroll infinito da Home — mesmo critério (elemento com overflow próprio ou janela) usado
+  // no feed do profissional, porque aqui também não dá pra saber de antemão qual dos dois rola.
+  useEffect(() => {
+    if (tab !== 'home') return;
+    const el = mainRef.current;
+    function faltamParaFim() {
+      if (el) {
+        const elRolavel = el.scrollHeight > el.clientHeight + 1;
+        if (elRolavel) return el.scrollHeight - el.scrollTop - el.clientHeight;
+      }
+      return document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+    }
+    function verificarScroll() {
+      if (faltamParaFim() > 200) return;
+      setVisiveis((v) => (v < feedFiltrado.length ? Math.min(v + VAGAS_POR_PAGINA, feedFiltrado.length) : v));
+    }
+    el?.addEventListener('scroll', verificarScroll, { passive: true });
+    window.addEventListener('scroll', verificarScroll, { passive: true });
+    window.addEventListener('resize', verificarScroll);
+    return () => {
+      el?.removeEventListener('scroll', verificarScroll);
+      window.removeEventListener('scroll', verificarScroll);
+      window.removeEventListener('resize', verificarScroll);
+    };
+  }, [tab, feedFiltrado.length]);
+
+  function renderVagaCard(v: Vaga) {
+    const propria = !!(clinica && v.clinicaId === clinica.id);
+    const expirada = vagaExpirada(v);
+    const local = localDaVaga(v);
+    const localCurto = [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ');
+    const badge = statusBadge(expirada ? 'encerrada' : v.status.toLowerCase());
+    // Vaga própria: busca a versão de minhasVagas, que tem as candidaturas — o feed
+    // público não traz esse detalhe (nem deveria, pras vagas das outras clínicas).
+    const mv = propria ? minhasVagas.find((m) => m.id === v.id) : undefined;
+    const totalCandidatos = mv?.candidaturas?.length || 0;
+    const pendentes = mv?.candidaturas?.filter((c) => c.status === 'PENDENTE').length || 0;
+    return (
+      <div
+        key={v.id}
+        onClick={() => abrirDetalheVaga(v.id)}
+        className="flex flex-col gap-3 bg-white border border-gray-200 rounded-2xl shadow-sm p-4 cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex gap-2.5 min-w-0">
+            <div className="w-[42px] h-[42px] rounded-xl border border-gray-200 bg-white text-gray-300 flex items-center justify-center shrink-0 overflow-hidden">
+              {v.clinica?.logoUrl ? (
+                <img src={v.clinica.logoUrl} alt={v.clinica.nome} className="w-full h-full object-cover" />
+              ) : (
+                <BuildingIcon className="w-[18px] h-[18px]" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[16.5px] font-extrabold text-ink truncate">{v.clinica?.nome}</div>
+              <div className="mt-0.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+            </div>
+          </div>
+          <div className="font-extrabold text-[15px] px-3 py-1.5 rounded-[11px] whitespace-nowrap shrink-0 bg-primaryTint text-primaryDeep">
+            R$ {v.valor}
+          </div>
+        </div>
+
+        <div className="flex gap-1.5 flex-wrap">
+          <span className="bg-primaryTint text-primaryDeep text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">
+            {CATEGORIA_LABEL[v.categoria]}
+          </span>
+          {propria && <span className="bg-ink text-white text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">Sua vaga</span>}
+          <span className={`${badge.className} rounded-full`}>{badge.label}</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 rounded-[13px] bg-gray-50 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+            <CalendarIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Data</span>
+              <span className="text-[12.5px] font-bold text-ink truncate">{formatDataBR(v.data)}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+            <ClockIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Horário</span>
+              <span className="text-[12.5px] font-bold text-ink truncate">{v.horaInicio} – {v.horaFim}</span>
+            </div>
+          </div>
+          <a
+            href={mapsLink(local)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-100"
+          >
+            <PinIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Local</span>
+              <span className="text-[12.5px] font-bold text-ink truncate">{localCurto}</span>
+            </div>
+          </a>
+        </div>
+
+        {v.descricao && <div className="text-[12.5px] text-gray-500 leading-relaxed line-clamp-2">{v.descricao}</div>}
+
+        {propria && (
+          <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center pt-3 border-t border-gray-100 flex-wrap gap-2">
+            <div className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-gray-500">
+              <UsersIcon className="w-[15px] h-[15px] text-gray-400" />
+              {totalCandidatos === 0 ? 'Nenhum candidato ainda' : (
+                <>
+                  <b className="text-ink font-extrabold">{totalCandidatos}</b> candidato{totalCandidatos > 1 ? 's' : ''}
+                  {pendentes > 0 && <span className="text-amber-600"> · {pendentes} pendente{pendentes > 1 ? 's' : ''}</span>}
+                </>
+              )}
+            </div>
+            <button onClick={() => irParaCandidatos(v.id)} className="px-4 py-2 rounded-lg bg-secondary text-white text-xs font-extrabold">
+              Gerenciar candidatos
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const minVal = vagaForm.categoria ? MIN_VALORES[vagaForm.categoria] : undefined;
   const valorNum = parseFloat(vagaForm.valor);
   let horaLabel = '';
@@ -290,15 +642,36 @@ function ClinicaPageInner() {
     if (!vagaForm.data) e.data = 'Selecione a data do serviço.';
     if (!vagaForm.horaInicio) e.horaInicio = 'Selecione o horário de início.';
     if (!vagaForm.horaFim) e.horaFim = 'Selecione o horário de fim.';
-    if (!vagaForm.valor || isNaN(parseFloat(vagaForm.valor)) || parseFloat(vagaForm.valor) <= 0) e.valor = 'Informe o valor do plantão.';
+    if (!vagaForm.valor || isNaN(parseFloat(vagaForm.valor)) || parseFloat(vagaForm.valor) <= 0) {
+      e.valor = 'Informe o valor do plantão.';
+    } else if (vagaForm.categoria && parseFloat(vagaForm.valor) < MIN_VALORES[vagaForm.categoria]) {
+      e.valor = `Valor abaixo do mínimo de R$ ${MIN_VALORES[vagaForm.categoria]} para esta categoria.`;
+    }
     return e;
   }
 
-  async function publicarVaga() {
+  function publicarVaga() {
     const errosValidacao = validateVaga();
     setVagaErrors(errosValidacao);
     if (Object.keys(errosValidacao).length > 0 || !clinica) return;
+    // Plantão noturno costuma exigir mais pra atrair candidatos — isso não
+    // bloqueia a publicação (a clínica pode ter motivo pra pagar menos, ex.:
+    // plantão curto), só confirma que ela está ciente antes de seguir.
+    if (vagaForm.categoria && isPlantaoNoturno(vagaForm.horaInicio) && valorNum < valorSugeridoNoturno(MIN_VALORES[vagaForm.categoria])) {
+      setAvisoNoturno(true);
+      return;
+    }
+    executarPublicacao();
+  }
+
+  // `valorOverride` existe pra "Usar sugestão" no aviso noturno: aplicar o
+  // valor sugerido e publicar são a mesma ação ali, e o setState de
+  // vagaForm.valor não fica pronto a tempo de compor o payload abaixo.
+  async function executarPublicacao(valorOverride?: string) {
+    setAvisoNoturno(false);
+    if (!clinica) return;
     setPublishing(true);
+    const valor = valorOverride ?? vagaForm.valor;
     const endereco = vagaForm.outroEndereco
       ? { cep: vagaForm.cep || undefined, estado: vagaForm.estado, cidade: vagaForm.cidade, bairro: vagaForm.bairro || undefined, rua: vagaForm.rua, numero: vagaForm.numero, complemento: vagaForm.complemento || undefined }
       : { cep: clinica.cep || undefined, estado: clinica.estado, cidade: clinica.cidade, bairro: clinica.bairro || undefined, rua: clinica.rua, numero: clinica.numero, complemento: clinica.complemento || undefined };
@@ -308,7 +681,7 @@ function ClinicaPageInner() {
       data: vagaForm.data,
       horaInicio: vagaForm.horaInicio,
       horaFim: vagaForm.horaFim,
-      valor: vagaForm.valor,
+      valor,
       descricao: vagaForm.descricao || undefined,
     };
     try {
@@ -330,11 +703,26 @@ function ClinicaPageInner() {
     } catch (err) {
       toast.error('Não foi possível publicar a vaga', {
         message: err instanceof ApiError ? err.message : undefined,
-        action: { label: 'Tentar novamente', onClick: publicarVaga },
+        action: { label: 'Tentar novamente', onClick: executarPublicacao },
       });
     } finally {
       setPublishing(false);
     }
+  }
+
+  // Aplica o valor sugerido pro horário noturno no campo — usado tanto pelo
+  // atalho abaixo do campo (só preenche) quanto pelo modal (preenche e publica).
+  function aplicarValorSugerido(): string | null {
+    if (!minVal) return null;
+    const sugerido = String(valorSugeridoNoturno(minVal));
+    setVagaForm((f) => ({ ...f, valor: sugerido }));
+    limparErroVaga('valor');
+    return sugerido;
+  }
+
+  function usarSugestaoEPublicar() {
+    const sugerido = aplicarValorSugerido();
+    if (sugerido) executarPublicacao(sugerido);
   }
 
   function editarVaga(mv: Vaga) {
@@ -563,67 +951,169 @@ function ClinicaPageInner() {
         <NotificationBell />
       </div>
 
-      <main className="flex-1 overflow-y-auto bg-paws">
-        {vagaSelecionada ? (
-          <VagaDetalheView vaga={vagaSelecionada} onBack={fecharDetalheVaga} />
+      <main ref={mainRef} className="flex-1 overflow-y-auto bg-paws">
+        {profDetalheId ? (
+          profissionalCarregando || !profissionalSelecionado ? (
+            <div className="max-w-[980px] mx-auto p-8"><CardSkeleton /></div>
+          ) : (
+            <PerfilProfissionalView
+              profissional={profissionalSelecionado}
+              avaliacoes={avaliacoesProfissional}
+              onBack={fecharPerfilProfissional}
+            />
+          )
+        ) : vagaSelecionada ? (
+          <VagaDetalheView
+            vaga={vagaSelecionada}
+            onBack={fecharDetalheVaga}
+            actionLabel={vagaSelecionadaEhMinha ? 'Gerenciar candidatos' : undefined}
+            onAction={vagaSelecionadaEhMinha ? () => irParaCandidatos(vagaSelecionadaFeed!.id) : undefined}
+          />
         ) : (
         <>
         {tab === 'home' && (
-            <div className="max-w-[1080px] mx-auto p-8">
-              <h1 className="text-2xl font-extrabold mb-1 text-white">Painel</h1>
-              <p className="text-sm text-white/85 mb-6">Como sua clínica está indo na plataforma</p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
-                <div className="bg-white rounded-2xl p-4">
-                  <div className="text-xl font-extrabold text-ink">{vagasAtivas}</div>
-                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Vagas ativas</div>
-                </div>
-                <div className="bg-white rounded-2xl p-4">
-                  <div className="text-xl font-extrabold text-ink">{taxaPreenchimento !== null ? `${taxaPreenchimento}%` : '—'}</div>
-                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Taxa de preenchimento</div>
-                </div>
-                <div className="bg-white rounded-2xl p-4">
-                  <div className="text-xl font-extrabold text-ink">{notaMedia !== null ? notaMedia.toFixed(1) : '—'}</div>
-                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Avaliação recebida</div>
-                </div>
-                <div className="bg-white rounded-2xl p-4">
-                  <div className="text-xl font-extrabold text-ink">R$ {retidoTotal.toFixed(2)}</div>
-                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Retido, aguardando confirmação</div>
-                </div>
+          <div className="max-w-[1080px] mx-auto p-8">
+            <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas na plataforma</h1>
+            <p className="text-sm text-white/85 mb-5">Todas as vagas publicadas, incluindo as suas</p>
+            <div className="relative mb-3">
+              <SearchIcon className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${filtros.busca ? 'text-primary' : 'text-gray-400'}`} />
+              <input
+                value={filtros.busca}
+                onChange={(e) => atualizarFiltro({ busca: e.target.value })}
+                placeholder="Buscar por clínica, categoria ou local..."
+                className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-gray-300 text-sm bg-white"
+              />
+            </div>
+            {/* Filtros: linha inline no desktop */}
+            <div className="hidden md:flex gap-2.5 flex-wrap items-center mb-4">
+              <div className="relative">
+                <PinIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.cidade ? 'text-primary' : 'text-gray-400'}`} />
+                <input
+                  value={filtros.cidade}
+                  onChange={(e) => atualizarFiltro({ cidade: e.target.value })}
+                  placeholder="Cidade"
+                  className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white w-32"
+                />
               </div>
+              <DateField
+                label="Data"
+                hideLabel
+                compact
+                clearable
+                value={filtros.data}
+                onChange={(v) => atualizarFiltro({ data: v })}
+                min={hojeBrasil()}
+                placeholder="Qualquer data"
+              />
+              <div className="relative">
+                <FilterIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.categoria ? 'text-primary' : 'text-gray-400'}`} />
+                <select
+                  value={filtros.categoria}
+                  onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
+                  className={`pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white appearance-none ${filtros.categoria ? 'text-ink' : 'text-gray-400'}`}
+                >
+                  <option value="">Todas categorias</option>
+                  {CATEGORIAS_API.map((c) => <option key={c} value={c} className="text-ink">{CATEGORIA_LABEL[c]}</option>)}
+                </select>
+              </div>
+              <button
+                onClick={limparFiltros}
+                disabled={!algumFiltroAtivo}
+                className="flex items-center gap-1.5 text-sm font-bold text-white/90 ml-auto px-2.5 py-2 rounded-full hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <CloseIcon className="w-3 h-3" /> Limpar filtros
+              </button>
+            </div>
 
-              <div className="bg-white border border-gray-200 rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-sm font-extrabold text-ink">Candidatos aguardando resposta</div>
-                  {candidatosPendentes.length > 0 && (
-                    <span className="bg-amber-100 text-amber-700 text-[11px] font-extrabold px-2 py-0.5 rounded-full">{candidatosPendentes.length}</span>
+            {/* Filtros: botão + painel no mobile */}
+            <div className="md:hidden mb-4">
+              <button
+                onClick={() => setFiltrosAbertos((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-sm font-bold text-white bg-white/15 px-3.5 py-2.5 rounded-full"
+              >
+                <FilterIcon className="w-3.5 h-3.5" /> Filtros
+                {filtrosAtivos > 0 && (
+                  <span className="bg-white text-primaryDeep text-[11px] font-extrabold rounded-full min-w-[17px] h-[17px] flex items-center justify-center px-1">
+                    {filtrosAtivos}
+                  </span>
+                )}
+              </button>
+              {filtrosAbertos && (
+                <div className="flex flex-col gap-3 bg-white rounded-2xl p-3.5 mt-2.5 shadow-sm">
+                  <div>
+                    <div className="text-xs font-bold text-gray-500 mb-1">Cidade</div>
+                    <div className="relative">
+                      <PinIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.cidade ? 'text-primary' : 'text-gray-400'}`} />
+                      <input
+                        value={filtros.cidade}
+                        onChange={(e) => atualizarFiltro({ cidade: e.target.value })}
+                        placeholder="Qualquer cidade"
+                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <DateField
+                      label="Data"
+                      value={filtros.data}
+                      onChange={(v) => atualizarFiltro({ data: v })}
+                      min={hojeBrasil()}
+                      placeholder="Qualquer data"
+                      clearable
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-gray-500 mb-1">Categoria</div>
+                    <div className="relative">
+                      <FilterIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.categoria ? 'text-primary' : 'text-gray-400'}`} />
+                      <select
+                        value={filtros.categoria}
+                        onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
+                        className={`w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm bg-white appearance-none ${filtros.categoria ? 'text-ink' : 'text-gray-400'}`}
+                      >
+                        <option value="">Todas categorias</option>
+                        {CATEGORIAS_API.map((c) => <option key={c} value={c} className="text-ink">{CATEGORIA_LABEL[c]}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {algumFiltroAtivo && (
+                    <button
+                      onClick={limparFiltros}
+                      className="flex items-center justify-center gap-1.5 text-sm font-bold text-danger bg-red-50 rounded-lg py-2.5"
+                    >
+                      <CloseIcon className="w-3 h-3" /> Limpar filtros
+                    </button>
                   )}
                 </div>
-                {candidatosPendentes.length === 0 ? (
-                  <div className="text-sm text-gray-400 mt-2">Nenhum candidato pendente no momento.</div>
-                ) : (
-                  <div className="flex flex-col">
-                    {candidatosPendentes.map(({ candidatura: c, vaga: v }) => (
-                      <div key={c.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
-                        <div className="w-8 h-8 rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-xs font-extrabold shrink-0">
-                          {(c.profissional?.nome || '?').slice(0, 1).toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[13px] font-bold text-ink truncate">{c.profissional?.nome}</div>
-                          <div className="text-[12px] text-gray-500 truncate">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · vaga de <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
-                        </div>
-                        <button
-                          onClick={() => irParaCandidatos(v.id)}
-                          className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold shrink-0"
-                        >
-                          Ver
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
+
+            <div className="flex flex-col gap-[14px]">
+              {feedPaginado.map((v) => renderVagaCard(v))}
+              {feedFiltrado.length === 0 && (
+                <div className="bg-white rounded-2xl shadow-sm p-10">
+                  <EmptyState
+                    icon={<SearchIcon className="w-6 h-6" />}
+                    title="Nenhuma vaga encontrada"
+                    description={
+                      algumFiltroAtivo
+                        ? 'Nenhuma vaga bate com os filtros que você escolheu. Tente remover algum filtro ou ampliar a busca.'
+                        : 'No momento não há vagas publicadas na plataforma.'
+                    }
+                    actionLabel={algumFiltroAtivo ? 'Limpar filtros' : undefined}
+                    actionIcon={<CloseIcon className="w-3.5 h-3.5" />}
+                    onAction={algumFiltroAtivo ? limparFiltros : undefined}
+                    actionVariant="ghost"
+                  />
+                </div>
+              )}
+            </div>
+            {temMaisVagas && (
+              <div className="flex items-center justify-center py-6">
+                <PawTrailLoader label="Carregando mais vagas..." />
+              </div>
+            )}
+          </div>
         )}
 
         {tab === 'criar-vaga' && (
@@ -764,10 +1254,22 @@ function ClinicaPageInner() {
                       <span className="text-sm font-bold">Valor a pagar ao profissional (R$)</span>
                       <input type="number" value={vagaForm.valor} onChange={(e) => { setVagaForm((f) => ({ ...f, valor: e.target.value })); limparErroVaga('valor'); }} className={`px-3 py-2.5 rounded-lg border text-sm ${vagaErrors.valor ? 'border-danger' : 'border-gray-300'}`} />
                       {vagaErrors.valor && <span className="text-xs font-semibold text-danger">{vagaErrors.valor}</span>}
-                      {minVal && (
-                        <span className={`text-xs ${!isNaN(valorNum) && valorNum < minVal ? 'text-danger font-semibold' : 'text-gray-500'}`}>
-                          Mínimo para esta categoria: R$ {minVal}{!isNaN(valorNum) && valorNum < minVal ? ' — abaixo do mínimo' : ''}
-                        </span>
+                      {minVal && !vagaErrors.valor && (
+                        <span className="text-xs text-gray-500">Mínimo para esta categoria: R$ {minVal}</span>
+                      )}
+                      {minVal && isPlantaoNoturno(vagaForm.horaInicio) && !isNaN(valorNum) && valorNum >= minVal && valorNum < valorSugeridoNoturno(minVal) && (
+                        <div className="flex items-center gap-3 rounded-xl px-3.5 py-3 mt-1" style={{ background: 'linear-gradient(135deg, #0a2f4d, #123b5c)' }}>
+                          <div className="w-8 h-8 rounded-[10px] bg-white/10 text-[#8fc4e8] flex items-center justify-center shrink-0">
+                            <MoonIcon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-extrabold text-white">Plantão noturno</div>
+                            <div className="text-[11.5px] text-white/60 mt-px">Valores costumam ser mais altos nesse horário</div>
+                          </div>
+                          <button type="button" onClick={aplicarValorSugerido} className="shrink-0 bg-white text-ink text-[12px] font-extrabold px-3 py-2 rounded-[9px] whitespace-nowrap hover:bg-white/90">
+                            Usar R$ {valorSugeridoNoturno(minVal)}
+                          </button>
+                        </div>
                       )}
                       {!isNaN(valorNum) && valorNum > 0 ? (
                         <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 flex flex-col gap-1">
@@ -847,6 +1349,42 @@ function ClinicaPageInner() {
                 </div>
               </div>
             </div>
+
+            {avisoNoturno && minVal && (
+              <div className="fixed inset-0 z-50 bg-[rgba(4,20,25,0.7)] flex items-center justify-center p-6" onClick={() => setAvisoNoturno(false)}>
+                <div className="bg-white rounded-[20px] max-w-[380px] w-full overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                  <div className="px-6 pt-6 pb-5 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a2f4d, #123b5c)' }}>
+                    <div className="w-11 h-11 rounded-[13px] bg-white/10 text-[#8fc4e8] flex items-center justify-center mb-3">
+                      <MoonIcon className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-[16px] font-extrabold text-white mb-1">Valor abaixo do sugerido pra esse horário</h3>
+                    <div className="text-[12.5px] font-semibold text-white/65">Plantão começa às {vagaForm.horaInicio}</div>
+                  </div>
+                  <div className="px-6 pt-5 pb-6">
+                    <div className="flex items-center gap-2.5 bg-[#f5f8f6] rounded-2xl p-3.5 mb-4">
+                      <div className="flex-1 text-center">
+                        <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-1">Informado</div>
+                        <div className="text-[18px] font-extrabold text-gray-400 line-through decoration-gray-300">R$ {vagaForm.valor}</div>
+                      </div>
+                      <span className="text-gray-300 text-base shrink-0">→</span>
+                      <div className="flex-1 text-center">
+                        <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-1">Sugerido</div>
+                        <div className="text-[18px] font-extrabold text-ink">R$ {valorSugeridoNoturno(minVal)}</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed mb-4">
+                      Um valor mais alto ajuda a atrair mais profissionais nesse horário. Você pode publicar com o valor informado se preferir.
+                    </p>
+                    <button onClick={usarSugestaoEPublicar} className="w-full py-3 rounded-xl bg-ink text-white text-sm font-bold hover:bg-ink/90 mb-2">
+                      Usar sugestão de R$ {valorSugeridoNoturno(minVal)}
+                    </button>
+                    <button onClick={() => executarPublicacao()} className="w-full py-2.5 rounded-xl text-xs font-bold text-gray-400 hover:text-gray-600 underline underline-offset-2">
+                      Publicar com R$ {vagaForm.valor} mesmo assim
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -887,7 +1425,58 @@ function ClinicaPageInner() {
           return (
             <div className="max-w-[1080px] mx-auto p-8">
               <h1 className="text-2xl font-extrabold mb-1 text-white">Painel da clínica</h1>
-              <p className="text-sm text-white/85 mb-6">Acompanhe suas vagas publicadas e candidatos</p>
+              <p className="text-sm text-white/85 mb-6">Como sua clínica está indo, vagas publicadas e candidatos</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{vagasAtivas}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Vagas ativas</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{taxaPreenchimento !== null ? `${taxaPreenchimento}%` : '—'}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Taxa de preenchimento</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{notaMedia !== null ? notaMedia.toFixed(1) : '—'}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Avaliação recebida</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">R$ {retidoTotal.toFixed(2)}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Retido, aguardando confirmação</div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-6">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-sm font-extrabold text-ink">Candidatos aguardando resposta</div>
+                  {candidatosPendentes.length > 0 && (
+                    <span className="bg-amber-100 text-amber-700 text-[11px] font-extrabold px-2 py-0.5 rounded-full">{candidatosPendentes.length}</span>
+                  )}
+                </div>
+                {candidatosPendentes.length === 0 ? (
+                  <div className="text-sm text-gray-400 mt-2">Nenhum candidato pendente no momento.</div>
+                ) : (
+                  <div className="flex flex-col">
+                    {candidatosPendentes.map(({ candidatura: c, vaga: v }) => (
+                      <div key={c.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
+                        <div className="w-8 h-8 rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-xs font-extrabold shrink-0">
+                          {(c.profissional?.nome || '?').slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-bold text-ink truncate">{c.profissional?.nome}</div>
+                          <div className="text-[12px] text-gray-500 truncate">{c.profissional && CATEGORIA_LABEL[c.profissional.funcao]} · vaga de <b className="font-bold text-gray-700">{formatDataBR(v.data)}</b></div>
+                        </div>
+                        <button
+                          onClick={() => irParaCandidatos(v.id)}
+                          className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold shrink-0"
+                        >
+                          Ver
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 {statCards.map((s) => (
@@ -1061,7 +1650,7 @@ function ClinicaPageInner() {
         })()}
 
         {tab === 'candidatos' && selectedMv && (
-          <div className="max-w-2xl mx-auto p-8">
+          <div className="max-w-[1080px] mx-auto p-8">
             <button onClick={voltarAoPainel} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar ao painel</button>
             <h1 className="text-xl font-extrabold mb-1 text-white">Candidatos — {CATEGORIA_LABEL[selectedMv.categoria]}</h1>
             <p className="text-sm text-white/85 mb-6">
@@ -1085,10 +1674,21 @@ function ClinicaPageInner() {
                   {candidatos.map((c) => {
                     const badge = statusBadge(c.status.toLowerCase());
                     return (
-                      <div key={c.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
-                        <div className="flex justify-between items-start gap-3">
-                          <div>
-                            <div className="font-extrabold">{c.profissional?.nome}</div>
+                      <div key={c.id} className="flex items-center gap-4 flex-wrap bg-white border border-gray-200 rounded-2xl shadow-sm p-4 sm:p-5">
+                        <button
+                          onClick={() => c.profissional && abrirPerfilProfissional(c.profissional.id)}
+                          disabled={!c.profissional}
+                          className="flex items-center gap-4 flex-1 min-w-[240px] text-left rounded-xl -m-1 p-1 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="w-14 h-14 rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-base font-extrabold shrink-0 overflow-hidden">
+                            {c.profissional?.fotoUrl ? (
+                              <img src={c.profissional.fotoUrl} alt={c.profissional.nome} className="w-full h-full object-cover" />
+                            ) : (
+                              (c.profissional?.nome || '?').slice(0, 1).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-extrabold text-ink hover:underline">{c.profissional?.nome}</div>
                             <div className="mt-0.5"><RatingBadge notaMedia={c.profissional?.notaMedia} totalAvaliacoes={c.profissional?.totalAvaliacoes} /></div>
                             <div className="text-sm text-gray-500 mt-1">
                               {c.profissional && CATEGORIA_LABEL[c.profissional.funcao]}
@@ -1097,12 +1697,12 @@ function ClinicaPageInner() {
                             </div>
                             <div className="text-xs text-gray-500 mt-1">Região: {c.profissional?.regioesAtendimento}</div>
                           </div>
-                          <div className={badge.className}>{badge.label}</div>
-                        </div>
+                        </button>
+                        <div className={`${badge.className} shrink-0`}>{badge.label}</div>
                         {c.status === 'PENDENTE' && selectedMv.status === 'ABERTA' && (
-                          <div className="flex gap-2 mt-4">
-                            <button onClick={() => recusarCandidato(c.id)} className="px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Recusar</button>
-                            <button onClick={() => aceitarCandidato(selectedMv.id, c.id)} className="px-3.5 py-2 rounded-lg bg-primary text-white text-sm font-bold">Aceitar e pagar</button>
+                          <div className="flex gap-2 shrink-0 w-full sm:w-auto">
+                            <button onClick={() => recusarCandidato(c.id)} className="flex-1 sm:flex-none px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Recusar</button>
+                            <button onClick={() => aceitarCandidato(selectedMv.id, c.id)} className="flex-1 sm:flex-none px-3.5 py-2 rounded-lg bg-primary text-white text-sm font-bold">Aceitar e pagar</button>
                           </div>
                         )}
                       </div>
@@ -1127,24 +1727,99 @@ function ClinicaPageInner() {
           const valorProfissional = parseFloat(selectedMv.valor) || 0;
           const taxa = valorProfissional * TAXA_PLATAFORMA;
           const totalClinica = valorProfissional + taxa;
+          const local = localDaVaga(selectedMv);
           return (
-            <div className="max-w-lg mx-auto p-8">
+            <div className="max-w-[1080px] mx-auto p-8">
+              <button onClick={voltarAoPainel} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar aos candidatos</button>
               <div className="text-sm font-bold text-primaryTint mb-1">Pagamento</div>
-              <h1 className="text-2xl font-extrabold mb-6 text-white">Confirmar contratação</h1>
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7">
-                <div className="text-sm text-gray-500">Profissional</div>
-                <div className="text-lg font-extrabold">{selectedCand?.profissional?.nome}</div>
-                <div className="text-sm text-gray-500">{CATEGORIA_LABEL[selectedMv.categoria]} · <b className="font-bold text-gray-700">{localDaVaga(selectedMv)}</b></div>
-                <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-2">
-                  <div className="flex justify-between text-sm"><span>Valor ao profissional</span><span className="font-bold">R$ {valorProfissional.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-sm text-gray-500"><span>Taxa da ConectVet (5%)</span><span>+ R$ {taxa.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-base font-extrabold pt-2 border-t border-gray-200"><span>Total que você paga</span><span>R$ {totalClinica.toFixed(2)}</span></div>
+              <h1 className="text-2xl font-extrabold mb-1 text-white">Confirmar contratação</h1>
+              <p className="text-sm text-white/85 mb-6">Revise os dados antes de reservar o pagamento</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-5 items-start">
+                <div className="flex flex-col gap-3">
+                  <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-xl font-extrabold shrink-0 overflow-hidden">
+                      {selectedCand?.profissional?.fotoUrl ? (
+                        <img src={selectedCand.profissional.fotoUrl} alt={selectedCand.profissional.nome} className="w-full h-full object-cover" />
+                      ) : (
+                        (selectedCand?.profissional?.nome || '?').slice(0, 1).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-lg font-extrabold text-ink truncate">{selectedCand?.profissional?.nome}</div>
+                      <div className="mt-0.5"><RatingBadge notaMedia={selectedCand?.profissional?.notaMedia} totalAvaliacoes={selectedCand?.profissional?.totalAvaliacoes} /></div>
+                      <div className="text-sm text-gray-500 mt-1">{CATEGORIA_LABEL[selectedMv.categoria]} · Região: {selectedCand?.profissional?.regioesAtendimento}</div>
+                    </div>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+                    <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Vaga</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 rounded-[13px] bg-gray-50 overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+                        <CalendarIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                        <div className="flex items-baseline gap-1.5 min-w-0">
+                          <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Data</span>
+                          <span className="text-[12.5px] font-bold text-ink truncate">{formatDataBR(selectedMv.data)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
+                        <ClockIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                        <div className="flex items-baseline gap-1.5 min-w-0">
+                          <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Horário</span>
+                          <span className="text-[12.5px] font-bold text-ink truncate">{selectedMv.horaInicio} – {selectedMv.horaFim}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-2.5">
+                        <PinIcon className="w-[15px] h-[15px] text-primary shrink-0" />
+                        <div className="flex items-baseline gap-1.5 min-w-0">
+                          <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Local</span>
+                          <span className="text-[12.5px] font-bold text-ink truncate">{local}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <p className="text-xs text-white/85 mt-3">O valor fica retido até a clínica confirmar a presença do profissional.</p>
-              <div className="flex justify-end gap-3 mt-6">
-                <button onClick={voltarAoPainel} className="px-5 py-3 rounded-lg border border-gray-300 bg-white text-sm font-bold">Cancelar</button>
-                <button onClick={confirmarPagamento} className="px-6 py-3 rounded-lg bg-ink text-white text-sm font-bold shadow-sm">Confirmar pagamento</button>
+
+                <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+                  <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Resumo do pagamento</div>
+                  <div className="flex justify-between text-sm"><span>Valor ao profissional</span><span className="font-bold">R$ {valorProfissional.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-sm text-gray-500 mt-1"><span>Taxa da ConectVet (5%)</span><span>+ R$ {taxa.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-base font-extrabold pt-2.5 mt-2 border-t border-gray-200"><span>Total que você paga</span><span>R$ {totalClinica.toFixed(2)}</span></div>
+
+                  <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mt-4 mb-2">Forma de pagamento</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormaPagamento('pix')}
+                      className={`rounded-xl border-[1.5px] p-2.5 text-center transition-colors ${formaPagamento === 'pix' ? 'border-primary bg-primaryTint' : 'border-gray-200 hover:border-gray-300'}`}
+                    >
+                      <div className="text-[13px] font-extrabold text-ink">Pix</div>
+                      <div className="text-[10px] text-gray-400">Aprovação imediata</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormaPagamento('cartao')}
+                      className={`rounded-xl border-[1.5px] p-2.5 text-center transition-colors ${formaPagamento === 'cartao' ? 'border-primary bg-primaryTint' : 'border-gray-200 hover:border-gray-300'}`}
+                    >
+                      <div className="text-[13px] font-extrabold text-ink">Cartão de crédito</div>
+                      <div className="text-[10px] text-gray-400">Mastercard •••• 4242</div>
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-gray-400 font-semibold mt-2">
+                    {formaPagamento === 'pix' ? 'Você recebe a chave Pix assim que confirmar.' : 'Cobrança na fatura do cartão cadastrado.'}
+                  </div>
+
+                  <div className="flex items-start gap-2 bg-primaryTint text-primaryDeep text-[11.5px] font-semibold leading-relaxed rounded-xl px-3 py-2.5 mt-4">
+                    <LockIcon className="w-3.5 h-3.5 shrink-0 mt-px" />
+                    O valor fica retido até você confirmar a presença do profissional no dia do plantão.
+                  </div>
+
+                  <button onClick={confirmarPagamento} className="w-full mt-4 py-3 rounded-lg bg-ink text-white text-sm font-bold shadow-sm">
+                    Confirmar pagamento {formaPagamento === 'pix' ? 'com Pix' : 'no cartão'}
+                  </button>
+                  <button onClick={voltarAoPainel} className="w-full mt-2 py-2 text-xs font-bold text-gray-400 hover:text-gray-600 underline underline-offset-2">
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </div>
           );

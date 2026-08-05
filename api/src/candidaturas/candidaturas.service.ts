@@ -125,6 +125,7 @@ export class CandidaturasService {
             especialidade: true,
             areaAtuacao: true,
             regioesAtendimento: true,
+            fotoUrl: true,
           },
         },
       },

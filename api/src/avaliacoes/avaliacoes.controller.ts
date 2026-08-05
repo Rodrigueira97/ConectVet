@@ -30,4 +30,9 @@ export class AvaliacoesController {
   ultimasPorClinica(@Param('clinicaId') clinicaId: string) {
     return this.avaliacoesService.ultimasPorClinica(clinicaId);
   }
+
+  @Get('profissional/:profissionalId')
+  ultimasPorProfissional(@Param('profissionalId') profissionalId: string) {
+    return this.avaliacoesService.ultimasPorProfissional(profissionalId);
+  }
 }
