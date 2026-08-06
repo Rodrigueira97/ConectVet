@@ -328,21 +328,23 @@ export function VagaDetalheView({
       {mostrarCta && (
         <>
           <div className="hidden md:block max-w-[340px] mt-2">
-            {incompativel || aplicada ? (
-              <div className={`w-full flex items-center gap-3 rounded-2xl px-3.5 py-3 shadow-lg ${incompativel ? 'bg-white' : 'bg-primaryTint'}`}>
-                <div className={`w-9 h-9 rounded-[11px] flex items-center justify-center shrink-0 ${incompativel ? 'bg-red-50' : 'bg-primaryDeep/10'}`}>
+            {incompativel || aplicada || apagada ? (
+              <div className={`w-full flex items-center gap-3 rounded-2xl px-3.5 py-3 ${incompativel ? 'bg-white shadow-lg' : aplicada ? 'bg-primaryTint shadow-lg' : 'bg-ink shadow-lg'}`}>
+                <div className={`w-9 h-9 rounded-[11px] flex items-center justify-center shrink-0 ${incompativel ? 'bg-red-50' : aplicada ? 'bg-primaryDeep/10' : 'bg-white/15'}`}>
                   {incompativel ? (
                     <WarningIcon className="w-[17px] h-[17px] text-danger" />
-                  ) : (
+                  ) : aplicada ? (
                     <CheckCircleIcon className="w-[17px] h-[17px] text-primaryDeep" />
+                  ) : (
+                    <LockIcon className="w-[17px] h-[17px] text-white" />
                   )}
                 </div>
                 <div className="min-w-0">
-                  <div className={`text-[10.5px] font-extrabold uppercase tracking-wide ${incompativel ? 'text-danger/80' : 'text-primaryDeep/70'}`}>
-                    {incompativel ? 'Perfil incompatível' : 'Candidatura enviada'}
+                  <div className={`text-[10.5px] font-extrabold uppercase tracking-wide ${incompativel ? 'text-danger/80' : aplicada ? 'text-primaryDeep/70' : 'text-white/60'}`}>
+                    {incompativel ? 'Perfil incompatível' : aplicada ? 'Candidatura enviada' : 'Encerrada'}
                   </div>
-                  <div className={`text-[13.5px] font-extrabold leading-snug ${incompativel ? 'text-ink' : 'text-primaryDeep'}`}>
-                    {incompativel ? <>Essa vaga é para {vaga.categoria}</> : 'Acompanhe o status em Minhas candidaturas'}
+                  <div className={`text-[13.5px] font-extrabold leading-snug ${incompativel ? 'text-ink' : aplicada ? 'text-primaryDeep' : 'text-white'}`}>
+                    {incompativel ? <>Essa vaga é para {vaga.categoria}</> : aplicada ? 'Acompanhe o status em Minhas candidaturas' : 'Vaga concluída'}
                   </div>
                 </div>
               </div>
@@ -362,7 +364,7 @@ export function VagaDetalheView({
               </button>
             )}
             {(fechada || incompativel) && (
-              <button onClick={onBack} className="w-full mt-2.5 py-3 rounded-2xl text-[13.5px] font-extrabold text-white bg-white/10 hover:bg-white/15">
+              <button onClick={onBack} className="w-full h-[60px] mt-2.5 flex items-center justify-center rounded-2xl text-[13.5px] font-extrabold text-white bg-white/10 hover:bg-white/15">
                 Ver outras vagas disponíveis →
               </button>
             )}
@@ -371,21 +373,25 @@ export function VagaDetalheView({
             className="md:hidden sticky bottom-0 left-0 right-0 -mx-8 px-8 pt-6 pb-4"
             style={{ background: 'linear-gradient(to top, #F5F8F6 65%, transparent)' }}
           >
-            {incompativel || aplicada ? (
-              <div className={`w-full flex items-center gap-3 rounded-2xl px-3.5 py-3 ${incompativel ? 'bg-white border border-red-100 shadow-[0_4px_14px_rgba(4,45,76,0.08)]' : 'bg-primaryTint'}`}>
-                <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 ${incompativel ? 'bg-red-50' : 'bg-primaryDeep/10'}`}>
+            {incompativel || aplicada || apagada ? (
+              <div className={`w-full flex items-center gap-3 rounded-2xl px-3.5 py-3 ${
+                incompativel ? 'bg-white border border-red-100 shadow-[0_4px_14px_rgba(4,45,76,0.08)]' : aplicada ? 'bg-primaryTint' : 'bg-ink shadow-[0_4px_14px_rgba(4,45,76,0.08)]'
+              }`}>
+                <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 ${incompativel ? 'bg-red-50' : aplicada ? 'bg-primaryDeep/10' : 'bg-white/15'}`}>
                   {incompativel ? (
                     <WarningIcon className="w-4 h-4 text-danger" />
-                  ) : (
+                  ) : aplicada ? (
                     <CheckCircleIcon className="w-4 h-4 text-primaryDeep" />
+                  ) : (
+                    <LockIcon className="w-4 h-4 text-white" />
                   )}
                 </div>
                 <div className="min-w-0">
-                  <div className={`text-[10px] font-extrabold uppercase tracking-wide ${incompativel ? 'text-danger/80' : 'text-primaryDeep/70'}`}>
-                    {incompativel ? 'Perfil incompatível' : 'Candidatura enviada'}
+                  <div className={`text-[10px] font-extrabold uppercase tracking-wide ${incompativel ? 'text-danger/80' : aplicada ? 'text-primaryDeep/70' : 'text-white/60'}`}>
+                    {incompativel ? 'Perfil incompatível' : aplicada ? 'Candidatura enviada' : 'Encerrada'}
                   </div>
-                  <div className={`text-[12.5px] font-extrabold leading-snug ${incompativel ? 'text-ink' : 'text-primaryDeep'}`}>
-                    {incompativel ? <>Essa vaga é para {vaga.categoria}</> : 'Acompanhe o status em Minhas candidaturas'}
+                  <div className={`text-[12.5px] font-extrabold leading-snug ${incompativel ? 'text-ink' : aplicada ? 'text-primaryDeep' : 'text-white'}`}>
+                    {incompativel ? <>Essa vaga é para {vaga.categoria}</> : aplicada ? 'Acompanhe o status em Minhas candidaturas' : 'Vaga concluída'}
                   </div>
                 </div>
               </div>
@@ -405,7 +411,7 @@ export function VagaDetalheView({
               </button>
             )}
             {(fechada || incompativel) && (
-              <button onClick={onBack} className="w-full mt-2 py-2.5 rounded-2xl text-[13px] font-extrabold text-primaryDeep hover:underline">
+              <button onClick={onBack} className="w-full h-[56px] mt-2 flex items-center justify-center rounded-2xl text-[13px] font-extrabold text-primaryDeep hover:underline">
                 Ver outras vagas disponíveis →
               </button>
             )}
