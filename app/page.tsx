@@ -1,7 +1,7 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { hojeBrasil, vagaEncerrada } from '@/lib/mockData';
+import { correspondeAproximado, hojeBrasil, normalizarBusca, vagaEncerrada } from '@/lib/mockData';
 import { PublicHeader } from '@/app/components/PublicHeader';
 import { VagaCardPublica } from '@/app/components/VagaCardPublica';
 import { DateField } from '@/app/components/DateField';
@@ -66,12 +66,15 @@ function HomePublicaInner() {
   useEffect(() => {
     setLoading(true);
     setErro(false);
-    getFeed({ cidade: filtros.cidade || undefined, data: filtros.data || undefined })
+    // Cidade não vai mais pro back-end: filtramos aqui do lado do cliente
+    // (ver feedFiltrado) pra poder tolerar acento e erro de digitação, o que
+    // uma busca exata no servidor não faria.
+    getFeed({ data: filtros.data || undefined })
       .then(setFeed)
       .catch(() => setErro(true))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.cidade, filtros.data, tentativa]);
+  }, [filtros.data, tentativa]);
 
   useEffect(() => { setVisiveis(VAGAS_POR_PAGINA); }, [filtros.busca, filtros.categoria, filtros.cidade, filtros.data]);
 
@@ -93,8 +96,9 @@ function HomePublicaInner() {
   const feedFiltrado = feed
     .filter((v) => {
       if (filtros.categoria && v.categoria !== filtros.categoria) return false;
+      if (filtros.cidade && !correspondeAproximado(v.cidade, filtros.cidade)) return false;
       const local = [v.bairro, v.cidade, v.estado].filter(Boolean).join(' ');
-      if (filtros.busca && !`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`.toLowerCase().includes(filtros.busca.toLowerCase())) return false;
+      if (filtros.busca && !normalizarBusca(`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`).includes(normalizarBusca(filtros.busca))) return false;
       return true;
     })
     .sort((a, b) => Number(vagaEncerrada(a)) - Number(vagaEncerrada(b)));

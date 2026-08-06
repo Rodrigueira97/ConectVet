@@ -3,7 +3,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
   mapsLink, onlyDigits, hojeBrasil, somarDiasISO, agoraBrasil, plantaoEncerrado, plantaoAindaNaoComecou,
-  formatDataBR, localDaVaga, vagaEncerrada, urgenciaLabel, motivoVagaFechada,
+  formatDataBR, localDaVaga, vagaEncerrada, urgenciaLabel, motivoVagaFechada, correspondeAproximado, normalizarBusca,
 } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
@@ -308,10 +308,13 @@ function ProfissionalPageInner() {
   const jaCarregouFeed = useRef(false);
   useEffect(() => {
     if (!jaCarregouFeed.current) { jaCarregouFeed.current = true; return; }
-    getFeed({ cidade: filtros.cidade || undefined, data: filtros.data || undefined })
+    // Cidade não vai mais pro back-end: filtramos aqui do lado do cliente
+    // (ver feedFiltrado) pra poder tolerar acento e erro de digitação, o que
+    // uma busca exata no servidor não faria.
+    getFeed({ data: filtros.data || undefined })
       .then(setFeed)
       .catch(() => {});
-  }, [filtros.cidade, filtros.data]);
+  }, [filtros.data]);
 
   function hasApplied(vagaId: string) {
     return candidaturas.some((c) => c.vagaId === vagaId);
@@ -375,8 +378,9 @@ function ProfissionalPageInner() {
   const feedFiltrado = feed
     .filter((v) => {
       if (filtros.categoria && v.categoria !== filtros.categoria) return false;
+      if (filtros.cidade && !correspondeAproximado(v.cidade, filtros.cidade)) return false;
       const local = localDaVaga(v);
-      if (filtros.busca && !`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`.toLowerCase().includes(filtros.busca.toLowerCase())) return false;
+      if (filtros.busca && !normalizarBusca(`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`).includes(normalizarBusca(filtros.busca))) return false;
       if (filtros.pertoDeMim && !pertoDeVoce(v)) return false;
       return true;
     })

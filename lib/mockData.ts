@@ -105,6 +105,59 @@ export function mapsLink(endereco: string) {
   return endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}` : '';
 }
 
+// Minúsculo + sem acento — pra "São Paulo", "sao paulo" e "SÃO PAULO" serem
+// a mesma busca. Usado por toda busca de texto do feed (clínica, categoria,
+// local, cidade), pra quem digita sem acento (comum no celular) achar vaga
+// que tem acento no cadastro, e vice-versa.
+export function normalizarBusca(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+// Distância de edição (Levenshtein) entre duas strings já normalizadas —
+// quantas inserções/remoções/trocas de letra separam uma da outra. Só serve
+// de apoio pra correspondeAproximado, não precisa ser chamada direto.
+function distanciaEdicao(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const linha = new Array(n + 1);
+  for (let j = 0; j <= n; j++) linha[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let anterior = linha[0];
+    linha[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = linha[j];
+      linha[j] = a[i - 1] === b[j - 1]
+        ? anterior
+        : 1 + Math.min(anterior, linha[j], linha[j - 1]);
+      anterior = temp;
+    }
+  }
+  return linha[n];
+}
+
+// Compara "alvo" (ex.: a cidade de uma vaga) com o que a pessoa digitou,
+// tolerando acento e pequenos erros de digitação — "Barbacena" acha
+// "barbacena", "Barbcena" (faltou letra) e "Barbasena" (letra trocada), mas
+// não confunde cidades muito diferentes. A tolerância cresce com o tamanho
+// do termo buscado: nomes curtos toleram só 1 erro, mais longos toleram mais.
+export function correspondeAproximado(alvo: string | null | undefined, busca: string): boolean {
+  const b = normalizarBusca(busca);
+  if (!b) return true;
+  const a = normalizarBusca(alvo || '');
+  if (!a) return false;
+  if (a.includes(b)) return true;
+
+  const tolerancia = b.length <= 4 ? 1 : b.length <= 8 ? 2 : 3;
+  const candidatos = [a, ...a.split(/\s+/)].filter(Boolean);
+  return candidatos.some((c) => distanciaEdicao(c, b) <= tolerancia);
+}
+
 export function formatDataBR(iso: string) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
