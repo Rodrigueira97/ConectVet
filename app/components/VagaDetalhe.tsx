@@ -96,6 +96,7 @@ export function VagaDetalheView({
   // detalhes continuam em destaque porque você ainda precisa deles.
   const apagada = fechada && !confirmada;
   const incompativel = compatStatus === 'incompativel';
+  const aplicada = compatStatus === 'aplicada';
 
   const [avaliacoesClinica, setAvaliacoesClinica] = useState<AvaliacaoClinica[]>([]);
   const [avaliacoesCarregadas, setAvaliacoesCarregadas] = useState(false);
@@ -327,14 +328,22 @@ export function VagaDetalheView({
       {mostrarCta && (
         <>
           <div className="hidden md:block max-w-[340px] mt-2">
-            {incompativel ? (
-              <div className="w-full flex items-center gap-3 bg-white rounded-2xl px-3.5 py-3 shadow-lg">
-                <div className="w-9 h-9 rounded-[11px] bg-red-50 flex items-center justify-center shrink-0">
-                  <WarningIcon className="w-[17px] h-[17px] text-danger" />
+            {incompativel || aplicada ? (
+              <div className={`w-full flex items-center gap-3 rounded-2xl px-3.5 py-3 shadow-lg ${incompativel ? 'bg-white' : 'bg-primaryTint'}`}>
+                <div className={`w-9 h-9 rounded-[11px] flex items-center justify-center shrink-0 ${incompativel ? 'bg-red-50' : 'bg-primaryDeep/10'}`}>
+                  {incompativel ? (
+                    <WarningIcon className="w-[17px] h-[17px] text-danger" />
+                  ) : (
+                    <CheckCircleIcon className="w-[17px] h-[17px] text-primaryDeep" />
+                  )}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-danger/80">Perfil incompatível</div>
-                  <div className="text-[13.5px] font-extrabold text-ink leading-snug">Essa vaga é para {vaga.categoria}</div>
+                  <div className={`text-[10.5px] font-extrabold uppercase tracking-wide ${incompativel ? 'text-danger/80' : 'text-primaryDeep/70'}`}>
+                    {incompativel ? 'Perfil incompatível' : 'Candidatura enviada'}
+                  </div>
+                  <div className={`text-[13.5px] font-extrabold leading-snug ${incompativel ? 'text-ink' : 'text-primaryDeep'}`}>
+                    {incompativel ? <>Essa vaga é para {vaga.categoria}</> : 'Acompanhe o status em Minhas candidaturas'}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -362,14 +371,22 @@ export function VagaDetalheView({
             className="md:hidden sticky bottom-0 left-0 right-0 -mx-8 px-8 pt-6 pb-4"
             style={{ background: 'linear-gradient(to top, #F5F8F6 65%, transparent)' }}
           >
-            {incompativel ? (
-              <div className="w-full flex items-center gap-3 bg-white border border-red-100 rounded-2xl px-3.5 py-3 shadow-[0_4px_14px_rgba(4,45,76,0.08)]">
-                <div className="w-8 h-8 rounded-[10px] bg-red-50 flex items-center justify-center shrink-0">
-                  <WarningIcon className="w-4 h-4 text-danger" />
+            {incompativel || aplicada ? (
+              <div className={`w-full flex items-center gap-3 rounded-2xl px-3.5 py-3 ${incompativel ? 'bg-white border border-red-100 shadow-[0_4px_14px_rgba(4,45,76,0.08)]' : 'bg-primaryTint'}`}>
+                <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 ${incompativel ? 'bg-red-50' : 'bg-primaryDeep/10'}`}>
+                  {incompativel ? (
+                    <WarningIcon className="w-4 h-4 text-danger" />
+                  ) : (
+                    <CheckCircleIcon className="w-4 h-4 text-primaryDeep" />
+                  )}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[10px] font-extrabold uppercase tracking-wide text-danger/80">Perfil incompatível</div>
-                  <div className="text-[12.5px] font-extrabold text-ink leading-snug">Essa vaga é para {vaga.categoria}</div>
+                  <div className={`text-[10px] font-extrabold uppercase tracking-wide ${incompativel ? 'text-danger/80' : 'text-primaryDeep/70'}`}>
+                    {incompativel ? 'Perfil incompatível' : 'Candidatura enviada'}
+                  </div>
+                  <div className={`text-[12.5px] font-extrabold leading-snug ${incompativel ? 'text-ink' : 'text-primaryDeep'}`}>
+                    {incompativel ? <>Essa vaga é para {vaga.categoria}</> : 'Acompanhe o status em Minhas candidaturas'}
+                  </div>
                 </div>
               </div>
             ) : (

@@ -661,13 +661,22 @@ function ProfissionalPageInner() {
                 <div className="text-[13.5px] font-extrabold text-white leading-snug">{motivoVagaFechada(v)}</div>
               </div>
             </div>
+          ) : applied ? (
+            <div className="flex-1 min-w-0 flex items-center gap-2.5 py-2.5 px-3.5 rounded-[11px] bg-primaryTint">
+              <div className="w-7 h-7 rounded-[9px] bg-primaryDeep/10 flex items-center justify-center shrink-0">
+                <CheckCircleIcon className="w-[15px] h-[15px] text-primaryDeep" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-extrabold uppercase tracking-wide text-primaryDeep/70">Candidatura enviada</div>
+                <div className="text-[13.5px] font-extrabold text-primaryDeep leading-snug">Acompanhe em Minhas candidaturas</div>
+              </div>
+            </div>
           ) : (
             <button
-              disabled={applied}
               onClick={(e) => { e.stopPropagation(); abrirDetalheVaga(v.id); }}
-              className={`flex-1 py-2.5 rounded-[11px] text-[13px] font-bold ${applied ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}
+              className="flex-1 py-2.5 rounded-[11px] text-[13px] font-bold bg-primary hover:bg-primaryDark text-white"
             >
-              {applied ? 'Candidatura enviada' : 'Ver detalhes e candidatar-se'}
+              Ver detalhes e candidatar-se
             </button>
           )}
         </div>

@@ -152,6 +152,7 @@ function VagaPublicaInner() {
         actionLoading={candidatando}
         onAction={onClickCandidatar}
         preenchidaPorMim={preenchidaPorMim}
+        compatStatus={applied && !preenchidaPorMim ? 'aplicada' : undefined}
       />
 
       {gateAberto && (
