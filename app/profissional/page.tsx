@@ -196,7 +196,12 @@ function ProfissionalPageInner() {
   const tab = (searchParams.get('tab') as Tab | null) || 'home';
   // Trocar de aba pela sidebar precisa fechar o detalhe de vaga aberto — ele é
   // renderizado com prioridade sobre as abas, então sem isso a tela ficava "presa".
-  function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next, detalhe: null }); }
+  // Os filtros da Home (busca/categoria/cidade/data/perto) também moram na URL,
+  // então sem limpar aqui eles ficavam "grudados" — sair pra outra aba e voltar
+  // pra Home devia mostrar tudo de novo, não continuar filtrado.
+  function setTab(next: Tab) {
+    goTo({ tab: next === 'home' ? null : next, detalhe: null, busca: null, categoria: null, cidade: null, data: null, perto: null });
+  }
 
   const filtros = {
     busca: searchParams.get('busca') || '',

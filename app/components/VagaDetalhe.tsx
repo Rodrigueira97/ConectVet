@@ -196,6 +196,26 @@ export function VagaDetalheView({
         </div>
       )}
 
+      {compatStatus && !(compatStatus === 'encerrada' && fechada) && (
+        <div className={`flex items-start gap-2.5 rounded-2xl px-4 py-3.5 text-sm font-semibold leading-relaxed mb-5 ${
+          compatStatus === 'incompativel' ? 'bg-red-50 text-[#8C2E20]' : compatStatus === 'encerrada' ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'
+        }`}>
+          {compatStatus === 'incompativel' ? (
+            <WarningIcon className="w-[18px] h-[18px] shrink-0 mt-px text-danger" />
+          ) : compatStatus === 'encerrada' ? (
+            <XCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-gray-400" />
+          ) : (
+            <CheckCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-primaryDeep" />
+          )}
+          <div>
+            {compatStatus === 'compativel' && <>Sua função (<b>{perfilFuncao}</b>) é compatível com esta vaga.</>}
+            {compatStatus === 'incompativel' && <>Esta vaga é para <b>{vaga.categoria}</b>. Seu perfil está cadastrado como <b>{perfilFuncao}</b>.</>}
+            {compatStatus === 'aplicada' && <>Você já se candidatou para esta vaga. Acompanhe o status em Minhas candidaturas.</>}
+            {compatStatus === 'encerrada' && <>Esta vaga já encerrou e não aceita mais candidaturas.</>}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
         <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
           <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primaryDeep'}`}>
@@ -223,26 +243,6 @@ export function VagaDetalheView({
           </a>
         </div>
       </div>
-
-      {compatStatus && !(compatStatus === 'encerrada' && fechada) && (
-        <div className={`flex items-start gap-2.5 rounded-2xl px-4 py-3.5 text-sm font-semibold leading-relaxed mb-5 ${
-          compatStatus === 'incompativel' ? 'bg-red-50 text-[#8C2E20]' : compatStatus === 'encerrada' ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'
-        }`}>
-          {compatStatus === 'incompativel' ? (
-            <WarningIcon className="w-[18px] h-[18px] shrink-0 mt-px text-danger" />
-          ) : compatStatus === 'encerrada' ? (
-            <XCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-gray-400" />
-          ) : (
-            <CheckCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-primaryDeep" />
-          )}
-          <div>
-            {compatStatus === 'compativel' && <>Sua função (<b>{perfilFuncao}</b>) é compatível com esta vaga.</>}
-            {compatStatus === 'incompativel' && <>Esta vaga é para <b>{vaga.categoria}</b>. Seu perfil está cadastrado como <b>{perfilFuncao}</b>.</>}
-            {compatStatus === 'aplicada' && <>Você já se candidatou para esta vaga. Acompanhe o status em Minhas candidaturas.</>}
-            {compatStatus === 'encerrada' && <>Esta vaga já encerrou e não aceita mais candidaturas.</>}
-          </div>
-        </div>
-      )}
 
       <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
         <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-2">Endereço completo</div>
