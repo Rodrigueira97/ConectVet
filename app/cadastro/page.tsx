@@ -359,11 +359,16 @@ function CadastroPageInner() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-primary text-white px-6 py-6 md:px-10 md:py-8 bg-paws-header">
         <div className="max-w-5xl mx-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <a href="/" className="text-xl font-extrabold">
-              <span className="text-ink">conect</span> <span className="text-[#003531]">vet</span>
+          <div className="flex items-center gap-3">
+            <a href="/" className="w-11 h-11 shrink-0 flex items-center justify-center">
+              <img src="/logo.svg" alt="ConectVet" className="w-full h-full object-contain drop-shadow-[0_2px_6px_rgba(4,45,76,0.25)]" />
             </a>
-            <div className="text-sm text-white/85 mt-0.5">Crie sua conta para começar a usar a plataforma</div>
+            <div>
+              <a href="/" className="text-xl font-extrabold">
+                <span className="text-ink">conect</span> <span className="text-[#003531]">vet</span>
+              </a>
+              <div className="text-sm text-white/85 mt-0.5">Crie sua conta para começar a usar a plataforma</div>
+            </div>
           </div>
           <a href="/entrar" className="text-sm font-bold text-white/90 whitespace-nowrap">Já tem conta? Entrar</a>
         </div>
