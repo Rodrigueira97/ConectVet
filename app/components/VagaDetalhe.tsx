@@ -176,106 +176,115 @@ export function VagaDetalheView({
         </div>
       </div>
 
-      {encerramento && (
-        <div className={`flex items-center gap-3 rounded-2xl px-4 py-4 mb-4 ${confirmada ? 'bg-primaryTint' : 'bg-ink'}`}>
-          <div className={`w-9 h-9 rounded-[11px] flex items-center justify-center shrink-0 ${confirmada ? 'bg-primaryDeep/10' : 'bg-white/15'}`}>
-            {confirmada ? (
-              <CheckCircleIcon className="w-[18px] h-[18px] text-primaryDeep" />
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+        {encerramento && (
+          <div className={`flex items-center gap-3 rounded-2xl px-4 py-4 mb-4 ${confirmada ? 'bg-primaryTint' : 'bg-ink'}`}>
+            <div className={`w-9 h-9 rounded-[11px] flex items-center justify-center shrink-0 ${confirmada ? 'bg-primaryDeep/10' : 'bg-white/15'}`}>
+              {confirmada ? (
+                <CheckCircleIcon className="w-[18px] h-[18px] text-primaryDeep" />
+              ) : (
+                <LockIcon className="w-[18px] h-[18px] text-white" />
+              )}
+            </div>
+            <div>
+              <div className={`text-[11px] font-extrabold uppercase tracking-wide ${confirmada ? 'text-primaryDeep/65' : 'text-white/60'}`}>
+                {confirmada ? 'Confirmada' : 'Encerrada'}
+              </div>
+              <div className={`text-[15px] font-extrabold ${confirmada ? 'text-primaryDeep' : 'text-white'}`}>
+                {encerramento.motivo}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {compatStatus && !(compatStatus === 'encerrada' && fechada) && (
+          <div className={`flex items-start gap-2.5 rounded-2xl px-4 py-3.5 text-sm font-semibold leading-relaxed mb-4 ${
+            compatStatus === 'incompativel' ? 'bg-red-50 text-[#8C2E20]' : compatStatus === 'encerrada' ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'
+          }`}>
+            {compatStatus === 'incompativel' ? (
+              <WarningIcon className="w-[18px] h-[18px] shrink-0 mt-px text-danger" />
+            ) : compatStatus === 'encerrada' ? (
+              <XCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-gray-400" />
             ) : (
-              <LockIcon className="w-[18px] h-[18px] text-white" />
+              <CheckCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-primaryDeep" />
             )}
-          </div>
-          <div>
-            <div className={`text-[11px] font-extrabold uppercase tracking-wide ${confirmada ? 'text-primaryDeep/65' : 'text-white/60'}`}>
-              {confirmada ? 'Confirmada' : 'Encerrada'}
-            </div>
-            <div className={`text-[15px] font-extrabold ${confirmada ? 'text-primaryDeep' : 'text-white'}`}>
-              {encerramento.motivo}
+            <div>
+              {compatStatus === 'compativel' && <>Sua função (<b>{perfilFuncao}</b>) é compatível com esta vaga.</>}
+              {compatStatus === 'incompativel' && <>Esta vaga é para <b>{vaga.categoria}</b>. Seu perfil está cadastrado como <b>{perfilFuncao}</b>.</>}
+              {compatStatus === 'aplicada' && <>Você já se candidatou para esta vaga. Acompanhe o status em Minhas candidaturas.</>}
+              {compatStatus === 'encerrada' && <>Esta vaga já encerrou e não aceita mais candidaturas.</>}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {compatStatus && !(compatStatus === 'encerrada' && fechada) && (
-        <div className={`flex items-start gap-2.5 rounded-2xl px-4 py-3.5 text-sm font-semibold leading-relaxed mb-5 ${
-          compatStatus === 'incompativel' ? 'bg-red-50 text-[#8C2E20]' : compatStatus === 'encerrada' ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'
-        }`}>
-          {compatStatus === 'incompativel' ? (
-            <WarningIcon className="w-[18px] h-[18px] shrink-0 mt-px text-danger" />
-          ) : compatStatus === 'encerrada' ? (
-            <XCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-gray-400" />
-          ) : (
-            <CheckCircleIcon className="w-[18px] h-[18px] shrink-0 mt-px text-primaryDeep" />
-          )}
-          <div>
-            {compatStatus === 'compativel' && <>Sua função (<b>{perfilFuncao}</b>) é compatível com esta vaga.</>}
-            {compatStatus === 'incompativel' && <>Esta vaga é para <b>{vaga.categoria}</b>. Seu perfil está cadastrado como <b>{perfilFuncao}</b>.</>}
-            {compatStatus === 'aplicada' && <>Você já se candidatou para esta vaga. Acompanhe o status em Minhas candidaturas.</>}
-            {compatStatus === 'encerrada' && <>Esta vaga já encerrou e não aceita mais candidaturas.</>}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
+            <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primaryDeep'}`}>
+              <MoneyIcon className="w-[18px] h-[18px]" />
+            </div>
+            <div className={`text-[11.5px] font-extrabold uppercase tracking-wide mb-1 ${apagada ? 'text-gray-400' : 'text-primaryDeep/75'}`}>Valor do plantão</div>
+            <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>R$ {valorNum}</div>
+          </div>
+          <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
+            <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primary'}`}>
+              <CalendarIcon className="w-[18px] h-[18px]" />
+            </div>
+            <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-500 mb-1">Quando</div>
+            <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>{formatQuando(vaga.data)}</div>
+            <div className="text-[13px] font-bold text-gray-500 mt-1">{vaga.horaInicio} – {vaga.horaFim} · {horasLabel}</div>
+          </div>
+          <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
+            <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primary'}`}>
+              <PinIcon className="w-[18px] h-[18px]" />
+            </div>
+            <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-500 mb-1">Onde</div>
+            <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>{localCurto}</div>
+            <a href={mapsLink(local)} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-semibold mt-1 inline-block hover:underline ${apagada ? 'text-gray-400' : 'text-primary'}`}>
+              Ver no mapa →
+            </a>
           </div>
         </div>
-      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-        <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
-          <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primaryDeep'}`}>
-            <MoneyIcon className="w-[18px] h-[18px]" />
-          </div>
-          <div className={`text-[11.5px] font-extrabold uppercase tracking-wide mb-1 ${apagada ? 'text-gray-400' : 'text-primaryDeep/75'}`}>Valor do plantão</div>
-          <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>R$ {valorNum}</div>
-        </div>
-        <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
-          <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primary'}`}>
-            <CalendarIcon className="w-[18px] h-[18px]" />
-          </div>
-          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-500 mb-1">Quando</div>
-          <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>{formatQuando(vaga.data)}</div>
-          <div className="text-[13px] font-bold text-gray-500 mt-1">{vaga.horaInicio} – {vaga.horaFim} · {horasLabel}</div>
-        </div>
-        <div className={`rounded-2xl p-[18px] ${apagada ? 'bg-gray-100' : 'bg-primaryTint'}`}>
-          <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primary'}`}>
-            <PinIcon className="w-[18px] h-[18px]" />
-          </div>
-          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-500 mb-1">Onde</div>
-          <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>{localCurto}</div>
-          <a href={mapsLink(local)} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-semibold mt-1 inline-block hover:underline ${apagada ? 'text-gray-400' : 'text-primary'}`}>
-            Ver no mapa →
+        <div className="bg-gray-50 rounded-2xl p-5 mb-4">
+          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-2">Endereço completo</div>
+          <div className="text-[14.5px] font-semibold text-ink mb-2">{local}</div>
+          <a href={mapsLink(local)} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline">
+            Ver no Google Maps →
           </a>
         </div>
-      </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
-        <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-2">Endereço completo</div>
-        <div className="text-[14.5px] font-semibold text-ink mb-2">{local}</div>
-        <a href={mapsLink(local)} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline">
-          Ver no Google Maps →
-        </a>
-      </div>
-
-      {vaga.clinicaFotos && vaga.clinicaFotos.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
-          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-3">Conheça a clínica</div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {vaga.clinicaFotos.map((foto) => (
-              <button
-                key={foto.url}
-                onClick={() => setFotoAberta(foto)}
-                className="relative aspect-square rounded-xl overflow-hidden bg-gray-100"
-              >
-                <img src={foto.url} alt={foto.descricao || 'Foto da clínica'} className="w-full h-full object-cover" />
-                {foto.descricao && (
-                  <span
-                    className="absolute left-0 right-0 bottom-0 px-2 py-1.5 text-[10.5px] font-bold text-white text-left"
-                    style={{ background: 'linear-gradient(to top, rgba(4,20,25,.72), transparent)' }}
-                  >
-                    {foto.descricao}
-                  </span>
-                )}
-              </button>
-            ))}
+        {vaga.clinicaFotos && vaga.clinicaFotos.length > 0 && (
+          <div className="bg-gray-50 rounded-2xl p-5 mb-4">
+            <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-3">Conheça a clínica</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {vaga.clinicaFotos.map((foto) => (
+                <button
+                  key={foto.url}
+                  onClick={() => setFotoAberta(foto)}
+                  className="relative aspect-square rounded-xl overflow-hidden bg-gray-100"
+                >
+                  <img src={foto.url} alt={foto.descricao || 'Foto da clínica'} className="w-full h-full object-cover" />
+                  {foto.descricao && (
+                    <span
+                      className="absolute left-0 right-0 bottom-0 px-2 py-1.5 text-[10.5px] font-bold text-white text-left"
+                      style={{ background: 'linear-gradient(to top, rgba(4,20,25,.72), transparent)' }}
+                    >
+                      {foto.descricao}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {vaga.descricao && (
+          <div className="bg-gray-50 rounded-2xl p-5">
+            <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-2">Descrição da vaga</div>
+            <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{vaga.descricao}</div>
+          </div>
+        )}
+      </div>
 
       {fotoAberta && (
         <div
@@ -295,13 +304,6 @@ export function VagaDetalheView({
             </div>
             {fotoAberta.descricao && <div className="text-white text-sm font-bold text-center mt-3">{fotoAberta.descricao}</div>}
           </div>
-        </div>
-      )}
-
-      {vaga.descricao && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
-          <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-400 mb-2">Descrição da vaga</div>
-          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{vaga.descricao}</div>
         </div>
       )}
 

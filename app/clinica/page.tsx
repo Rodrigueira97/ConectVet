@@ -1344,7 +1344,7 @@ function ClinicaPageInner() {
                       </div>
                     </div>
                     {vagaForm.descricao && (
-                      <div className="mt-2.5 pt-2.5 border-t border-gray-100 text-[11.5px] leading-relaxed text-gray-600 whitespace-pre-line">{vagaForm.descricao}</div>
+                      <div className="mt-2.5 pt-2.5 border-t border-gray-100 text-[11.5px] leading-relaxed text-gray-600 whitespace-pre-wrap">{vagaForm.descricao}</div>
                     )}
                     <div className="flex justify-end mt-3">
                       <span className="px-3 py-[7px] rounded-[9px] text-[11.5px] font-bold bg-primary text-white">Ver detalhes e candidatar-se</span>
