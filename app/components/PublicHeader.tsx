@@ -20,13 +20,13 @@ export function PublicHeader() {
   }, []);
 
   return (
-    <header className="flex items-center justify-between gap-3 px-5 sm:px-8 py-3.5 bg-white border-b border-gray-100">
-      <a href="/" className="flex items-center gap-2.5 shrink-0">
-        <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+    <header className="flex items-center justify-between gap-2 sm:gap-3 px-3.5 sm:px-8 py-3 sm:py-3.5 bg-white border-b border-gray-100">
+      <a href="/" className="flex items-center gap-2 sm:gap-2.5 shrink-0 min-w-0">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
           <img src="/logo.svg" alt="ConectVet" className="w-[70%] h-[70%] object-contain" />
         </div>
-        <div className="leading-tight">
-          <div className="text-base font-bold font-brand whitespace-nowrap">
+        <div className="leading-tight min-w-0">
+          <div className="text-[15px] sm:text-base font-bold font-brand whitespace-nowrap">
             <span className="text-ink">conect</span> <span className="text-primaryDeep">vet</span>
           </div>
         </div>
@@ -40,14 +40,17 @@ export function PublicHeader() {
       {logado ? (
         <a
           href={logado.painel}
-          className="inline-flex items-center gap-1.5 bg-primary hover:bg-primaryDark text-white text-[13px] font-extrabold px-4 py-2.5 rounded-xl shrink-0"
+          className="inline-flex items-center gap-1.5 bg-primary hover:bg-primaryDark text-white text-[12.5px] sm:text-[13px] font-extrabold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl shrink-0 whitespace-nowrap"
         >
           Meu painel
         </a>
       ) : (
-        <div className="flex items-center gap-2 shrink-0">
-          <a href="/entrar" className="text-[13px] font-extrabold text-ink px-3 py-2.5 rounded-xl hover:bg-gray-50">Entrar</a>
-          <a href="/cadastro" className="bg-primary hover:bg-primaryDark text-white text-[13px] font-extrabold px-4 py-2.5 rounded-xl">Criar conta grátis</a>
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <a href="/entrar" className="text-[12.5px] sm:text-[13px] font-extrabold text-ink px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl hover:bg-gray-50 whitespace-nowrap">Entrar</a>
+          <a href="/cadastro" className="bg-primary hover:bg-primaryDark text-white text-[12.5px] sm:text-[13px] font-extrabold px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl whitespace-nowrap">
+            <span className="sm:hidden">Criar conta</span>
+            <span className="hidden sm:inline">Criar conta grátis</span>
+          </a>
         </div>
       )}
     </header>
