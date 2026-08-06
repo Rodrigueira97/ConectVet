@@ -95,6 +95,7 @@ export function VagaDetalheView({
   // você é fechada (não aceita mais candidatura), mas não é apagada: os
   // detalhes continuam em destaque porque você ainda precisa deles.
   const apagada = fechada && !confirmada;
+  const incompativel = compatStatus === 'incompativel';
 
   const [avaliacoesClinica, setAvaliacoesClinica] = useState<AvaliacaoClinica[]>([]);
   const [avaliacoesCarregadas, setAvaliacoesCarregadas] = useState(false);
@@ -326,20 +327,32 @@ export function VagaDetalheView({
       {mostrarCta && (
         <>
           <div className="hidden md:block max-w-[340px] mt-2">
-            <button
-              disabled={actionDisabled || actionLoading}
-              onClick={onAction}
-              className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors flex items-center justify-center ${
-                actionLoading
-                  ? 'bg-white text-primaryDeep shadow-lg cursor-default'
-                  : actionDisabled
-                    ? 'bg-white/10 border border-white/25 text-white/60'
-                    : 'bg-white text-primaryDeep shadow-lg hover:bg-primaryTint'
-              }`}
-            >
-              {actionLoading ? <PawTrailInline /> : actionLabel}
-            </button>
-            {fechada && (
+            {incompativel ? (
+              <div className="w-full flex items-center gap-3 bg-white rounded-2xl px-3.5 py-3 shadow-lg">
+                <div className="w-9 h-9 rounded-[11px] bg-red-50 flex items-center justify-center shrink-0">
+                  <WarningIcon className="w-[17px] h-[17px] text-danger" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10.5px] font-extrabold uppercase tracking-wide text-danger/80">Perfil incompatível</div>
+                  <div className="text-[13.5px] font-extrabold text-ink leading-snug">Essa vaga é para {vaga.categoria}</div>
+                </div>
+              </div>
+            ) : (
+              <button
+                disabled={actionDisabled || actionLoading}
+                onClick={onAction}
+                className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors flex items-center justify-center ${
+                  actionLoading
+                    ? 'bg-white text-primaryDeep shadow-lg cursor-default'
+                    : actionDisabled
+                      ? 'bg-white/10 border border-white/25 text-white/60'
+                      : 'bg-white text-primaryDeep shadow-lg hover:bg-primaryTint'
+                }`}
+              >
+                {actionLoading ? <PawTrailInline /> : actionLabel}
+              </button>
+            )}
+            {(fechada || incompativel) && (
               <button onClick={onBack} className="w-full mt-2.5 py-3 rounded-2xl text-[13.5px] font-extrabold text-white bg-white/10 hover:bg-white/15">
                 Ver outras vagas disponíveis →
               </button>
@@ -349,20 +362,32 @@ export function VagaDetalheView({
             className="md:hidden sticky bottom-0 left-0 right-0 -mx-8 px-8 pt-6 pb-4"
             style={{ background: 'linear-gradient(to top, #F5F8F6 65%, transparent)' }}
           >
-            <button
-              disabled={actionDisabled || actionLoading}
-              onClick={onAction}
-              className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors flex items-center justify-center ${
-                actionLoading
-                  ? 'bg-primary text-white cursor-default'
-                  : actionDisabled
-                    ? 'bg-white border border-gray-200 text-gray-400'
-                    : 'bg-primary text-white hover:bg-primaryDark'
-              }`}
-            >
-              {actionLoading ? <PawTrailInline /> : actionLabel}
-            </button>
-            {fechada && (
+            {incompativel ? (
+              <div className="w-full flex items-center gap-3 bg-white border border-red-100 rounded-2xl px-3.5 py-3 shadow-[0_4px_14px_rgba(4,45,76,0.08)]">
+                <div className="w-8 h-8 rounded-[10px] bg-red-50 flex items-center justify-center shrink-0">
+                  <WarningIcon className="w-4 h-4 text-danger" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wide text-danger/80">Perfil incompatível</div>
+                  <div className="text-[12.5px] font-extrabold text-ink leading-snug">Essa vaga é para {vaga.categoria}</div>
+                </div>
+              </div>
+            ) : (
+              <button
+                disabled={actionDisabled || actionLoading}
+                onClick={onAction}
+                className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors flex items-center justify-center ${
+                  actionLoading
+                    ? 'bg-primary text-white cursor-default'
+                    : actionDisabled
+                      ? 'bg-white border border-gray-200 text-gray-400'
+                      : 'bg-primary text-white hover:bg-primaryDark'
+                }`}
+              >
+                {actionLoading ? <PawTrailInline /> : actionLabel}
+              </button>
+            )}
+            {(fechada || incompativel) && (
               <button onClick={onBack} className="w-full mt-2 py-2.5 rounded-2xl text-[13px] font-extrabold text-primaryDeep hover:underline">
                 Ver outras vagas disponíveis →
               </button>

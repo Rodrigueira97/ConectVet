@@ -533,7 +533,6 @@ function ProfissionalPageInner() {
   }
 
   function renderVagaCard(v: Vaga) {
-    const compat = v.categoria === perfil!.funcao;
     const applied = hasApplied(v.id);
     const perto = pertoDeVoce(v);
     const encerrada = vagaEncerrada(v);
@@ -664,11 +663,11 @@ function ProfissionalPageInner() {
             </div>
           ) : (
             <button
-              disabled={applied || !compat}
+              disabled={applied}
               onClick={(e) => { e.stopPropagation(); abrirDetalheVaga(v.id); }}
-              className={`flex-1 py-2.5 rounded-[11px] text-[13px] font-bold ${applied || !compat ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}
+              className={`flex-1 py-2.5 rounded-[11px] text-[13px] font-bold ${applied ? 'border border-gray-300 bg-gray-50 text-gray-400' : 'bg-primary hover:bg-primaryDark text-white'}`}
             >
-              {applied ? 'Candidatura enviada' : compat ? 'Ver detalhes e candidatar-se' : 'Perfil incompatível'}
+              {applied ? 'Candidatura enviada' : 'Ver detalhes e candidatar-se'}
             </button>
           )}
         </div>
