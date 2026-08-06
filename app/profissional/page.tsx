@@ -1,7 +1,10 @@
 'use client';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { buildEndereco, mapsLink, onlyDigits, hojeBrasil, somarDiasISO, agoraBrasil, plantaoEncerrado, plantaoAindaNaoComecou } from '@/lib/mockData';
+import {
+  mapsLink, onlyDigits, hojeBrasil, somarDiasISO, agoraBrasil, plantaoEncerrado, plantaoAindaNaoComecou,
+  formatDataBR, localDaVaga, vagaEncerrada, urgenciaLabel, motivoVagaFechada,
+} from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
 import { Sidebar } from '@/app/components/Sidebar';
 import {
@@ -41,43 +44,12 @@ const CANDIDATURAS_POR_PAGINA = 10;
 
 type Tab = 'home' | 'favoritas' | 'historico' | 'perfil' | 'quem-somos';
 
-function formatDataBR(iso: string) {
-  if (!iso) return '';
-  return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-}
-
-function localDaVaga(v: { rua: string; numero: string; complemento?: string | null; bairro?: string | null; cidade: string; estado: string }) {
-  return buildEndereco({ rua: v.rua, numero: v.numero, complemento: v.complemento || undefined, bairro: v.bairro || undefined, cidade: v.cidade, estado: v.estado });
-}
-
 function tempoNaPlataforma(createdAt: string) {
   const meses = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30)));
   if (meses < 1) return 'novo por aqui';
   if (meses < 12) return `${meses} ${meses === 1 ? 'mês' : 'meses'}`;
   const anos = Math.floor(meses / 12);
   return `${anos} ${anos === 1 ? 'ano' : 'anos'}`;
-}
-
-function vagaEncerrada(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
-  if (v.status !== 'ABERTA') return true;
-  return plantaoEncerrado(v);
-}
-
-function urgenciaLabel(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
-  if (vagaEncerrada(v)) return null;
-  const hojeStr = hojeBrasil();
-  const amanhaStr = somarDiasISO(hojeStr, 1);
-  const d = v.data.slice(0, 10);
-  if (d === hojeStr) return 'É hoje';
-  if (d === amanhaStr) return 'Amanhã';
-  return null;
-}
-
-function motivoVagaFechada(v: { status: string }) {
-  if (v.status === 'PREENCHIDA') return 'Preenchida por outro profissional';
-  if (v.status === 'CONCLUIDA') return 'Vaga concluída';
-  if (v.status === 'CANCELADA') return 'Cancelada pela clínica';
-  return 'Prazo encerrado';
 }
 
 const FAVORITOS_KEY = 'conectvet_vagas_favoritas';
@@ -309,7 +281,7 @@ function ProfissionalPageInner() {
   const [desistindoProcessandoId, setDesistindoProcessandoId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getToken()) { router.push('/'); return; }
+    if (!getToken()) { router.push('/entrar'); return; }
     (async () => {
       try {
         const [p, f, c] = await Promise.all([getProfissionalMe(), getFeed(), getMinhasCandidaturas()]);
@@ -326,7 +298,7 @@ function ProfissionalPageInner() {
         const pares = await Promise.all(aceitas.map(async (x) => [x.id, await getAvaliacoesPorCandidatura(x.id)] as const));
         setAvaliacoesPorCandidatura(Object.fromEntries(pares));
       } catch (err) {
-        if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/'); }
+        if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/entrar'); }
       } finally {
         setLoading(false);
       }

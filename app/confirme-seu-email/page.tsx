@@ -46,7 +46,7 @@ function ConfirmeSeuEmailContent() {
             </a>
             <div className="text-sm text-white/85 mt-0.5">Falta pouco para começar a usar a plataforma</div>
           </div>
-          <a href="/" className="text-sm font-bold text-white/90 whitespace-nowrap">Já tem conta? Entrar</a>
+          <a href="/entrar" className="text-sm font-bold text-white/90 whitespace-nowrap">Já tem conta? Entrar</a>
         </div>
       </div>
 

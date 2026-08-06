@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { CATEGORIAS, ESTADOS_CIDADES, isVeterinarioFormado, onlyDigits, hojeBrasil } from '@/lib/mockData';
 import { isValidCNPJ, isValidCpfCnpj, maskCEP, maskCNPJ, maskCpfCnpj, maskTelefone } from '@/lib/validators';
 import { Categoria } from '@/lib/types';
@@ -93,8 +93,23 @@ const FIELD_SECTION_MAP: Record<string, string> = {
 };
 
 export default function CadastroPage() {
+  return (
+    <Suspense fallback={null}>
+      <CadastroPageInner />
+    </Suspense>
+  );
+}
+
+function CadastroPageInner() {
   const router = useRouter();
-  const [role, setRole] = useState<Role>('clinica');
+  const searchParams = useSearchParams();
+  // O gate de login da vaga pública (app/vagas/[id]) manda pra cá com
+  // ?role=profissional&next=/vagas/:id — pré-seleciona o papel certo e, no
+  // fim do cadastro, devolve a pessoa pra vaga que ela queria, em vez do
+  // painel genérico.
+  const roleInicial = searchParams.get('role') === 'profissional' ? 'profissional' : 'clinica';
+  const next = searchParams.get('next');
+  const [role, setRole] = useState<Role>(roleInicial);
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
 
@@ -276,7 +291,7 @@ export default function CadastroPage() {
         });
         if ('accessToken' in resultadoClinica) {
           setSession(resultadoClinica.accessToken, resultadoClinica.role);
-          router.push('/clinica');
+          router.push(next || '/clinica');
         } else {
           router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}&enviado=1`);
         }
@@ -307,7 +322,9 @@ export default function CadastroPage() {
         });
         if ('accessToken' in resultadoProf) {
           setSession(resultadoProf.accessToken, resultadoProf.role);
-          router.push('/profissional');
+          // "novaConta=1" avisa a página de destino (tipicamente a vaga que
+          // a pessoa queria) pra mostrar um empurrãozinho de boas-vindas.
+          router.push(next ? `${next}${next.includes('?') ? '&' : '?'}novaConta=1` : '/profissional');
         } else {
           router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}&enviado=1`);
         }
@@ -348,7 +365,7 @@ export default function CadastroPage() {
             </a>
             <div className="text-sm text-white/85 mt-0.5">Crie sua conta para começar a usar a plataforma</div>
           </div>
-          <a href="/" className="text-sm font-bold text-white/90 whitespace-nowrap">Já tem conta? Entrar</a>
+          <a href="/entrar" className="text-sm font-bold text-white/90 whitespace-nowrap">Já tem conta? Entrar</a>
         </div>
       </div>
 
@@ -590,7 +607,7 @@ export default function CadastroPage() {
         </div>
 
         <div className="text-center mt-1 mb-8 text-sm text-gray-500">
-          Já tem conta? <a href="/" className="font-bold">Entrar</a>
+          Já tem conta? <a href="/entrar" className="font-bold">Entrar</a>
         </div>
       </div>
     </div>

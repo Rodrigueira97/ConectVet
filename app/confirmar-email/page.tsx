@@ -56,7 +56,7 @@ function ConfirmarEmailContent() {
               <span className="text-ink">conect</span> <span className="text-[#003531]">vet</span>
             </a>
           </div>
-          <a href="/" className="text-sm font-bold text-white/90 whitespace-nowrap">Já tem conta? Entrar</a>
+          <a href="/entrar" className="text-sm font-bold text-white/90 whitespace-nowrap">Já tem conta? Entrar</a>
         </div>
       </div>
 
@@ -73,7 +73,7 @@ function ConfirmarEmailContent() {
               Sua conta foi ativada com sucesso. Agora você já pode acessar a ConectVet.
             </p>
             <button
-              onClick={() => router.push('/')}
+              onClick={() => router.push('/entrar')}
               className="w-full mt-5 py-3 rounded-lg bg-primary hover:bg-primaryDark text-white font-bold text-sm"
             >
               Entrar na minha conta

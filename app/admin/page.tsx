@@ -20,7 +20,7 @@ export default function AdminPage() {
     try {
       setPagamentos(await listarPagamentos());
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/'); return; }
+      if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/entrar'); return; }
       setError(err instanceof ApiError ? err.message : 'Não foi possível carregar os pagamentos.');
     } finally {
       setLoading(false);
@@ -28,7 +28,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (!getToken()) { router.push('/'); return; }
+    if (!getToken()) { router.push('/entrar'); return; }
     carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);

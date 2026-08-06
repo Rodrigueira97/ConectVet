@@ -1,147 +1,275 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { login, setSession, ApiError } from '@/lib/api';
-import { EyeIcon, EyeOffIcon, LockIcon, MailIcon, WarningIcon } from '@/app/components/icons';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { hojeBrasil, vagaEncerrada } from '@/lib/mockData';
+import { PublicHeader } from '@/app/components/PublicHeader';
+import { VagaCardPublica } from '@/app/components/VagaCardPublica';
+import { DateField } from '@/app/components/DateField';
+import { EmptyState } from '@/app/components/EmptyState';
+import { PawTrailLoader } from '@/app/components/PawTrailLoader';
+import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
+import { CloseIcon, FilterIcon, PinIcon, SearchIcon, WarningIcon } from '@/app/components/icons';
+import { CATEGORIA_LABEL, CATEGORIAS, Vaga, getFeed } from '@/lib/api';
 
-export default function LoginPage() {
+const VAGAS_POR_PAGINA = 6;
+
+export default function HomePublica() {
+  return (
+    <Suspense fallback={<HomePublicaSkeleton />}>
+      <HomePublicaInner />
+    </Suspense>
+  );
+}
+
+function HomePublicaSkeleton() {
+  return (
+    <div className="min-h-screen bg-paws">
+      <div className="bg-white h-[62px]" />
+      <div className="max-w-[880px] mx-auto p-8">
+        <div className="flex flex-col gap-3.5">
+          {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HomePublicaInner() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
-  const [showSenha, setShowSenha] = useState(false);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  async function entrar() {
-    if (!/\S+@\S+\.\S+/.test(email)) return setError('Informe um e-mail válido.');
-    if (!senha || senha.length < 4) return setError('A senha deve ter ao menos 4 caracteres.');
-    setError('');
-    setLoading(true);
-    try {
-      const { accessToken, role: contaRole } = await login(email, senha);
-      setSession(accessToken, contaRole);
-      const destino = contaRole === 'CLINICA' ? '/clinica' : contaRole === 'PROFISSIONAL' ? '/profissional' : '/admin';
-      router.push(destino);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'EMAIL_NAO_CONFIRMADO') {
-        router.push(`/confirme-seu-email?email=${encodeURIComponent(email)}`);
-        return;
-      }
-      setError(err instanceof ApiError ? err.message : 'Não foi possível entrar. Tente novamente.');
-    } finally {
-      setLoading(false);
+  function goTo(patch: Record<string, string | null | undefined>) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === undefined || value === '') params.delete(key);
+      else params.set(key, value);
     }
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  const filtros = {
+    busca: searchParams.get('busca') || '',
+    categoria: searchParams.get('categoria') || '',
+    cidade: searchParams.get('cidade') || '',
+    data: searchParams.get('data') || '',
+  };
+
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
+  const [feed, setFeed] = useState<Vaga[]>([]);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
+
+  useEffect(() => {
+    setLoading(true);
+    setErro(false);
+    getFeed({ cidade: filtros.cidade || undefined, data: filtros.data || undefined })
+      .then(setFeed)
+      .catch(() => setErro(true))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.cidade, filtros.data, tentativa]);
+
+  useEffect(() => { setVisiveis(VAGAS_POR_PAGINA); }, [filtros.busca, filtros.categoria, filtros.cidade, filtros.data]);
+
+  useEffect(() => {
+    function verificarScroll() {
+      const faltam = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+      if (faltam > 200) return;
+      setVisiveis((v) => (v < feedFiltrado.length ? Math.min(v + VAGAS_POR_PAGINA, feedFiltrado.length) : v));
+    }
+    window.addEventListener('scroll', verificarScroll, { passive: true });
+    window.addEventListener('resize', verificarScroll);
+    return () => {
+      window.removeEventListener('scroll', verificarScroll);
+      window.removeEventListener('resize', verificarScroll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
+  const feedFiltrado = feed
+    .filter((v) => {
+      if (filtros.categoria && v.categoria !== filtros.categoria) return false;
+      const local = [v.bairro, v.cidade, v.estado].filter(Boolean).join(' ');
+      if (filtros.busca && !`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`.toLowerCase().includes(filtros.busca.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => Number(vagaEncerrada(a)) - Number(vagaEncerrada(b)));
+
+  const feedPaginado = feedFiltrado.slice(0, visiveis);
+  const temMais = visiveis < feedFiltrado.length;
+  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria].filter(Boolean).length;
+  const algumFiltroAtivo = filtrosAtivos > 0 || !!filtros.busca;
+
+  function limparFiltros() {
+    goTo({ busca: '', categoria: '', cidade: '', data: '' });
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen">
-      {/* Painel de marca */}
-      <div
-        className="bg-paws relative overflow-hidden text-white flex flex-col items-center justify-center text-center
-                   rounded-b-[32px] px-5 pt-8 pb-14 min-h-[46vh]
-                   md:min-h-0 md:rounded-none md:flex-[1.05] md:p-12 md:items-stretch md:text-left md:justify-start"
-      >
-        <div className="login-brand-inner relative z-10 w-full max-w-[460px] mx-auto flex flex-col gap-4 flex-none items-center
-                         md:h-full md:max-w-[460px] md:min-[1600px]:max-w-[520px] md:items-start md:flex-1 md:gap-0">
-          <div className="login-copy-group flex flex-col gap-4 items-center md:items-start md:gap-[26px]">
-            <div className="flex flex-col items-center gap-4 md:items-start md:gap-3.5">
-              <div className="w-[136px] h-[136px] md:w-[84px] md:h-[84px] md:min-[1600px]:w-24 md:min-[1600px]:h-24 shrink-0 flex items-center justify-center">
-                <img
-                  src="/logo.svg"
-                  alt="ConectVet"
-                  className="w-full h-full object-contain drop-shadow-[0_6px_16px_rgba(4,45,76,0.35)] md:drop-shadow-none"
+    <div className="min-h-screen bg-paws">
+      <PublicHeader />
+
+      <div className="max-w-[880px] mx-auto p-8">
+        <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas disponíveis</h1>
+        <p className="text-sm text-white/85 mb-5">
+          Plantões publicados por clínicas parceiras. Navegue à vontade — só pedimos conta na hora de se candidatar.
+        </p>
+
+        <div className="relative mb-3">
+          <SearchIcon className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${filtros.busca ? 'text-primary' : 'text-gray-400'}`} />
+          <input
+            value={filtros.busca}
+            onChange={(e) => goTo({ busca: e.target.value })}
+            placeholder="Buscar por clínica, categoria ou local..."
+            className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-gray-300 text-sm bg-white"
+          />
+        </div>
+
+        {/* Filtros: linha inline no desktop */}
+        <div className="hidden md:flex gap-2.5 flex-wrap items-center mb-4">
+          <div className="relative">
+            <PinIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.cidade ? 'text-primary' : 'text-gray-400'}`} />
+            <input
+              value={filtros.cidade}
+              onChange={(e) => goTo({ cidade: e.target.value })}
+              placeholder="Cidade"
+              className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white w-32"
+            />
+          </div>
+          <DateField
+            label="Data" hideLabel compact clearable
+            value={filtros.data}
+            onChange={(v) => goTo({ data: v })}
+            min={hojeBrasil()}
+            placeholder="Qualquer data"
+          />
+          <div className="relative">
+            <FilterIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.categoria ? 'text-primary' : 'text-gray-400'}`} />
+            <select
+              value={filtros.categoria}
+              onChange={(e) => goTo({ categoria: e.target.value })}
+              className={`pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white appearance-none ${filtros.categoria ? 'text-ink' : 'text-gray-400'}`}
+            >
+              <option value="">Todas categorias</option>
+              {CATEGORIAS.map((c) => <option key={c} value={c} className="text-ink">{CATEGORIA_LABEL[c]}</option>)}
+            </select>
+          </div>
+          <button
+            onClick={limparFiltros}
+            disabled={!algumFiltroAtivo}
+            className="flex items-center gap-1.5 text-sm font-bold text-white/90 ml-auto px-2.5 py-2 rounded-full hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+          >
+            <CloseIcon className="w-3 h-3" /> Limpar filtros
+          </button>
+        </div>
+
+        {/* Filtros: botão + painel no mobile */}
+        <div className="md:hidden mb-4">
+          <button
+            onClick={() => setFiltrosAbertos((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-white bg-white/15 px-3.5 py-2.5 rounded-full"
+          >
+            <FilterIcon className="w-3.5 h-3.5" /> Filtros
+            {filtrosAtivos > 0 && (
+              <span className="bg-white text-primaryDeep text-[11px] font-extrabold rounded-full min-w-[17px] h-[17px] flex items-center justify-center px-1">
+                {filtrosAtivos}
+              </span>
+            )}
+          </button>
+          {filtrosAbertos && (
+            <div className="flex flex-col gap-3 bg-white rounded-2xl p-3.5 mt-2.5 shadow-sm">
+              <div>
+                <div className="text-xs font-bold text-gray-500 mb-1">Cidade</div>
+                <div className="relative">
+                  <PinIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.cidade ? 'text-primary' : 'text-gray-400'}`} />
+                  <input
+                    value={filtros.cidade}
+                    onChange={(e) => goTo({ cidade: e.target.value })}
+                    placeholder="Qualquer cidade"
+                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="min-w-0">
+                <DateField
+                  label="Data"
+                  value={filtros.data}
+                  onChange={(v) => goTo({ data: v })}
+                  min={hojeBrasil()}
+                  placeholder="Qualquer data"
+                  clearable
                 />
               </div>
-              <div className="text-[40px] md:text-[36px] md:min-[1600px]:text-[40px] font-extrabold tracking-tight font-brand">
-                <span className="text-ink">conect</span> <span className="text-[#83F9E8]">vet</span>
+              <div>
+                <div className="text-xs font-bold text-gray-500 mb-1">Categoria</div>
+                <div className="relative">
+                  <FilterIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.categoria ? 'text-primary' : 'text-gray-400'}`} />
+                  <select
+                    value={filtros.categoria}
+                    onChange={(e) => goTo({ categoria: e.target.value })}
+                    className={`w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm bg-white appearance-none ${filtros.categoria ? 'text-ink' : 'text-gray-400'}`}
+                  >
+                    <option value="">Todas categorias</option>
+                    {CATEGORIAS.map((c) => <option key={c} value={c} className="text-ink">{CATEGORIA_LABEL[c]}</option>)}
+                  </select>
+                </div>
               </div>
-            </div>
-            <div className="hidden md:block text-[36px] md:min-[1600px]:text-[42px] font-extrabold leading-[1.28] text-balance max-w-[460px] md:min-[1600px]:max-w-[500px]">
-              Conectando clínicas e profissionais veterinários com facilidade, rapidez e segurança.
-            </div>
-            <div className="hidden md:block text-[16.5px] md:min-[1600px]:text-lg text-white/90 leading-relaxed max-w-[400px] md:min-[1600px]:max-w-[440px]">
-              Acesse sua conta para publicar vagas, encontrar plantões e gerenciar contratações.
-            </div>
-          </div>
-          <div className="hidden md:block text-xs text-white/65 mt-auto">v0.01 — protótipo de produto</div>
-        </div>
-      </div>
-
-      {/* Painel do formulário */}
-      <div
-        className="relative flex-1 flex items-start justify-center bg-white rounded-t-3xl -mt-7 px-5 pt-8 pb-10
-                   md:mt-0 md:bg-transparent md:rounded-none md:items-center md:px-8 md:py-12"
-      >
-        <div className="w-full max-w-[380px] md:min-[1600px]:max-w-[420px]">
-          <div className="text-[22px] md:min-[1600px]:text-2xl font-extrabold mb-1">Entrar</div>
-          <div className="text-[13.5px] md:min-[1600px]:text-sm text-gray-500 mb-6">Acesse sua conta ConectVet</div>
-
-          {error && (
-            <div className="flex items-start gap-1.5 text-[13px] font-semibold text-danger bg-red-50 rounded-lg px-2.5 py-2 mb-3.5">
-              <WarningIcon className="w-[15px] h-[15px] shrink-0 mt-px" />
-              <span>{error}</span>
+              {algumFiltroAtivo && (
+                <button
+                  onClick={limparFiltros}
+                  className="flex items-center justify-center gap-1.5 text-sm font-bold text-danger bg-red-50 rounded-lg py-2.5"
+                >
+                  <CloseIcon className="w-3 h-3" /> Limpar filtros
+                </button>
+              )}
             </div>
           )}
-
-          <label className="flex flex-col gap-1.5 mb-3.5">
-            <span className="text-[13px] font-bold">E-mail</span>
-            <div className="relative">
-              <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#97A39D] pointer-events-none" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                onKeyDown={(e) => e.key === 'Enter' && entrar()}
-                placeholder="voce@email.com"
-                autoComplete="email"
-                className="w-full pl-[38px] pr-3 py-[11px] rounded-[10px] border border-gray-200 text-sm outline-none
-                           focus:border-primary focus:ring-4 focus:ring-primaryTint"
-              />
-            </div>
-          </label>
-
-          <label className="flex flex-col gap-1.5 mb-3.5">
-            <span className="text-[13px] font-bold">Senha</span>
-            <div className="relative">
-              <LockIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#97A39D] pointer-events-none" />
-              <input
-                type={showSenha ? 'text' : 'password'}
-                value={senha}
-                onChange={(e) => { setSenha(e.target.value); setError(''); }}
-                onKeyDown={(e) => e.key === 'Enter' && entrar()}
-                placeholder="Sua senha"
-                autoComplete="current-password"
-                className="w-full pl-[38px] pr-[38px] py-[11px] rounded-[10px] border border-gray-200 text-sm outline-none
-                           focus:border-primary focus:ring-4 focus:ring-primaryTint"
-              />
-              <button
-                type="button"
-                onClick={() => setShowSenha((v) => !v)}
-                aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-[26px] h-[26px] rounded-md flex items-center justify-center
-                           text-[#97A39D] hover:bg-gray-100 hover:text-gray-500"
-              >
-                {showSenha ? <EyeOffIcon className="w-[17px] h-[17px]" /> : <EyeIcon className="w-[17px] h-[17px]" />}
-              </button>
-            </div>
-          </label>
-
-          <button
-            onClick={entrar}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 mt-1.5 py-[13px] rounded-[11px] bg-primary hover:bg-primaryDark
-                       text-white font-extrabold text-[14.5px] disabled:opacity-65"
-          >
-            {loading && (
-              <span className="w-[15px] h-[15px] rounded-full border-2 border-white/40 border-t-white animate-spin" />
-            )}
-            {loading ? 'Entrando...' : 'Entrar'}
-          </button>
-
-          <div className="text-center mt-5 text-[13.5px] text-gray-500">
-            Não tem conta? <a href="/cadastro" className="font-bold hover:underline">Criar conta</a>
-          </div>
         </div>
+
+        {erro ? (
+          <div className="bg-white rounded-2xl shadow-sm p-10">
+            <EmptyState
+              icon={<WarningIcon className="w-6 h-6" />}
+              title="Não foi possível carregar as vagas"
+              description="Algo deu errado ao buscar os plantões disponíveis. Tente de novo em instantes."
+              actionLabel="Tentar novamente"
+              onAction={() => setTentativa((t) => t + 1)}
+            />
+          </div>
+        ) : loading ? (
+          <div className="flex flex-col gap-3.5">
+            {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-[14px]">
+            {feedPaginado.map((v) => <VagaCardPublica key={v.id} vaga={v} />)}
+            {feedFiltrado.length === 0 && (
+              <div className="bg-white rounded-2xl shadow-sm p-10">
+                <EmptyState
+                  icon={<SearchIcon className="w-6 h-6" />}
+                  title="Nenhuma vaga encontrada"
+                  description={
+                    algumFiltroAtivo
+                      ? 'Nenhuma vaga bate com os filtros que você escolheu. Tente remover algum filtro ou ampliar a busca.'
+                      : 'No momento não há vagas publicadas. Volte mais tarde pra conferir novidades.'
+                  }
+                  actionLabel={algumFiltroAtivo ? 'Limpar filtros' : undefined}
+                  actionIcon={<CloseIcon className="w-3.5 h-3.5" />}
+                  onAction={algumFiltroAtivo ? limparFiltros : undefined}
+                  actionVariant="ghost"
+                />
+              </div>
+            )}
+          </div>
+        )}
+        {temMais && (
+          <div className="flex items-center justify-center py-6">
+            <PawTrailLoader label="Carregando mais vagas..." />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -367,7 +367,7 @@ function ClinicaPageInner() {
   const [editandoPerfil, setEditandoPerfil] = useState(false);
 
   useEffect(() => {
-    if (!getToken()) { router.push('/'); return; }
+    if (!getToken()) { router.push('/entrar'); return; }
     (async () => {
       try {
         const [c, mv, f] = await Promise.all([getClinicaMe(), getMinhasVagas(), getFeed()]);
@@ -383,7 +383,7 @@ function ClinicaPageInner() {
         const pares = await Promise.all(hiredIds.map(async (id) => [id, await getAvaliacoesPorCandidatura(id)] as const));
         setAvaliacoesPorCandidatura(Object.fromEntries(pares));
       } catch (err) {
-        if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/'); }
+        if (err instanceof ApiError && err.status === 401) { clearSession(); router.push('/entrar'); }
       } finally {
         setLoading(false);
       }

@@ -105,6 +105,40 @@ export function mapsLink(endereco: string) {
   return endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}` : '';
 }
 
+export function formatDataBR(iso: string) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+}
+
+export function localDaVaga(v: { rua: string; numero: string; complemento?: string | null; bairro?: string | null; cidade: string; estado: string }) {
+  return buildEndereco({ rua: v.rua, numero: v.numero, complemento: v.complemento || undefined, bairro: v.bairro || undefined, cidade: v.cidade, estado: v.estado });
+}
+
+// Do ponto de vista de quem navega pelas vagas (feed do profissional ou feed
+// público), "encerrada" é qualquer vaga que não aceita mais candidatura:
+// preenchida, cancelada, concluída, ou aberta cuja data/hora já passou.
+export function vagaEncerrada(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
+  if (v.status !== 'ABERTA') return true;
+  return plantaoEncerrado(v);
+}
+
+export function urgenciaLabel(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
+  if (vagaEncerrada(v)) return null;
+  const hojeStr = hojeBrasil();
+  const amanhaStr = somarDiasISO(hojeStr, 1);
+  const d = v.data.slice(0, 10);
+  if (d === hojeStr) return 'É hoje';
+  if (d === amanhaStr) return 'Amanhã';
+  return null;
+}
+
+export function motivoVagaFechada(v: { status: string }) {
+  if (v.status === 'PREENCHIDA') return 'Preenchida por outro profissional';
+  if (v.status === 'CONCLUIDA') return 'Vaga concluída';
+  if (v.status === 'CANCELADA') return 'Cancelada pela clínica';
+  return 'Prazo encerrado';
+}
+
 export function statusBadge(status: string) {
   const map: Record<string, [string, string, string]> = {
     cancelada: ['bg-gray-100', 'text-gray-500', 'Cancelada'],

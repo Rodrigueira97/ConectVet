@@ -45,13 +45,18 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessao = getSessao(request);
 
-  // Já logado: não pode ver a tela de login — manda para o painel do seu papel.
-  if (pathname === '/') {
+  // "/" e "/entrar" são as únicas rotas que fazem sentido pra quem já está
+  // logado ver de novo: a home pública (sem necessidade de conta) e o
+  // formulário de login. Nos dois casos, se já tem sessão, não tem o que
+  // fazer ali — manda direto pro painel do seu papel.
+  if (pathname === '/' || pathname === '/entrar') {
     if (sessao) return redirecionarPara(request, ROTA_POR_ROLE[sessao.role]);
     return NextResponse.next();
   }
 
-  // Deslogado: não pode acessar nenhuma área da plataforma.
+  // Deslogado: não pode acessar nenhuma área logada da plataforma. Note que
+  // "/vagas/:id" e "/quem-somos" nem aparecem no matcher abaixo — são
+  // públicas de propósito, não precisam (e não devem) passar por aqui.
   if (!sessao) {
     return redirecionarPara(request, '/');
   }
@@ -71,5 +76,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/clinica/:path*', '/profissional/:path*', '/admin/:path*'],
+  matcher: ['/', '/entrar', '/clinica/:path*', '/profissional/:path*', '/admin/:path*'],
 };
