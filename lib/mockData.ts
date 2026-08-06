@@ -185,11 +185,12 @@ export function urgenciaLabel(v: { data: string; horaInicio: string; horaFim: st
   return null;
 }
 
-export function motivoVagaFechada(v: { status: string }) {
-  if (v.status === 'PREENCHIDA') return 'Preenchida por outro profissional';
-  if (v.status === 'CONCLUIDA') return 'Vaga concluída';
-  if (v.status === 'CANCELADA') return 'Cancelada pela clínica';
-  return 'Prazo encerrado';
+// Antes distinguia "preenchida por outro profissional" / "prazo encerrado" /
+// "cancelada pela clínica" — simplificado a pedido: pra quem lê, o resultado
+// prático de qualquer vaga fechada já era sempre o mesmo ("não dá mais"),
+// então toda vaga encerrada mostra a mesma frase, sem explicar o motivo.
+export function motivoVagaFechada(_v: { status: string }) {
+  return 'Vaga concluída';
 }
 
 export function statusBadge(status: string) {

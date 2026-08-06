@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { buildEndereco, mapsLink, plantaoEncerrado } from '@/lib/mockData';
+import { buildEndereco, mapsLink, motivoVagaFechada, plantaoEncerrado } from '@/lib/mockData';
 import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CloseIcon, LockIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
 import { PawTrailInline } from '@/app/components/PawTrailLoader';
 import { FotoEstrutura, AvaliacaoClinica, getUltimasAvaliacoesClinica } from '@/lib/api';
@@ -48,32 +48,23 @@ function formatQuando(dataIso: string) {
   return semData.charAt(0).toUpperCase() + semData.slice(1);
 }
 
-function formatDiaMes(dataIso: string) {
-  return new Date(dataIso)
-    .toLocaleDateString('pt-BR', { timeZone: 'UTC', day: '2-digit', month: 'short' })
-    .replace('.', '');
-}
-
 // Do ponto de vista de quem navega pelas vagas, "encerrada" é qualquer vaga
 // que não aceita mais candidatura: preenchida, cancelada, concluída, ou
-// aberta cuja data/hora já passou sem ninguém confirmado. Cada motivo tem
-// seu próprio texto — mas todos ganham o mesmo tratamento visual (painel
-// escuro, selo com cadeado, aviso em destaque, cards apagados) porque pra
-// quem está vendo, o resultado prático é sempre o mesmo: não dá mais.
+// aberta cuja data/hora já passou sem ninguém confirmado. Não importa qual
+// desses motivos é — pra quem lê, o resultado prático é sempre o mesmo (não
+// dá mais), então o selo é sempre "Encerrada" e o motivo é sempre a mesma
+// frase curta (motivoVagaFechada, a mesma usada no card do feed).
 //
 // A exceção é quando o próprio profissional foi o escolhido: aí "encerrada"
 // significa "você conseguiu o plantão", então ganha `tom: 'confirmada'` e o
 // resto do componente troca o visual apagado por um destaque positivo.
-function encerramentoInfo(vaga: VagaDetalheData, preenchidaPorMim?: boolean): { pill: string; titulo: string; motivo: string; tom: 'fechada' | 'confirmada' } | null {
+function encerramentoInfo(vaga: VagaDetalheData, preenchidaPorMim?: boolean): { pill: string; motivo: string; tom: 'fechada' | 'confirmada' } | null {
   const encerrada = vaga.status ? (vaga.status !== 'ABERTA' || plantaoEncerrado(vaga)) : plantaoEncerrado(vaga);
   if (!encerrada) return null;
   if (vaga.status === 'PREENCHIDA' && preenchidaPorMim) {
-    return { pill: 'Preenchida por você', titulo: 'Você foi confirmado para este plantão!', motivo: 'A clínica selecionou você. Compareça no dia e horário combinados.', tom: 'confirmada' };
+    return { pill: 'Preenchida por você', motivo: 'Você foi confirmado para este plantão!', tom: 'confirmada' };
   }
-  if (vaga.status === 'CANCELADA') return { pill: 'Cancelada', titulo: 'Esta vaga foi cancelada', motivo: 'A clínica cancelou este plantão.', tom: 'fechada' };
-  if (vaga.status === 'CONCLUIDA') return { pill: 'Concluída', titulo: 'Este plantão já foi concluído', motivo: `Foi realizado em ${formatDiaMes(vaga.data)}.`, tom: 'fechada' };
-  if (vaga.status === 'PREENCHIDA') return { pill: 'Preenchida', titulo: 'Esta vaga já foi preenchida', motivo: 'Outro profissional já foi confirmado para este plantão.', tom: 'fechada' };
-  return { pill: `Encerrada em ${formatDiaMes(vaga.data)}`, titulo: 'Esta vaga já foi encerrada', motivo: `O plantão de ${formatDiaMes(vaga.data)} não teve profissional confirmado a tempo.`, tom: 'fechada' };
+  return { pill: 'Encerrada', motivo: motivoVagaFechada({ status: vaga.status || '' }), tom: 'fechada' };
 }
 
 export function VagaDetalheView({
@@ -184,16 +175,20 @@ export function VagaDetalheView({
       </div>
 
       {encerramento && (
-        <div className={`flex items-start gap-3 rounded-2xl px-4 py-4 mb-4 ${confirmada ? 'bg-primaryTint text-primaryDeep' : 'bg-ink text-white'}`}>
-          {confirmada ? (
-            <CheckCircleIcon className="w-[19px] h-[19px] shrink-0 mt-px text-primaryDeep" />
-          ) : (
-            <WarningIcon className="w-[19px] h-[19px] shrink-0 mt-px text-[#ffb35c]" />
-          )}
+        <div className={`flex items-center gap-3 rounded-2xl px-4 py-4 mb-4 ${confirmada ? 'bg-primaryTint' : 'bg-ink'}`}>
+          <div className={`w-9 h-9 rounded-[11px] flex items-center justify-center shrink-0 ${confirmada ? 'bg-primaryDeep/10' : 'bg-white/15'}`}>
+            {confirmada ? (
+              <CheckCircleIcon className="w-[18px] h-[18px] text-primaryDeep" />
+            ) : (
+              <LockIcon className="w-[18px] h-[18px] text-white" />
+            )}
+          </div>
           <div>
-            <div className="text-[14.5px] font-extrabold mb-0.5">{encerramento.titulo}</div>
-            <div className={`text-[13px] leading-relaxed font-medium ${confirmada ? 'text-primaryDeep/80' : 'text-white/80'}`}>
-              {encerramento.motivo}{!confirmada && ' Não aceita mais candidaturas.'}
+            <div className={`text-[11px] font-extrabold uppercase tracking-wide ${confirmada ? 'text-primaryDeep/65' : 'text-white/60'}`}>
+              {confirmada ? 'Confirmada' : 'Encerrada'}
+            </div>
+            <div className={`text-[15px] font-extrabold ${confirmada ? 'text-primaryDeep' : 'text-white'}`}>
+              {encerramento.motivo}
             </div>
           </div>
         </div>
