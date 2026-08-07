@@ -104,6 +104,9 @@ model Clinica {
   alvaraUrl      String
   fotosEstrutura Json    @default("[]")
   logoUrl        String?
+  // Texto livre de apresentação, mostrado no perfil público da clínica
+  // (acessado a partir da foto/nome da clínica em Detalhes da vaga).
+  sobre          String?
   planosSaude    String?
   sistemas       String?
   observacoes    String?

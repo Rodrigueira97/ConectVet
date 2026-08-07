@@ -25,7 +25,12 @@ export class VagasService {
     });
   }
 
-  async feed(filtros: { categoria?: Categoria; cidade?: string; data?: string }) {
+  async feed(filtros: {
+    categoria?: Categoria;
+    cidade?: string;
+    data?: string;
+    clinicaId?: string;
+  }) {
     const vagas = await this.prisma.vaga.findMany({
       where: {
         categoria: filtros.categoria,
@@ -33,6 +38,7 @@ export class VagasService {
           ? { contains: filtros.cidade, mode: 'insensitive' }
           : undefined,
         data: filtros.data ? new Date(filtros.data) : undefined,
+        clinicaId: filtros.clinicaId,
       },
       include: {
         clinica: {
@@ -49,7 +55,10 @@ export class VagasService {
       ...v,
       clinica: {
         ...v.clinica,
-        ...(medias.get(v.clinica.id) ?? { notaMedia: null, totalAvaliacoes: 0 }),
+        ...(medias.get(v.clinica.id) ?? {
+          notaMedia: null,
+          totalAvaliacoes: 0,
+        }),
       },
     }));
   }
@@ -84,7 +93,9 @@ export class VagasService {
     const vaga = await this.prisma.vaga.findUnique({
       where: { id },
       include: {
-        clinica: { select: { id: true, nome: true } },
+        clinica: {
+          select: { id: true, nome: true, logoUrl: true, fotosEstrutura: true },
+        },
         candidaturas: {
           include: {
             profissional: {
@@ -102,7 +113,12 @@ export class VagasService {
       },
     });
     if (!vaga) throw new NotFoundException('Vaga não encontrada.');
-    return vaga;
+
+    const media = (
+      await this.avaliacoesService.mediaPorClinicas([vaga.clinica.id])
+    ).get(vaga.clinica.id) ?? { notaMedia: null, totalAvaliacoes: 0 };
+
+    return { ...vaga, clinica: { ...vaga.clinica, ...media } };
   }
 
   private async garantirDona(clinicaUserId: string, vagaId: string) {

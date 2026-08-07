@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { buildEndereco, mapsLink, motivoVagaFechada, plantaoEncerrado } from '@/lib/mockData';
 import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CloseIcon, LockIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
 import { PawTrailInline } from '@/app/components/PawTrailLoader';
@@ -140,18 +141,42 @@ export function VagaDetalheView({
 
         <div className="flex items-center gap-3.5">
           {vaga.clinica && (
-            <div className="w-14 h-14 rounded-2xl bg-white/90 p-[3px] shadow-lg shrink-0">
-              <div className="w-full h-full rounded-[13px] bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
-                {vaga.clinicaLogoUrl ? (
-                  <img src={vaga.clinicaLogoUrl} alt={vaga.clinica} className="w-full h-full object-cover" />
-                ) : (
-                  <BuildingIcon className="w-6 h-6" />
-                )}
+            vaga.clinicaId ? (
+              <Link
+                href={`/clinicas/${vaga.clinicaId}`}
+                aria-label={`Ver perfil de ${vaga.clinica}`}
+                className="w-14 h-14 rounded-2xl bg-white/90 p-[3px] shadow-lg shrink-0 hover:shadow-xl transition-shadow"
+              >
+                <div className="w-full h-full rounded-[13px] bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
+                  {vaga.clinicaLogoUrl ? (
+                    <img src={vaga.clinicaLogoUrl} alt={vaga.clinica} className="w-full h-full object-cover" />
+                  ) : (
+                    <BuildingIcon className="w-6 h-6" />
+                  )}
+                </div>
+              </Link>
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-white/90 p-[3px] shadow-lg shrink-0">
+                <div className="w-full h-full rounded-[13px] bg-gray-100 text-gray-400 flex items-center justify-center overflow-hidden">
+                  {vaga.clinicaLogoUrl ? (
+                    <img src={vaga.clinicaLogoUrl} alt={vaga.clinica} className="w-full h-full object-cover" />
+                  ) : (
+                    <BuildingIcon className="w-6 h-6" />
+                  )}
+                </div>
               </div>
-            </div>
+            )
           )}
           <div>
-            <h1 className="text-white text-2xl font-extrabold mb-1">{vaga.clinica || 'Detalhes da vaga'}</h1>
+            <h1 className="text-white text-2xl font-extrabold mb-1">
+              {vaga.clinicaId ? (
+                <Link href={`/clinicas/${vaga.clinicaId}`} className="hover:underline underline-offset-2">
+                  {vaga.clinica}
+                </Link>
+              ) : (
+                vaga.clinica || 'Detalhes da vaga'
+              )}
+            </h1>
             <div className="text-white/90 text-sm font-bold">
               {vaga.notaMedia && vaga.totalAvaliacoes ? (
                 avaliacoesClinica.length > 0 ? (

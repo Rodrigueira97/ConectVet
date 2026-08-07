@@ -43,7 +43,7 @@ function withCurrent(list: string[], current: string) {
 
 function perfilFormFromClinica(c: Clinica) {
   return {
-    nome: c.nome, cnpj: c.cnpj, telefone: c.telefone || '',
+    nome: c.nome, cnpj: c.cnpj, telefone: c.telefone || '', sobre: c.sobre || '',
     cep: c.cep || '', estado: c.estado, cidade: c.cidade, bairro: c.bairro || '', rua: c.rua, numero: c.numero, complemento: c.complemento || '',
   };
 }
@@ -354,7 +354,7 @@ function ClinicaPageInner() {
   }
 
   const [perfilForm, setPerfilForm] = useState({
-    nome: '', cnpj: '', telefone: '',
+    nome: '', cnpj: '', telefone: '', sobre: '',
     cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '',
   });
   const [perfilCepStatus, setPerfilCepStatus] = useState<CepStatus>('idle');
@@ -794,6 +794,7 @@ function ClinicaPageInner() {
       const atualizado = await updateClinicaMe({
         nome: perfilForm.nome,
         telefone: onlyDigits(perfilForm.telefone) || undefined,
+        sobre: perfilForm.sobre.trim() || undefined,
         cep: perfilForm.cep || undefined,
         estado: perfilForm.estado,
         cidade: perfilForm.cidade,
@@ -1891,6 +1892,15 @@ function ClinicaPageInner() {
                 </div>
 
                 <div className="bg-white rounded-2xl p-5 mb-3.5">
+                  <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-2">Sobre a clínica</div>
+                  {clinica.sobre ? (
+                    <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">{clinica.sobre}</p>
+                  ) : (
+                    <p className="text-sm text-gray-400">Adicione uma descrição — ela aparece no perfil público que os profissionais veem ao clicar no nome da sua clínica.</p>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl p-5 mb-3.5">
                   <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Dados de contato</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="flex items-start gap-2.5">
@@ -1952,6 +1962,18 @@ function ClinicaPageInner() {
                     placeholder="(00) 00000-0000"
                     className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
                   />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-bold">Sobre a clínica</span>
+                  <span className="text-xs text-gray-400 -mt-1">Visível no perfil público, quando um profissional clica no nome da sua clínica.</span>
+                  <textarea
+                    value={perfilForm.sobre}
+                    onChange={(e) => setPerfilForm((f) => ({ ...f, sobre: e.target.value.slice(0, 600) }))}
+                    placeholder="Conte um pouco da estrutura, da equipe e do que buscam em quem se candidata..."
+                    rows={4}
+                    className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm resize-none"
+                  />
+                  <span className="text-xs text-gray-400 self-end">{perfilForm.sobre.length}/600</span>
                 </label>
 
                 <div className="pt-2 mt-2 border-t border-gray-100">

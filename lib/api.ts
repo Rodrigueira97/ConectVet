@@ -246,9 +246,31 @@ export type Clinica = {
   alvaraUrl: string;
   fotosEstrutura: FotoEstrutura[];
   logoUrl?: string | null;
+  sobre?: string | null;
   planosSaude?: string | null;
   sistemas?: string | null;
   observacoes?: string | null;
+};
+
+// Perfil público de uma clínica (tela acessada pela foto/nome dela em
+// Detalhes da vaga) — mesmo formato de Clinica, menos CNPJ, inscrição
+// estadual, responsável técnico, telefone, CEP e observações internas
+// (o backend já corta isso em clinicas.service.ts, buscarPorId).
+export type ClinicaPublica = {
+  id: string;
+  nome: string;
+  sobre?: string | null;
+  logoUrl?: string | null;
+  fotosEstrutura: FotoEstrutura[];
+  estado: string;
+  cidade: string;
+  bairro?: string | null;
+  rua: string;
+  numero: string;
+  complemento?: string | null;
+  createdAt: string;
+  notaMedia?: number | null;
+  totalAvaliacoes?: number;
 };
 
 export type Profissional = {
@@ -335,6 +357,11 @@ export function updateClinicaMe(payload: Partial<Clinica>) {
   return patch<Clinica>('/clinicas/me', payload);
 }
 
+// Perfil público — acessado pela foto/nome da clínica em Detalhes da vaga.
+export function getClinica(id: string) {
+  return get<ClinicaPublica>(`/clinicas/${id}`);
+}
+
 // ---------- Profissionais ----------
 
 export function getProfissionalMe() {
@@ -356,11 +383,12 @@ export function getProfissionalPorId(id: string) {
 
 // ---------- Vagas ----------
 
-export function getFeed(filtros?: { categoria?: Categoria; cidade?: string; data?: string }) {
+export function getFeed(filtros?: { categoria?: Categoria; cidade?: string; data?: string; clinicaId?: string }) {
   const params = new URLSearchParams();
   if (filtros?.categoria) params.set('categoria', filtros.categoria);
   if (filtros?.cidade) params.set('cidade', filtros.cidade);
   if (filtros?.data) params.set('data', filtros.data);
+  if (filtros?.clinicaId) params.set('clinicaId', filtros.clinicaId);
   const qs = params.toString();
   return get<Vaga[]>(`/vagas${qs ? `?${qs}` : ''}`);
 }
