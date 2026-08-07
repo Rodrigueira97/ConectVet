@@ -209,6 +209,7 @@ function ProfissionalPageInner() {
     cidade: searchParams.get('cidade') || '',
     data: searchParams.get('data') || '',
     pertoDeMim: searchParams.get('perto') === '1',
+    naoCandidatadas: searchParams.get('naoCand') === '1',
   };
 
   const filtroCandidaturas = (searchParams.get('statusCand') as 'TODAS' | StatusCandidatura | null) || 'TODAS';
@@ -387,6 +388,7 @@ function ProfissionalPageInner() {
       const local = localDaVaga(v);
       if (filtros.busca && !normalizarBusca(`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`).includes(normalizarBusca(filtros.busca))) return false;
       if (filtros.pertoDeMim && !pertoDeVoce(v)) return false;
+      if (filtros.naoCandidatadas && (vagaEncerrada(v) || hasApplied(v.id))) return false;
       return true;
     })
     .sort((a, b) => Number(vagaEncerrada(a)) - Number(vagaEncerrada(b)));
@@ -470,15 +472,16 @@ function ProfissionalPageInner() {
     if ('cidade' in novo) patch.cidade = novo.cidade || null;
     if ('data' in novo) patch.data = novo.data || null;
     if ('pertoDeMim' in novo) patch.perto = novo.pertoDeMim ? '1' : null;
+    if ('naoCandidatadas' in novo) patch.naoCand = novo.naoCandidatadas ? '1' : null;
     goTo(patch, 'replace');
     setVisiveis(VAGAS_POR_PAGINA);
   }
 
   function limparFiltros() {
-    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false });
+    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '', pertoDeMim: false, naoCandidatadas: false });
   }
 
-  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria, filtros.pertoDeMim].filter(Boolean).length;
+  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria, filtros.pertoDeMim, filtros.naoCandidatadas].filter(Boolean).length;
   const algumFiltroAtivo = filtrosAtivos > 0 || !!filtros.busca;
 
   async function salvarPerfil() {
@@ -802,6 +805,10 @@ function ProfissionalPageInner() {
                   Somente perto de mim ({perfil.regioesAtendimento})
                 </label>
               )}
+              <label className="flex items-center gap-2 text-sm font-semibold text-white/90 ml-1">
+                <input type="checkbox" checked={filtros.naoCandidatadas} onChange={(e) => atualizarFiltro({ naoCandidatadas: e.target.checked })} />
+                Só as que eu não candidatei
+              </label>
               <button
                 onClick={limparFiltros}
                 disabled={!algumFiltroAtivo}
@@ -868,6 +875,10 @@ function ProfissionalPageInner() {
                       Somente perto de mim ({perfil.regioesAtendimento})
                     </label>
                   )}
+                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <input type="checkbox" checked={filtros.naoCandidatadas} onChange={(e) => atualizarFiltro({ naoCandidatadas: e.target.checked })} />
+                    Só as que eu não candidatei
+                  </label>
                   {algumFiltroAtivo && (
                     <button
                       onClick={limparFiltros}
@@ -885,11 +896,13 @@ function ProfissionalPageInner() {
                 <div className="bg-white rounded-2xl shadow-sm p-10">
                   <EmptyState
                     icon={<SearchIcon className="w-6 h-6" />}
-                    title="Nenhuma vaga encontrada"
+                    title={filtros.naoCandidatadas ? 'Nenhuma vaga nova pra você agora' : 'Nenhuma vaga encontrada'}
                     description={
-                      algumFiltroAtivo
-                        ? 'Nenhuma vaga bate com os filtros que você escolheu. Tente remover algum filtro ou ampliar a busca.'
-                        : 'No momento não há vagas publicadas. Volte mais tarde pra conferir novidades.'
+                      filtros.naoCandidatadas
+                        ? 'Você já se candidatou em tudo que bate com os outros filtros escolhidos. Tente remover algum filtro ou volte mais tarde pra conferir novidades.'
+                        : algumFiltroAtivo
+                          ? 'Nenhuma vaga bate com os filtros que você escolheu. Tente remover algum filtro ou ampliar a busca.'
+                          : 'No momento não há vagas publicadas. Volte mais tarde pra conferir novidades.'
                     }
                     actionLabel={algumFiltroAtivo ? 'Limpar filtros' : undefined}
                     actionIcon={<CloseIcon className="w-3.5 h-3.5" />}
