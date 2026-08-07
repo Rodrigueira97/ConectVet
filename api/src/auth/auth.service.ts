@@ -152,6 +152,7 @@ export class AuthService {
             documento: dto.documento,
             funcao: dto.funcao,
             especialidade: dto.especialidade,
+            crmv: dto.crmv,
             telefone: dto.telefone,
             dataNascimento: new Date(dto.dataNascimento),
             tipoComprovacao: dto.tipoComprovacao,

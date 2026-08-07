@@ -134,6 +134,9 @@ model Profissional {
   telefone       String?
   dataNascimento DateTime?
 
+  // Só se aplica quando funcao = VETERINARIO_CLINICO ou VETERINARIO_ESPECIALISTA.
+  crmv String?
+
   tipoComprovacao String
   comprovanteUrl  String
   idDocUrls       String[]

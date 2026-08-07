@@ -32,18 +32,18 @@ const initialClinica = {
 
 const initialProf = {
   nome: '', doc: '', funcao: '' as Categoria | '', telefone: '', dataNascimento: '',
-  especialidade: '', especialidadeOutra: '',
+  especialidade: '', especialidadeOutra: '', crmv: '',
   areaAtuacao: '', regioes: '', observacoes: '',
 };
 
 const COMPROVACAO_POR_FUNCAO: Record<Categoria, { label: string; accept: string; hint: string }> = {
   'Veterinário Clínico': {
-    label: 'Foto da carteirinha do CRMV (ou arquivo PDF)',
+    label: 'Anexo da carteirinha do CRMV (foto ou PDF)',
     accept: 'image/*,.pdf',
     hint: 'Envie a foto da carteirinha do CRMV ou um PDF do documento.',
   },
   'Veterinário Especialista': {
-    label: 'Foto da carteirinha do CRMV (ou arquivo PDF)',
+    label: 'Anexo da carteirinha do CRMV (foto ou PDF)',
     accept: 'image/*,.pdf',
     hint: 'Envie a foto da carteirinha do CRMV ou um PDF do documento.',
   },
@@ -87,7 +87,7 @@ const FIELD_SECTION_MAP: Record<string, string> = {
   nomeProf: 'dados-profissional', doc: 'dados-profissional', funcao: 'dados-profissional',
   telefoneProf: 'dados-profissional', dataNascimentoProf: 'dados-profissional',
   especialidade: 'dados-profissional', especialidadeOutra: 'dados-profissional',
-  comprovante: 'comprovacao',
+  crmv: 'comprovacao', comprovante: 'comprovacao',
   idDocFrente: 'documentos', idDocVerso: 'documentos',
   areaAtuacao: 'atuacao', regioes: 'atuacao',
 };
@@ -245,6 +245,7 @@ function CadastroPageInner() {
       if (onlyDigits(prof.telefone).length < 10) e.telefoneProf = 'Informe um telefone válido com DDD.';
       if (!prof.dataNascimento) e.dataNascimentoProf = 'Informe a data de nascimento.';
       else if (!dataNascimentoValida(prof.dataNascimento)) e.dataNascimentoProf = 'Informe uma data de nascimento válida.';
+      if (isVeterinarioFormado(prof.funcao) && !prof.crmv.trim()) e.crmv = 'Informe o número do CRMV.';
       if (prof.funcao && !comprovante) e.comprovante = `Anexe: ${COMPROVACAO_POR_FUNCAO[prof.funcao].label}.`;
       if (!idDocFrente) e.idDocFrente = 'Anexe a foto da frente do documento de identidade.';
       if (!idDocVerso) e.idDocVerso = 'Anexe a foto do verso do documento de identidade.';
@@ -309,6 +310,7 @@ function CadastroPageInner() {
           especialidade: prof.funcao === 'Veterinário Especialista'
             ? (prof.especialidade === 'Outra' ? prof.especialidadeOutra.trim() : prof.especialidade)
             : undefined,
+          crmv: isVeterinarioFormado(prof.funcao) ? prof.crmv.trim() : undefined,
           telefone: onlyDigits(prof.telefone),
           dataNascimento: prof.dataNascimento,
           tipoComprovacao: comprovacao?.label ?? '',
@@ -542,7 +544,7 @@ function CadastroPageInner() {
                     <TextField label="CNPJ/CPF" value={prof.doc} onChange={(v) => pField('doc', maskCpfCnpj(v))} error={errors.doc} placeholder="000.000.000-00" required />
                     <TextField label="Escolha da função" value={prof.funcao} onChange={() => {}} error={errors.funcao} required select
                       options={CATEGORIAS}
-                      onSelect={(v) => { pField('funcao', v as Categoria); setComprovante(null); pField('especialidade', ''); pField('especialidadeOutra', ''); }}
+                      onSelect={(v) => { pField('funcao', v as Categoria); setComprovante(null); pField('especialidade', ''); pField('especialidadeOutra', ''); pField('crmv', ''); }}
                     />
                   </div>
                   {prof.funcao === 'Veterinário Especialista' && (
@@ -564,15 +566,27 @@ function CadastroPageInner() {
 
             <SectionCard id="comprovacao" sectionRef={(el) => { sectionRefs.current.comprovacao = el; }} title="Comprovação de função">
               {comprovacao ? (
-                <FileField
-                  label={comprovacao.label}
-                  files={comprovante}
-                  onChange={(fl) => setComprovante(fl?.[0] ?? null)}
-                  error={errors.comprovante}
-                  accept={comprovacao.accept}
-                  required
-                  hint={comprovacao.hint}
-                />
+                <>
+                  {isVeterinarioFormado(prof.funcao) && (
+                    <TextField
+                      label="Número do CRMV"
+                      value={prof.crmv}
+                      onChange={(v) => pField('crmv', v)}
+                      error={errors.crmv}
+                      placeholder="Ex.: 18.432-SP"
+                      required
+                    />
+                  )}
+                  <FileField
+                    label={comprovacao.label}
+                    files={comprovante}
+                    onChange={(fl) => setComprovante(fl?.[0] ?? null)}
+                    error={errors.comprovante}
+                    accept={comprovacao.accept}
+                    required
+                    hint={comprovacao.hint}
+                  />
+                </>
               ) : (
                 <div className="text-xs text-gray-400">Selecione a função acima para indicar o documento necessário.</div>
               )}

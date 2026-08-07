@@ -1314,8 +1314,14 @@ function ProfissionalPageInner() {
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-[34px] h-[34px] rounded-[10px] bg-gray-100 text-gray-500 flex items-center justify-center shrink-0"><ShieldIcon className="w-4 h-4" /></div>
                       <div className="min-w-0">
-                        <div className="text-[13.5px] font-bold text-ink">Carteirinha do {perfil.tipoComprovacao}</div>
-                        <div className="text-xs text-gray-400">Enviado</div>
+                        <div className="text-[13.5px] font-bold text-ink">
+                          {isVeterinarioFormado(perfil.funcao) ? 'Carteirinha do CRMV' : `Carteirinha do ${perfil.tipoComprovacao}`}
+                        </div>
+                        {isVeterinarioFormado(perfil.funcao) && perfil.crmv ? (
+                          <div className="text-xs text-gray-400">Nº do CRMV: <span className="font-bold text-gray-600">{perfil.crmv}</span></div>
+                        ) : (
+                          <div className="text-xs text-gray-400">Enviado</div>
+                        )}
                       </div>
                     </div>
                     <a href={perfil.comprovanteUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline shrink-0">Ver documento →</a>

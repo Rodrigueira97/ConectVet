@@ -283,6 +283,8 @@ export type Profissional = {
   documento: string;
   funcao: Categoria;
   especialidade?: string | null;
+  // Só preenchido para VETERINARIO_CLINICO e VETERINARIO_ESPECIALISTA.
+  crmv?: string | null;
   telefone?: string | null;
   dataNascimento?: string | null;
   tipoComprovacao: string;

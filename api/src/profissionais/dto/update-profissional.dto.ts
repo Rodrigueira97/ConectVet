@@ -19,6 +19,10 @@ export class UpdateProfissionalDto {
 
   @IsOptional()
   @IsString()
+  crmv?: string;
+
+  @IsOptional()
+  @IsString()
   areaAtuacao?: string;
 
   @IsOptional()
