@@ -131,7 +131,6 @@ function CadastroPageInner() {
   const [comprovante, setComprovante] = useState<File | null>(null);
   const [idDocFrente, setIdDocFrente] = useState<File | null>(null);
   const [idDocVerso, setIdDocVerso] = useState<File | null>(null);
-  const [curriculo, setCurriculo] = useState<File | null>(null);
   const [fotoPerfil, setFotoPerfil] = useState<File | null>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -299,7 +298,6 @@ function CadastroPageInner() {
       } else {
         const [comprovanteUrl] = await uploadArquivos([comprovante as File]);
         const idDocUrls = await uploadArquivos([idDocFrente as File, idDocVerso as File]);
-        const curriculoUrl = curriculo ? (await uploadArquivos([curriculo]))[0] : undefined;
         const fotoUrl = fotoPerfil ? (await uploadArquivos([fotoPerfil]))[0] : undefined;
 
         const resultadoProf = await registrarProfissional({
@@ -316,7 +314,6 @@ function CadastroPageInner() {
           tipoComprovacao: comprovacao?.label ?? '',
           comprovanteUrl,
           idDocUrls,
-          curriculoUrl,
           fotoUrl,
           areaAtuacao: isVeterinarioFormado(prof.funcao) ? prof.areaAtuacao : undefined,
           regioesAtendimento: prof.regioes,
@@ -597,7 +594,6 @@ function CadastroPageInner() {
                 <FileField label="Foto do documento de identidade (frente)" files={idDocFrente} onChange={(fl) => setIdDocFrente(fl?.[0] ?? null)} error={errors.idDocFrente} accept="image/*" required />
                 <FileField label="Foto do documento de identidade (verso)" files={idDocVerso} onChange={(fl) => setIdDocVerso(fl?.[0] ?? null)} error={errors.idDocVerso} accept="image/*" required />
               </div>
-              <FileField label="Currículo (opcional)" files={curriculo} onChange={(fl) => setCurriculo(fl?.[0] ?? null)} accept=".pdf" />
             </SectionCard>
 
             <SectionCard id="atuacao" sectionRef={(el) => { sectionRefs.current.atuacao = el; }} title="Atuação">
