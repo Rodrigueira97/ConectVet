@@ -37,7 +37,7 @@ export function VagaCardPublica({ vaga: v }: { vaga: Vaga }) {
           </div>
           <div className="min-w-0">
             <div className={`text-[16.5px] font-extrabold truncate ${encerrada ? 'text-gray-400' : 'text-ink'}`}>{v.clinica?.nome}</div>
-            <div className={`mt-0.5 ${encerrada ? 'opacity-50 grayscale' : ''}`}><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+            <div className={`mt-0.5 ${encerrada ? 'opacity-50 grayscale' : ''}`}><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} hideWhenEmpty /></div>
           </div>
         </div>
         <div className={`font-extrabold text-[15px] px-3 py-1.5 rounded-[11px] whitespace-nowrap shrink-0 ${encerrada ? 'bg-gray-100 text-gray-500' : 'bg-primaryTint text-primaryDeep'}`}>

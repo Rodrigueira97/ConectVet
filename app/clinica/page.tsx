@@ -549,7 +549,7 @@ function ClinicaPageInner() {
             </div>
             <div className="min-w-0">
               <div className="text-[16.5px] font-extrabold text-ink truncate">{v.clinica?.nome}</div>
-              <div className="mt-0.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} /></div>
+              <div className="mt-0.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} hideWhenEmpty /></div>
             </div>
           </div>
           <div className="font-extrabold text-[15px] px-3 py-1.5 rounded-[11px] whitespace-nowrap shrink-0 bg-primaryTint text-primaryDeep">
@@ -1327,7 +1327,7 @@ function ClinicaPageInner() {
                       <div>
                         <div className="text-[10.5px] font-extrabold text-primary uppercase tracking-wide">{vagaForm.categoria || 'Categoria'}</div>
                         <div className="text-[15px] font-extrabold text-ink mt-0.5">{clinica.nome}</div>
-                        <div className="mt-1"><RatingBadge /></div>
+                        <div className="mt-1"><RatingBadge hideWhenEmpty /></div>
                       </div>
                       <div className="bg-primaryTint text-primaryDeep font-extrabold text-[12.5px] px-[9px] py-1 rounded-[9px] whitespace-nowrap">
                         {!isNaN(valorNum) && valorNum > 0 ? `R$ ${vagaForm.valor}` : 'R$ —'}

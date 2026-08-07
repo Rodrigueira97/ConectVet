@@ -1,5 +1,14 @@
-export function RatingBadge({ notaMedia, totalAvaliacoes }: { notaMedia?: number | null; totalAvaliacoes?: number }) {
+export function RatingBadge({
+  notaMedia, totalAvaliacoes, hideWhenEmpty,
+}: {
+  notaMedia?: number | null;
+  totalAvaliacoes?: number;
+  // Clínicas ainda sem avaliação não mostram nada (em vez do aviso "Sem
+  // avaliações ainda") — menos ruído nos cards de vaga.
+  hideWhenEmpty?: boolean;
+}) {
   if (!notaMedia || !totalAvaliacoes) {
+    if (hideWhenEmpty) return null;
     return <span className="text-xs text-gray-400">Sem avaliações ainda</span>;
   }
   return (

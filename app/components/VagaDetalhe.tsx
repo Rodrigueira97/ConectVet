@@ -193,9 +193,7 @@ export function VagaDetalheView({
                     <span className="text-white/65 font-semibold">({vaga.totalAvaliacoes} avaliações)</span>
                   </span>
                 )
-              ) : (
-                <span className="text-white/70 font-semibold">Sem avaliações ainda</span>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
