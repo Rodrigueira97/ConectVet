@@ -37,12 +37,30 @@ export function Sidebar({
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [contaMobileAberta, setContaMobileAberta] = useState(false);
   const [senhaModalOpen, setSenhaModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (localStorage.getItem(COLLAPSE_KEY) === '1') setCollapsed(true);
   }, []);
+
+  // Fecha o submenu "Minha conta" sempre que o menu mobile inteiro fecha,
+  // pra ele sempre reabrir recolhido.
+  useEffect(() => {
+    if (!open) setContaMobileAberta(false);
+  }, [open]);
+
+  // Menu mobile ocupa a tela inteira — trava o scroll do fundo enquanto ele
+  // estiver aberto, senão dá pra rolar o conteúdo por trás do overlay.
+  useEffect(() => {
+    if (!open) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [open]);
 
   // Menu de "Ver perfil" / "Sair" que abre a partir do rodapé — mesmo padrão de
   // clique-fora do NotificationBell, só que ancorado pra cima (o rodapé fica na base da tela).
@@ -75,6 +93,22 @@ export function Sidebar({
   }
 
   const FooterIcon = footerIcon === 'building' ? BuildingIcon : UserIcon;
+
+  function renderBrandMobile() {
+    return (
+      <a href="/" className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+          <img src="/logo.svg" alt="ConectVet" className="w-[70%] h-[70%] object-contain" />
+        </div>
+        <div className="leading-tight">
+          <div className="text-sm font-bold font-brand whitespace-nowrap">
+            <span className="text-ink">conect</span> <span className="text-primaryDeep">vet</span>
+          </div>
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{subtitle}</div>
+        </div>
+      </a>
+    );
+  }
 
   function renderNavItem(item: SidebarItem, onClick: () => void, hideLabel: boolean) {
     const active = item.key === activeKey;
@@ -118,24 +152,41 @@ export function Sidebar({
     );
   }
 
-  // No mobile o rodapé já mora dentro do menu hambúrguer aberto — nada de empilhar
-  // um segundo menu ali dentro, as duas ações aparecem direto, sempre visíveis.
+  // No mobile o rodapé já mora dentro do menu hambúrguer aberto — mas "Alterar
+  // senha" e "Sair" ficam escondidos atrás de "Minha conta", só aparecem ao tocar.
   function renderFooterMobile() {
     return (
-      <div className="mt-1.5 rounded-xl bg-gray-100 overflow-hidden">
-        <div className="flex items-center gap-2.5 px-2.5 py-2.5">{renderIdentidade(false)}</div>
+      <div className="rounded-xl bg-gray-100 overflow-hidden">
         <button
-          onClick={() => { setOpen(false); setSenhaModalOpen(true); }}
-          className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-gray-600 border-t border-white/70 hover:bg-white/60"
+          onClick={() => setContaMobileAberta((v) => !v)}
+          aria-expanded={contaMobileAberta}
+          aria-controls="conta-mobile-submenu"
+          className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5"
         >
-          <LockIcon className="w-4 h-4 text-gray-400" /> Alterar senha
+          {renderIdentidade(false)}
+          <ChevronLeftIcon
+            className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform duration-200 ${contaMobileAberta ? '-rotate-90' : 'rotate-90'}`}
+          />
         </button>
-        <button
-          onClick={() => { clearSession(); window.location.href = '/'; }}
-          className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-danger border-t border-white/70 hover:bg-white/60"
+        <div
+          id="conta-mobile-submenu"
+          className={`grid transition-[grid-template-rows] duration-300 ease-out ${contaMobileAberta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
         >
-          <LogoutIcon className="w-4 h-4" /> Sair
-        </button>
+          <div className="overflow-hidden">
+            <button
+              onClick={() => { setOpen(false); setSenhaModalOpen(true); }}
+              className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-gray-600 border-t border-white/70 hover:bg-white/60"
+            >
+              <LockIcon className="w-4 h-4 text-gray-400" /> Alterar senha
+            </button>
+            <button
+              onClick={() => { clearSession(); window.location.href = '/'; }}
+              className="flex items-center gap-2.5 w-full text-left px-2.5 py-2.5 text-sm font-bold text-danger border-t border-white/70 hover:bg-white/60"
+            >
+              <LogoutIcon className="w-4 h-4" /> Sair
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -190,33 +241,38 @@ export function Sidebar({
       {/* Mobile: top bar with hamburger menu */}
       <div className="md:hidden sticky top-0 z-20 bg-white border-b border-gray-100">
         <div className="flex items-center justify-between px-4 py-3">
-          <a href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
-              <img src="/logo.svg" alt="ConectVet" className="w-[70%] h-[70%] object-contain" />
-            </div>
-            <div className="leading-tight">
-              <div className="text-sm font-bold font-brand whitespace-nowrap">
-                <span className="text-ink">conect</span> <span className="text-primaryDeep">vet</span>
-              </div>
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{subtitle}</div>
-            </div>
-          </a>
+          {renderBrandMobile()}
           <button
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? 'Fechar menu' : 'Abrir menu'}
+            aria-expanded={open}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-50"
           >
             {open ? <CloseIcon className="w-5 h-5" /> : <MenuIcon className="w-5 h-5" />}
           </button>
         </div>
-
-        {open && (
-          <div className="border-t border-gray-100 px-3 pb-3 pt-2 flex flex-col gap-1">
-            {items.map((item) => renderNavItem(item, () => handleSelect(item.key), false))}
-            {renderFooterMobile()}
-          </div>
-        )}
       </div>
+
+      {/* Mobile: menu aberto ocupa a tela inteira, por cima de tudo */}
+      {open && (
+        <div className="md:hidden fixed inset-0 z-30 bg-white flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+            {renderBrandMobile()}
+            <button
+              onClick={() => setOpen(false)}
+              aria-label="Fechar menu"
+              className="p-2 rounded-lg text-gray-500 hover:bg-gray-50"
+            >
+              <CloseIcon className="w-5 h-5" />
+            </button>
+          </div>
+          <nav className="flex-1 overflow-y-auto px-3 pb-3 pt-2 flex flex-col gap-1">
+            {items.map((item) => renderNavItem(item, () => handleSelect(item.key), false))}
+            <div className="h-[1.5px] rounded-full bg-gray-100 mt-6 mb-4" />
+            {renderFooterMobile()}
+          </nav>
+        </div>
+      )}
 
       {/* Desktop: vertical sidebar */}
       <aside
