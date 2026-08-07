@@ -310,6 +310,14 @@ export function ArrowRightIcon({ className }: IconProps) {
   );
 }
 
+export function StarIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M12 3.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.4l-5.8 3 1.1-6.5-4.7-4.6 6.5-.9Z" />
+    </svg>
+  );
+}
+
 export function BellIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>

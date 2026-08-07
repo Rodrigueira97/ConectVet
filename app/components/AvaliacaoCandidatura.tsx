@@ -4,17 +4,21 @@ import { ApiError, Avaliacao, criarAvaliacao } from '@/lib/api';
 import { useToast } from './Toast';
 
 export function AvaliacaoCandidatura({
-  candidaturaId, autorProprio, labelForm, labelFeita, labelOutra, avaliacoesIniciais,
+  candidaturaId, autorProprio, labelForm, labelFeita, labelOutra, avaliacoes, onAvaliado,
 }: {
   candidaturaId: string;
   autorProprio: 'CLINICA' | 'PROFISSIONAL';
   labelForm: string;
   labelFeita: string;
   labelOutra: string;
-  avaliacoesIniciais: Avaliacao[];
+  // Controlado pelo componente pai (em vez de estado interno) pra que os dois lugares onde essa
+  // avaliação pode aparecer — "Minhas candidaturas"/"Painel" e a aba "Avaliações" — fiquem sempre
+  // em sincronia: os dois leem do mesmo Record<candidaturaId, Avaliacao[]> e um só re-render
+  // depois de enviar já atualiza ambos.
+  avaliacoes: Avaliacao[];
+  onAvaliado?: (avaliacao: Avaliacao) => void;
 }) {
   const toast = useToast();
-  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>(avaliacoesIniciais);
   const [nota, setNota] = useState(5);
   const [comentario, setComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -31,7 +35,7 @@ export function AvaliacaoCandidatura({
         nota,
         comentario: podeComentar && comentario ? comentario : undefined,
       });
-      setAvaliacoes((prev) => [...prev, nova]);
+      onAvaliado?.(nova);
       toast.success('Avaliação enviada', { message: 'Obrigado pelo feedback — isso ajuda outros profissionais e clínicas na plataforma.' });
     } catch (err) {
       toast.error('Não foi possível enviar a avaliação', {

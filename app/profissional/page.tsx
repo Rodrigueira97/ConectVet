@@ -10,7 +10,7 @@ import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, MailIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
-  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon,
+  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon, StarIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { QuemSomosView } from '@/app/components/QuemSomos';
@@ -41,7 +41,7 @@ function especialidadeFormFromProfissional(p: { especialidade?: string | null })
 }
 const CANDIDATURAS_POR_PAGINA = 10;
 
-type Tab = 'home' | 'favoritas' | 'historico' | 'perfil' | 'quem-somos';
+type Tab = 'home' | 'favoritas' | 'historico' | 'avaliacoes' | 'perfil' | 'quem-somos';
 
 function tempoNaPlataforma(createdAt: string) {
   const meses = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30)));
@@ -255,6 +255,7 @@ function ProfissionalPageInner() {
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
+  const [avaliacoesSubTab, setAvaliacoesSubTab] = useState<'pendentes' | 'recebidas'>('pendentes');
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [favoritos, setFavoritos] = useState<Set<string>>(new Set());
 
@@ -369,6 +370,13 @@ function ProfissionalPageInner() {
     }
   }
 
+  // Atualiza o Record central de avaliações — é lido tanto por "Minhas candidaturas" quanto pela
+  // aba "Avaliações", então enviar uma avaliação em qualquer um dos dois lugares reflete no outro
+  // na hora, sem precisar recarregar a página.
+  function registrarAvaliacao(candidaturaId: string, nova: Avaliacao) {
+    setAvaliacoesPorCandidatura((prev) => ({ ...prev, [candidaturaId]: [...(prev[candidaturaId] || []), nova] }));
+  }
+
   const regioesTokens = (perfil?.regioesAtendimento || '')
     .split(/[,\s]+/)
     .map((t) => t.trim().toLowerCase())
@@ -407,6 +415,13 @@ function ProfissionalPageInner() {
   const notaMediaRecebida = avaliacoesRecebidas.length
     ? avaliacoesRecebidas.reduce((soma, a) => soma + a.nota, 0) / avaliacoesRecebidas.length
     : null;
+
+  // Plantões concluídos em que o profissional ainda não avaliou a clínica — é o que popula a
+  // aba "Avaliações" e o contador na sidebar.
+  const candidaturasConcluidas = candidaturas.filter((c) => statusDaCandidatura(c) === 'CONCLUIDA');
+  const avaliacoesPendentes = candidaturasConcluidas.filter(
+    (c) => !(avaliacoesPorCandidatura[c.id] || []).some((a) => a.autor === 'PROFISSIONAL')
+  );
 
   const candidaturasComStatus = candidaturas.map((c) => ({ ...c, statusExibido: statusDaCandidatura(c) }));
   const candidaturasFiltradas = filtroCandidaturas === 'TODAS'
@@ -699,6 +714,7 @@ function ProfissionalPageInner() {
           { key: 'historico', label: 'Minhas candidaturas', icon: <ClockIcon /> },
           { key: 'favoritas', label: 'Favoritas', icon: <HeartIcon />, count: vagasFavoritas.length },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
+          { key: 'avaliacoes', label: 'Avaliações', icon: <StarIcon />, count: avaliacoesPendentes.length },
           { key: 'quem-somos', label: 'Quem somos', icon: <PawIcon className="w-[18px] h-4" /> },
         ]}
         activeKey={tab}
@@ -1092,7 +1108,8 @@ function ProfissionalPageInner() {
                         labelForm="Avaliar clínica"
                         labelFeita="Sua avaliação"
                         labelOutra={`${v?.clinica?.nome || 'Clínica'} avaliou você`}
-                        avaliacoesIniciais={avaliacoesPorCandidatura[c.id] || []}
+                        avaliacoes={avaliacoesPorCandidatura[c.id] || []}
+                        onAvaliado={(nova) => registrarAvaliacao(c.id, nova)}
                       />
                     )}
 
@@ -1178,6 +1195,105 @@ function ProfissionalPageInner() {
             {temMaisCandidaturas && (
               <div className="flex items-center justify-center py-6">
                 <PawTrailLoader label="Carregando mais candidaturas..." />
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'avaliacoes' && (
+          <div className="max-w-[880px] mx-auto p-8">
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
+              <div>
+                <h1 className="text-2xl font-extrabold mb-1 text-white">Avaliações</h1>
+                <p className="text-sm text-white/85">Avalie as clínicas onde você já trabalhou. Sua nota e comentário ajudam outros profissionais a escolher melhor.</p>
+              </div>
+              <RatingBadge notaMedia={notaMediaRecebida} totalAvaliacoes={avaliacoesRecebidas.length} hideWhenEmpty />
+            </div>
+
+            <div className="flex gap-2 flex-wrap mb-5">
+              {([
+                ['pendentes', 'Pendentes', avaliacoesPendentes.length],
+                ['recebidas', 'Recebidas', undefined],
+              ] as const).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  onClick={() => setAvaliacoesSubTab(key)}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap ${
+                    avaliacoesSubTab === key ? 'bg-white text-primaryDeep' : 'bg-white/15 text-white hover:bg-white/25'
+                  }`}
+                >
+                  {label}
+                  {!!count && (
+                    <span className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-full ${avaliacoesSubTab === key ? 'bg-primaryTint text-primaryDeep' : 'bg-white/25 text-white'}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {avaliacoesSubTab === 'pendentes' ? (
+              avaliacoesPendentes.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm p-10">
+                  <EmptyState
+                    icon={<StarIcon className="w-6 h-6" />}
+                    title="Nenhuma avaliação pendente"
+                    description="Assim que uma vaga for concluída, ela aparece aqui pra você avaliar a clínica."
+                    actionLabel="Ver vagas disponíveis"
+                    actionIcon={<ArrowRightIcon className="w-3.5 h-3.5" />}
+                    onAction={() => setTab('home')}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-[14px]">
+                  {avaliacoesPendentes.map((c) => (
+                    <div key={c.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-[42px] h-[42px] rounded-xl bg-white border border-gray-200 text-gray-300 flex items-center justify-center shrink-0 overflow-hidden">
+                          {c.vaga?.clinica?.logoUrl ? (
+                            <img src={c.vaga.clinica.logoUrl} alt={c.vaga.clinica.nome} className="w-full h-full object-cover" />
+                          ) : (
+                            <BuildingIcon className="w-[18px] h-[18px]" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[15px] font-extrabold text-ink truncate">{c.vaga?.clinica?.nome}</div>
+                          <div className="text-[12px] font-semibold text-gray-400">{c.vaga ? `Plantão concluído em ${formatDataBR(c.vaga.data)}` : 'Plantão concluído'}</div>
+                        </div>
+                      </div>
+                      <AvaliacaoCandidatura
+                        candidaturaId={c.id}
+                        autorProprio="PROFISSIONAL"
+                        labelForm="Avaliar clínica"
+                        labelFeita="Sua avaliação"
+                        labelOutra={`${c.vaga?.clinica?.nome || 'Clínica'} avaliou você`}
+                        avaliacoes={avaliacoesPorCandidatura[c.id] || []}
+                        onAvaliado={(nova) => registrarAvaliacao(c.id, nova)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : avaliacoesRecebidas.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm p-10">
+                <EmptyState
+                  icon={<StarIcon className="w-6 h-6" />}
+                  title="Você ainda não recebeu nenhuma avaliação"
+                  description="Assim que uma clínica avaliar um plantão seu, aparece aqui."
+                />
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl p-5">
+                <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-2">Últimas avaliações</div>
+                {avaliacoesRecebidas.map((a) => (
+                  <div key={a.id} className="py-3.5 border-b border-gray-100 last:border-b-0 last:pb-0 first:pt-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[13.5px] font-extrabold text-ink">{a.clinicaNome}</div>
+                      <div className="text-amber-500 text-sm tracking-widest">{'★'.repeat(a.nota)}{'☆'.repeat(5 - a.nota)}</div>
+                    </div>
+                    {a.data && <div className="text-xs text-gray-400 mt-1.5">Plantão de {formatDataBR(a.data)}</div>}
+                  </div>
+                ))}
               </div>
             )}
           </div>

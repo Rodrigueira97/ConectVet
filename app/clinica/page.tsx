@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado, isPlantaoNoturno, valorSugeridoNoturno, correspondeAproximado, normalizarBusca } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, FilterIcon, DownloadIcon, LockIcon, PawIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, FilterIcon, DownloadIcon, LockIcon, PawIcon, StarIcon, ArrowRightIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { QuemSomosView } from '@/app/components/QuemSomos';
@@ -31,7 +31,7 @@ import {
   getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos, getFeed, getProfissionalPorId, getUltimasAvaliacoesProfissional,
 } from '@/lib/api';
 
-type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'perfil' | 'quem-somos';
+type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'avaliacoes' | 'perfil' | 'quem-somos';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
 type PainelFiltro = 'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido';
 
@@ -284,6 +284,7 @@ function ClinicaPageInner() {
   const [candidatos, setCandidatos] = useState<Candidatura[]>([]);
   const [candidatosLoading, setCandidatosLoading] = useState(false);
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
+  const [avaliacoesSubTab, setAvaliacoesSubTab] = useState<'pendentes' | 'recebidas'>('pendentes');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
@@ -407,6 +408,13 @@ function ClinicaPageInner() {
 
   async function refreshMinhasVagas() {
     setMinhasVagas(await getMinhasVagas());
+  }
+
+  // Atualiza o Record central de avaliações — é lido tanto pelo "Painel" quanto pela aba
+  // "Avaliações", então enviar uma avaliação em qualquer um dos dois lugares reflete no outro
+  // na hora, sem precisar recarregar a página.
+  function registrarAvaliacao(candidaturaId: string, nova: Avaliacao) {
+    setAvaliacoesPorCandidatura((prev) => ({ ...prev, [candidaturaId]: [...(prev[candidaturaId] || []), nova] }));
   }
 
   async function buscarCepVaga(cep: string) {
@@ -923,6 +931,16 @@ function ClinicaPageInner() {
   const notaMedia = avaliacoesRecebidas.length
     ? avaliacoesRecebidas.reduce((soma, a) => soma + a.nota, 0) / avaliacoesRecebidas.length
     : null;
+
+  // Vagas concluídas com o profissional contratado que a clínica ainda não avaliou — é o que
+  // popula a aba "Avaliações" e o contador na sidebar.
+  const vagasConcluidasComContratado = minhasVagas
+    .filter((v) => v.status === 'CONCLUIDA')
+    .map((v) => ({ vaga: v, hired: (v.candidaturas || []).find((c) => c.status === 'ACEITO') }))
+    .filter((x): x is { vaga: Vaga; hired: Candidatura } => !!x.hired);
+  const avaliacoesPendentes = vagasConcluidasComContratado.filter(
+    (x) => !(avaliacoesPorCandidatura[x.hired.id] || []).some((a) => a.autor === 'CLINICA')
+  );
   const retidoTotal = minhasVagas.reduce((soma, v) => soma + (v.pagamento?.status === 'RETIDO' ? Number(v.pagamento.valorBruto) : 0), 0);
   const candidatosPendentes = minhasVagas
     .filter((v) => v.status === 'ABERTA' && !vagaExpirada(v))
@@ -942,6 +960,7 @@ function ClinicaPageInner() {
           { key: 'criar-vaga', label: 'Criar vaga', icon: <PlusIcon /> },
           { key: 'painel', label: 'Painel', icon: <GridIcon />, count: pendingTotal },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
+          { key: 'avaliacoes', label: 'Avaliações', icon: <StarIcon />, count: avaliacoesPendentes.length },
           { key: 'quem-somos', label: 'Quem somos', icon: <PawIcon className="w-[18px] h-4" /> },
         ]}
         activeKey={tab}
@@ -1618,7 +1637,8 @@ function ClinicaPageInner() {
                             labelForm={`Avaliar ${hired.profissional?.nome || 'profissional'}`}
                             labelFeita={`Avaliação de ${hired.profissional?.nome || 'profissional'}`}
                             labelOutra={`${hired.profissional?.nome || 'Profissional'} avaliou você`}
-                            avaliacoesIniciais={avaliacoesPorCandidatura[hired.id] || []}
+                            avaliacoes={avaliacoesPorCandidatura[hired.id] || []}
+                            onAvaliado={(nova) => registrarAvaliacao(hired.id, nova)}
                           />
                         </div>
                       )}
@@ -2078,6 +2098,106 @@ function ClinicaPageInner() {
               </div>
             </div>
           </div>
+          </div>
+        )}
+
+        {tab === 'avaliacoes' && (
+          <div className="max-w-[880px] mx-auto p-8">
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
+              <div>
+                <h1 className="text-2xl font-extrabold mb-1 text-white">Avaliações</h1>
+                <p className="text-sm text-white/85">Avalie os profissionais que atenderam suas vagas concluídas. A nota fica visível no perfil deles.</p>
+              </div>
+              <RatingBadge notaMedia={notaMedia} totalAvaliacoes={avaliacoesRecebidas.length} hideWhenEmpty />
+            </div>
+
+            <div className="flex gap-2 flex-wrap mb-5">
+              {([
+                ['pendentes', 'Pendentes', avaliacoesPendentes.length],
+                ['recebidas', 'Recebidas', undefined],
+              ] as const).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  onClick={() => setAvaliacoesSubTab(key)}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap ${
+                    avaliacoesSubTab === key ? 'bg-white text-primaryDeep' : 'bg-white/15 text-white hover:bg-white/25'
+                  }`}
+                >
+                  {label}
+                  {!!count && (
+                    <span className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-full ${avaliacoesSubTab === key ? 'bg-primaryTint text-primaryDeep' : 'bg-white/25 text-white'}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {avaliacoesSubTab === 'pendentes' ? (
+              avaliacoesPendentes.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm p-10">
+                  <EmptyState
+                    icon={<StarIcon className="w-6 h-6" />}
+                    title="Nenhuma avaliação pendente"
+                    description="Assim que uma vaga for concluída, ela aparece aqui pra você avaliar o profissional."
+                    actionLabel="Ver painel"
+                    actionIcon={<ArrowRightIcon className="w-3.5 h-3.5" />}
+                    onAction={() => setTab('painel')}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-[14px]">
+                  {avaliacoesPendentes.map(({ vaga, hired }) => (
+                    <div key={hired.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-[42px] h-[42px] rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-sm font-extrabold shrink-0 overflow-hidden">
+                          {hired.profissional?.fotoUrl ? (
+                            <img src={hired.profissional.fotoUrl} alt={hired.profissional.nome} className="w-full h-full object-cover" />
+                          ) : (
+                            (hired.profissional?.nome || '?').slice(0, 1).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[15px] font-extrabold text-ink truncate">{hired.profissional?.nome}</div>
+                          <div className="text-[12px] font-semibold text-gray-400">Plantão concluído em {formatDataBR(vaga.data)}</div>
+                        </div>
+                      </div>
+                      <AvaliacaoCandidatura
+                        candidaturaId={hired.id}
+                        autorProprio="CLINICA"
+                        labelForm={`Avaliar ${hired.profissional?.nome || 'profissional'}`}
+                        labelFeita={`Avaliação de ${hired.profissional?.nome || 'profissional'}`}
+                        labelOutra={`${hired.profissional?.nome || 'Profissional'} avaliou você`}
+                        avaliacoes={avaliacoesPorCandidatura[hired.id] || []}
+                        onAvaliado={(nova) => registrarAvaliacao(hired.id, nova)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : avaliacoesRecebidas.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm p-10">
+                <EmptyState
+                  icon={<StarIcon className="w-6 h-6" />}
+                  title="Você ainda não recebeu nenhuma avaliação"
+                  description="Assim que um profissional avaliar um plantão, aparece aqui."
+                />
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl p-5">
+                <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-2">Últimas avaliações</div>
+                {avaliacoesRecebidas.map((a) => (
+                  <div key={a.id} className="py-3.5 border-b border-gray-100 last:border-b-0 last:pb-0 first:pt-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[13.5px] font-extrabold text-ink">{a.profissionalNome}</div>
+                      <div className="text-amber-500 text-sm tracking-widest">{'★'.repeat(a.nota)}{'☆'.repeat(5 - a.nota)}</div>
+                    </div>
+                    {a.comentario && <div className="text-[13.5px] leading-relaxed text-gray-700 mt-1">{a.comentario}</div>}
+                    {a.data && <div className="text-xs text-gray-400 mt-1.5">Plantão de {formatDataBR(a.data)}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
