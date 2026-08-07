@@ -10,7 +10,7 @@ import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, MailIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
-  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon,
+  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon, UploadIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { QuemSomosView } from '@/app/components/QuemSomos';
@@ -248,7 +248,8 @@ function ProfissionalPageInner() {
 
   const [loading, setLoading] = useState(true);
   const [perfil, setPerfil] = useState<Profissional | null>(null);
-  const [perfilForm, setPerfilForm] = useState({ nome: '', telefone: '', dataNascimento: '', especialidade: '', especialidadeOutra: '', areaAtuacao: '', regioesAtendimento: '', observacoes: '' });
+  const [perfilForm, setPerfilForm] = useState({ nome: '', telefone: '', dataNascimento: '', especialidade: '', especialidadeOutra: '', crmv: '', areaAtuacao: '', regioesAtendimento: '', observacoes: '' });
+  const [uploadingCurriculoInline, setUploadingCurriculoInline] = useState(false);
   const [savingPerfil, setSavingPerfil] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoParaCortar, setFotoParaCortar] = useState<File | null>(null);
@@ -295,6 +296,7 @@ function ProfissionalPageInner() {
         setPerfilForm({
           nome: p.nome, telefone: p.telefone || '', dataNascimento: p.dataNascimento ? p.dataNascimento.slice(0, 10) : '',
           ...especialidadeFormFromProfissional(p),
+          crmv: p.crmv || '',
           areaAtuacao: p.areaAtuacao || '', regioesAtendimento: p.regioesAtendimento, observacoes: p.observacoes || '',
         });
         setFeed(f);
@@ -497,7 +499,7 @@ function ProfissionalPageInner() {
         nome: perfilForm.nome,
         telefone: onlyDigits(perfilForm.telefone),
         dataNascimento: perfilForm.dataNascimento || undefined,
-        ...(isVeterinarioFormado(perfil?.funcao) ? { areaAtuacao: perfilForm.areaAtuacao } : {}),
+        ...(isVeterinarioFormado(perfil?.funcao) ? { areaAtuacao: perfilForm.areaAtuacao, crmv: perfilForm.crmv.trim() } : {}),
         regioesAtendimento: perfilForm.regioesAtendimento,
         observacoes: perfilForm.observacoes,
         ...(especialidade !== undefined ? { especialidade } : {}),
@@ -507,6 +509,7 @@ function ProfissionalPageInner() {
       setPerfilForm({
         nome: atualizado.nome, telefone: atualizado.telefone || '', dataNascimento: atualizado.dataNascimento ? atualizado.dataNascimento.slice(0, 10) : '',
         ...especialidadeFormFromProfissional(atualizado),
+        crmv: atualizado.crmv || '',
         areaAtuacao: atualizado.areaAtuacao || '', regioesAtendimento: atualizado.regioesAtendimento, observacoes: atualizado.observacoes || '',
       });
       setCurriculoNovo(null);
@@ -537,6 +540,24 @@ function ProfissionalPageInner() {
       toast.error('Não foi possível enviar a foto', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setUploadingFoto(false);
+    }
+  }
+
+  // Envio rápido do currículo direto no card de Documentação, sem precisar
+  // abrir o formulário inteiro de edição — mesmo padrão da foto de perfil.
+  async function handleCurriculoInlineSelecionado(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setUploadingCurriculoInline(true);
+    try {
+      const curriculoUrl = await uploadArquivo(file);
+      const atualizado = await updateProfissionalMe({ curriculoUrl });
+      setPerfil(atualizado);
+      toast.success('Currículo enviado');
+    } catch (err) {
+      toast.error('Não foi possível enviar o currículo', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setUploadingCurriculoInline(false);
     }
   }
 
@@ -1309,37 +1330,74 @@ function ProfissionalPageInner() {
 
                 {/* Documentação */}
                 <div className="bg-white rounded-2xl p-5 mb-3.5">
-                  <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-1">Documentação</div>
-                  <div className="flex items-center justify-between gap-3 py-3 border-b border-gray-100">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-[34px] h-[34px] rounded-[10px] bg-gray-100 text-gray-500 flex items-center justify-center shrink-0"><ShieldIcon className="w-4 h-4" /></div>
-                      <div className="min-w-0">
-                        <div className="text-[13.5px] font-bold text-ink">
-                          {isVeterinarioFormado(perfil.funcao) ? 'Carteirinha do CRMV' : `Carteirinha do ${perfil.tipoComprovacao}`}
-                        </div>
-                        {isVeterinarioFormado(perfil.funcao) && perfil.crmv ? (
-                          <div className="text-xs text-gray-400">Nº do CRMV: <span className="font-bold text-gray-600">{perfil.crmv}</span></div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400">Documentação</div>
+                    <div className="text-[11px] font-bold text-gray-400">{perfil.curriculoUrl ? '2' : '1'} de 2 enviados</div>
+                  </div>
+
+                  <div className="flex items-center gap-3 bg-gray-50 rounded-2xl p-3 mb-2">
+                    <div className="w-[46px] h-[46px] rounded-xl bg-primaryTint text-primaryDeep flex items-center justify-center shrink-0"><ShieldIcon className="w-5 h-5" /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-extrabold text-ink">
+                        {isVeterinarioFormado(perfil.funcao) ? 'Carteirinha do CRMV' : `Carteirinha do ${perfil.tipoComprovacao}`}
+                      </div>
+                      {isVeterinarioFormado(perfil.funcao) && perfil.crmv && (
+                        <div className="text-xs text-gray-500 font-semibold mt-0.5">Nº do CRMV: <span className="font-extrabold text-gray-700">{perfil.crmv}</span></div>
+                      )}
+                      <span className="inline-flex items-center gap-1 bg-primaryTint text-primaryDeep text-[10.5px] font-extrabold px-2 py-0.5 rounded-full mt-1.5">
+                        <CheckIcon className="w-2.5 h-2.5" /> Enviado
+                      </span>
+                    </div>
+                    <a
+                      href={perfil.comprovanteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Ver documento"
+                      className="w-[42px] h-[42px] rounded-full bg-white border border-gray-200 text-primary flex items-center justify-center shrink-0 shadow-sm hover:bg-primaryTint"
+                    >
+                      <EyeIcon className="w-[18px] h-[18px]" />
+                    </a>
+                  </div>
+
+                  {perfil.curriculoUrl ? (
+                    <div className="flex items-center gap-3 bg-gray-50 rounded-2xl p-3">
+                      <div className="w-[46px] h-[46px] rounded-xl bg-primaryTint text-primaryDeep flex items-center justify-center shrink-0"><FileIcon className="w-5 h-5" /></div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-extrabold text-ink">Currículo</div>
+                        <div className="text-xs text-gray-500 truncate">{decodeURIComponent(perfil.curriculoUrl.split('/').pop() || 'curriculo.pdf')}</div>
+                        <span className="inline-flex items-center gap-1 bg-primaryTint text-primaryDeep text-[10.5px] font-extrabold px-2 py-0.5 rounded-full mt-1.5">
+                          <CheckIcon className="w-2.5 h-2.5" /> Enviado
+                        </span>
+                      </div>
+                      <a
+                        href={perfil.curriculoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Baixar currículo"
+                        className="w-[42px] h-[42px] rounded-full bg-white border border-gray-200 text-primary flex items-center justify-center shrink-0 shadow-sm hover:bg-primaryTint"
+                      >
+                        <DownloadIcon className="w-[18px] h-[18px]" />
+                      </a>
+                    </div>
+                  ) : (
+                    <label className={`flex items-center gap-3 border-2 border-dashed border-gray-200 rounded-2xl p-3 ${uploadingCurriculoInline ? '' : 'cursor-pointer hover:bg-gray-50'}`}>
+                      <div className="w-[46px] h-[46px] rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center shrink-0">
+                        {uploadingCurriculoInline ? (
+                          <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin" />
                         ) : (
-                          <div className="text-xs text-gray-400">Enviado</div>
+                          <FileIcon className="w-5 h-5" />
                         )}
                       </div>
-                    </div>
-                    <a href={perfil.comprovanteUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline shrink-0">Ver documento →</a>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 py-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-[34px] h-[34px] rounded-[10px] bg-gray-100 text-gray-500 flex items-center justify-center shrink-0"><FileIcon className="w-4 h-4" /></div>
-                      <div className="min-w-0">
-                        <div className="text-[13.5px] font-bold text-ink">Currículo</div>
-                        <div className="text-xs text-gray-400 truncate">{perfil.curriculoUrl ? perfil.curriculoUrl.split('/').pop() : 'Nenhum currículo enviado'}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-extrabold text-ink">Currículo</div>
+                        <div className="text-xs text-gray-400">Nenhum currículo enviado ainda</div>
                       </div>
-                    </div>
-                    {perfil.curriculoUrl && (
-                      <a href={perfil.curriculoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:underline shrink-0">
-                        <DownloadIcon className="w-3.5 h-3.5" /> Baixar
-                      </a>
-                    )}
-                  </div>
+                      <span className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-extrabold px-3.5 py-2.5 rounded-full shrink-0">
+                        <UploadIcon className="w-3.5 h-3.5" /> {uploadingCurriculoInline ? 'Enviando...' : 'Enviar'}
+                      </span>
+                      <input type="file" accept=".pdf" className="hidden" disabled={uploadingCurriculoInline} onChange={(e) => handleCurriculoInlineSelecionado(e.target.files)} />
+                    </label>
+                  )}
                 </div>
 
                 {/* Avaliações recebidas */}
@@ -1390,6 +1448,15 @@ function ProfissionalPageInner() {
                         /></label>
                     )}
                   </>
+                )}
+                {isVeterinarioFormado(perfil.funcao) && (
+                  <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Número do CRMV</span>
+                    <input
+                      value={perfilForm.crmv}
+                      onChange={(e) => setPerfilForm((f) => ({ ...f, crmv: e.target.value }))}
+                      placeholder="Ex.: 18.432-SP"
+                      className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
+                    /></label>
                 )}
                 <label className="flex flex-col gap-1.5"><span className="text-sm font-bold">Telefone</span>
                   <input
