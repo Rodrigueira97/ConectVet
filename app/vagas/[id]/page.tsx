@@ -3,12 +3,15 @@ import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { formatDataBR, vagaEncerrada } from '@/lib/mockData';
 import { PublicHeader } from '@/app/components/PublicHeader';
+import { ContaSidebar } from '@/app/components/ContaSidebar';
 import { LoginGate } from '@/app/components/LoginGate';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
+import { SidebarSkeleton } from '@/app/components/skeletons/SidebarSkeleton';
 import { EmptyState } from '@/app/components/EmptyState';
 import { SearchIcon } from '@/app/components/icons';
 import { useToast } from '@/app/components/Toast';
+import { useContaLogada } from '@/app/hooks/useContaLogada';
 import {
   ApiError, CATEGORIA_LABEL, Candidatura, Vaga,
   candidatar as apiCandidatar, getMinhasCandidaturas, getToken, getVaga,
@@ -22,11 +25,25 @@ export default function VagaPublicaPage() {
   );
 }
 
-function VagaPublicaSkeleton() {
+// `sidebar` espelha a sidebar de app logado (ver useContaLogada) — só
+// entra quando já sabemos que quem abriu a vaga está logado, pra não
+// trocar de layout no meio do carregamento.
+function VagaPublicaSkeleton({ sidebar = false }: { sidebar?: boolean }) {
+  const conteudo = <div className="max-w-[720px] mx-auto p-8"><CardSkeleton /></div>;
+
+  if (sidebar) {
+    return (
+      <div className="flex min-h-screen flex-col md:flex-row">
+        <SidebarSkeleton />
+        <main className="flex-1 overflow-y-auto bg-paws">{conteudo}</main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-paws">
       <div className="bg-white h-[62px]" />
-      <div className="max-w-[720px] mx-auto p-8"><CardSkeleton /></div>
+      {conteudo}
     </div>
   );
 }
@@ -37,6 +54,7 @@ function VagaPublicaInner() {
   const searchParams = useSearchParams();
   const toast = useToast();
   const vagaId = params.id;
+  const { logged, conta } = useContaLogada();
 
   const [vaga, setVaga] = useState<Vaga | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,10 +62,6 @@ function VagaPublicaInner() {
   const [minhaCandidatura, setMinhaCandidatura] = useState<Candidatura | null>(null);
   const [gateAberto, setGateAberto] = useState(false);
   const [candidatando, setCandidatando] = useState(false);
-  const [logado, setLogado] = useState(false);
-
-  // localStorage não existe no server — só sabemos se tem sessão depois de montar.
-  useEffect(() => { setLogado(!!getToken()); }, []);
 
   useEffect(() => {
     let cancelado = false;
@@ -61,11 +75,11 @@ function VagaPublicaInner() {
   }, [vagaId]);
 
   useEffect(() => {
-    if (!logado) return;
+    if (!logged) return;
     getMinhasCandidaturas()
       .then((cs) => setMinhaCandidatura(cs.find((c) => c.vagaId === vagaId) || null))
       .catch(() => {});
-  }, [logado, vagaId]);
+  }, [logged, vagaId]);
 
   // Quem chegou aqui de volta de um cadastro (ver LoginGate → /cadastro?next=)
   // ganha um empurrãozinho: toast de boas-vindas + botão de candidatar-se em
@@ -96,7 +110,9 @@ function VagaPublicaInner() {
     candidatarSe();
   }
 
-  if (loading) return <VagaPublicaSkeleton />;
+  if (loading || logged === undefined || (logged && !conta)) {
+    return <VagaPublicaSkeleton sidebar={logged === true} />;
+  }
 
   if (erro || !vaga) {
     return (
@@ -129,9 +145,8 @@ function VagaPublicaInner() {
         ? 'Vaga encerrada'
         : 'Candidatar-se';
 
-  return (
-    <div className="min-h-screen bg-paws">
-      <PublicHeader />
+  const detalhe = (
+    <>
       <VagaDetalheView
         vaga={{
           clinica: vaga.clinica?.nome,
@@ -146,7 +161,7 @@ function VagaPublicaInner() {
           valor: vaga.valor, descricao: vaga.descricao,
           notaMedia: vaga.clinica?.notaMedia, totalAvaliacoes: vaga.clinica?.totalAvaliacoes,
         }}
-        onBack={() => router.push('/')}
+        onBack={() => router.back()}
         actionLabel={actionLabel}
         actionDisabled={applied || encerrada}
         actionLoading={candidatando}
@@ -167,6 +182,24 @@ function VagaPublicaInner() {
           onLoginSuccess={candidatarSe}
         />
       )}
+    </>
+  );
+
+  // Quem chegou aqui logado (ex.: pelo perfil público de uma clínica)
+  // mantém a sidebar do app em vez de trocar pro cabeçalho público.
+  if (conta) {
+    return (
+      <div className="flex min-h-screen flex-col md:flex-row">
+        <ContaSidebar conta={conta} />
+        <main className="flex-1 overflow-y-auto bg-paws">{detalhe}</main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-paws">
+      <PublicHeader />
+      {detalhe}
     </div>
   );
 }
