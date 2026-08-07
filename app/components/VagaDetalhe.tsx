@@ -170,7 +170,7 @@ export function VagaDetalheView({
           <div>
             <h1 className="text-white text-2xl font-extrabold mb-1">
               {vaga.clinicaId ? (
-                <Link href={`/clinicas/${vaga.clinicaId}`} className="hover:underline underline-offset-2">
+                <Link href={`/clinicas/${vaga.clinicaId}`} className="text-white hover:underline underline-offset-2">
                   {vaga.clinica}
                 </Link>
               ) : (
