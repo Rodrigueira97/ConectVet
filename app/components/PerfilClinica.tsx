@@ -36,13 +36,13 @@ export function PerfilClinicaView({
 
       <div className="relative rounded-3xl p-5 sm:p-6 pb-10 sm:pb-12 shadow-lg bg-paws-header-open">
         {vagasAbertas.length > 0 && (
-          <span className="absolute top-4 right-4 sm:top-5 sm:right-6 inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[11px] font-extrabold pl-2 pr-2.5 py-1.5 rounded-full shadow">
+          <span className="hidden sm:inline-flex absolute top-5 right-6 items-center gap-1.5 bg-white text-primaryDeep text-[11px] font-extrabold pl-2 pr-2.5 py-1.5 rounded-full shadow">
             <span className="w-[6px] h-[6px] rounded-full shrink-0 bg-primary" />
             {vagasAbertas.length} {vagasAbertas.length === 1 ? 'vaga aberta agora' : 'vagas abertas agora'}
           </span>
         )}
 
-        <div className="flex items-center gap-3.5 pr-24 sm:pr-40">
+        <div className="flex items-center gap-3.5 sm:pr-40">
           <button
             type="button"
             onClick={() => clinica.logoUrl && setFotoAberta({ url: clinica.logoUrl, descricao: clinica.nome })}
@@ -63,7 +63,7 @@ export function PerfilClinicaView({
               </span>
             )}
           </button>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-white text-2xl font-extrabold mb-1">{clinica.nome}</h1>
             {clinica.notaMedia && clinica.totalAvaliacoes ? (
               <div className="text-white/90 text-sm font-bold mb-1 inline-flex items-center gap-1.5">
@@ -74,6 +74,12 @@ export function PerfilClinicaView({
             <div className="text-white/80 text-[13px] font-semibold flex items-center gap-1">
               <PinIcon className="w-3.5 h-3.5 shrink-0" /> {localCurto} · Na conectVet desde {formatMesAno(clinica.createdAt)}
             </div>
+            {vagasAbertas.length > 0 && (
+              <span className="sm:hidden mt-2.5 inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[11px] font-extrabold pl-2 pr-2.5 py-1.5 rounded-full shadow">
+                <span className="w-[6px] h-[6px] rounded-full shrink-0 bg-primary" />
+                {vagasAbertas.length} {vagasAbertas.length === 1 ? 'vaga aberta agora' : 'vagas abertas agora'}
+              </span>
+            )}
           </div>
         </div>
       </div>
