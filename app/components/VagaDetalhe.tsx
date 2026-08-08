@@ -71,7 +71,7 @@ function encerramentoInfo(vaga: VagaDetalheData, preenchidaPorMim?: boolean): { 
 }
 
 export function VagaDetalheView({
-  vaga, onBack, actionLabel, onAction, actionDisabled, actionLoading, compatStatus, perfilFuncao, preenchidaPorMim, confirmarCandidatura, onVerCandidaturas,
+  vaga, onBack, actionLabel, onAction, actionDisabled, actionLoading, compatStatus, perfilFuncao, preenchidaPorMim, confirmarCandidatura, onVerCandidaturas, mostrarVerOutras,
 }: {
   vaga: VagaDetalheData;
   onBack: () => void;
@@ -94,6 +94,12 @@ export function VagaDetalheView({
   // botão "Ver em Minhas candidaturas" — cada página decide pra onde isso
   // leva (rota própria ou troca de aba de uma SPA).
   onVerCandidaturas?: () => void;
+  // Mostra "Ver outras vagas disponíveis →" junto do CTA principal mesmo com
+  // a vaga aberta e compatível — hoje só quem manda `true` é a página pública
+  // (visitante sem conta), pra sempre oferecer uma saída pra navegar mais
+  // vagas. Nas outras telas o botão só aparece quando a vaga já fechou ou é
+  // incompatível (`fechada || incompativel`), como sempre foi.
+  mostrarVerOutras?: boolean;
 }) {
   const local = buildEndereco(vaga);
   const localCurto = [vaga.bairro, vaga.cidade].filter(Boolean).join(', ') || vaga.cidade;
@@ -461,7 +467,7 @@ export function VagaDetalheView({
                 {actionLoading ? <PawTrailInline /> : actionLabel}
               </button>
             )}
-            {(fechada || incompativel) && (
+            {(fechada || incompativel || mostrarVerOutras) && (
               <button onClick={onBack} className="w-full h-[60px] mt-2.5 flex items-center justify-center rounded-2xl text-[13.5px] font-extrabold text-white bg-white/10 hover:bg-white/15">
                 Ver outras vagas disponíveis →
               </button>
@@ -508,7 +514,7 @@ export function VagaDetalheView({
                 {actionLoading ? <PawTrailInline /> : actionLabel}
               </button>
             )}
-            {(fechada || incompativel) && (
+            {(fechada || incompativel || mostrarVerOutras) && (
               <button onClick={onBack} className="w-full h-[56px] mt-2 flex items-center justify-center rounded-2xl text-[13px] font-extrabold text-primaryDeep hover:underline">
                 Ver outras vagas disponíveis →
               </button>

@@ -104,6 +104,17 @@ function VagaPublicaInner() {
     candidatarSe();
   }
 
+  // `router.back()` só funciona se essa aba já tiver uma página anterior no
+  // histórico — quem chega direto por um link (WhatsApp, busca, etc.) abre
+  // a vaga como primeira entrada, e "Voltar para vagas"/"Ver outras vagas
+  // disponíveis" ficavam sem fazer nada. Navega direto pra rota certa em vez
+  // de depender do histórico: feed público pra visitante, o próprio painel
+  // pra quem já está logado.
+  function onBack() {
+    if (conta) router.push(conta.role === 'CLINICA' ? '/clinica' : '/profissional');
+    else router.push('/');
+  }
+
   if (loading || logged === undefined || (logged && !conta)) {
     return <VagaDetalheSkeleton sidebar={logged === true} outrasVagas={logged === false} />;
   }
@@ -157,7 +168,7 @@ function VagaPublicaInner() {
           valor: vaga.valor, descricao: vaga.descricao,
           notaMedia: vaga.clinica?.notaMedia, totalAvaliacoes: vaga.clinica?.totalAvaliacoes,
         }}
-        onBack={() => router.back()}
+        onBack={onBack}
         actionLabel={actionLabel}
         actionDisabled={applied || encerrada}
         actionLoading={candidatando}
@@ -168,6 +179,10 @@ function VagaPublicaInner() {
         // disso) — a revisão só entra depois que já sabemos quem é.
         confirmarCandidatura={!applied && !encerrada && !!logged}
         onVerCandidaturas={() => router.push('/profissional?tab=historico')}
+        // Visitante sem conta sempre ganha o atalho "Ver outras vagas disponíveis"
+        // ao lado do CTA, mesmo com a vaga aberta — quem já está logado tem o feed
+        // inteiro na sidebar, então não precisa do atalho.
+        mostrarVerOutras={logged === false}
       />
 
       {gateAberto && (
