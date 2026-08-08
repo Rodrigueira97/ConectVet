@@ -122,7 +122,10 @@ export default async function Image({ params }: { params: { id: string } }) {
               textTransform: 'uppercase',
             }}
           >
-            {categoria}
+            {/* "Plantão" em dourado — a mesma cor da estrela de avaliação
+                que já aparece nesse cabeçalho na página da vaga. */}
+            <span style={{ color: '#ffd666' }}>Plantão</span>
+            <span>{` para ${categoria}`}</span>
           </div>
           <Marca mark={mark} />
         </div>
