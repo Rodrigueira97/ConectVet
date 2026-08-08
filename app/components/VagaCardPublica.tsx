@@ -4,12 +4,14 @@ import { formatDataBR, localDaVaga, mapsLink, motivoVagaFechada, urgenciaLabel, 
 import { CATEGORIA_LABEL, Vaga } from '@/lib/api';
 import { RatingBadge } from '@/app/components/RatingBadge';
 import { BuildingIcon, CalendarIcon, ClockIcon, LockIcon, PinIcon } from '@/app/components/icons';
+import { ShareVagaButton } from '@/app/components/ShareVagaButton';
 
 // Card de vaga pra quem ainda não tem conta — mesma linguagem visual do card
 // do painel logado (app/profissional/page.tsx), mas sem favoritar (precisa de
 // conta) e sem chip de compatibilidade (não dá pra saber a função de quem tá
 // só navegando). O CTA sempre manda pra página pública da vaga; é lá que mora
-// o gate de login, não aqui no card.
+// o gate de login, não aqui no card. Compartilhar não precisa de conta, então
+// fica no lugar do coração — sozinho, ao lado do CTA.
 export function VagaCardPublica({ vaga: v }: { vaga: Vaga }) {
   const router = useRouter();
   const encerrada = vagaEncerrada(v);
@@ -88,24 +90,27 @@ export function VagaCardPublica({ vaga: v }: { vaga: Vaga }) {
         <div className="text-[12.5px] text-gray-500 leading-relaxed line-clamp-2">{v.descricao}</div>
       )}
 
-      {encerrada ? (
-        <div className="flex items-center gap-2.5 py-2.5 px-3.5 rounded-[11px] bg-ink">
-          <div className="w-7 h-7 rounded-[9px] bg-white/15 flex items-center justify-center shrink-0">
-            <LockIcon className="w-[15px] h-[15px] text-white" />
+      <div className="flex items-center gap-2">
+        <ShareVagaButton vagaId={v.id} titulo={`${CATEGORIA_LABEL[v.categoria]} — ${v.clinica?.nome || 'ConectVet'}`} />
+        {encerrada ? (
+          <div className="flex-1 min-w-0 flex items-center gap-2.5 py-2.5 px-3.5 rounded-[11px] bg-ink">
+            <div className="w-7 h-7 rounded-[9px] bg-white/15 flex items-center justify-center shrink-0">
+              <LockIcon className="w-[15px] h-[15px] text-white" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-extrabold uppercase tracking-wide text-white/60">Encerrada</div>
+              <div className="text-[13.5px] font-extrabold text-white leading-snug">{motivoVagaFechada(v)}</div>
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="text-[10px] font-extrabold uppercase tracking-wide text-white/60">Encerrada</div>
-            <div className="text-[13.5px] font-extrabold text-white leading-snug">{motivoVagaFechada(v)}</div>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={(e) => { e.stopPropagation(); router.push(`/vagas/${v.id}`); }}
-          className="w-full py-2.5 rounded-[11px] text-[13px] font-bold bg-primary hover:bg-primaryDark text-white"
-        >
-          Candidatar-se
-        </button>
-      )}
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); router.push(`/vagas/${v.id}`); }}
+            className="flex-1 py-2.5 rounded-[11px] text-[13px] font-bold bg-primary hover:bg-primaryDark text-white"
+          >
+            Candidatar-se
+          </button>
+        )}
+      </div>
     </div>
   );
 }
