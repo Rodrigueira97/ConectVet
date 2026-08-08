@@ -78,6 +78,7 @@ function vagaFechada(v: { data: string; horaInicio: string; horaFim: string; sta
 
 function buildVagaDetalhe(mv: Vaga): VagaDetalheData {
   return {
+    id: mv.id,
     clinica: mv.clinica?.nome,
     clinicaId: mv.clinicaId,
     clinicaLogoUrl: mv.clinica?.logoUrl,

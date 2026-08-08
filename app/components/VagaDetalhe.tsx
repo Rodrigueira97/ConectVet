@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { buildEndereco, mapsLink, motivoVagaFechada, plantaoEncerrado } from '@/lib/mockData';
 import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CheckIcon, CloseIcon, InfoIcon, LockIcon, MoneyIcon, PawIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
 import { PawTrailInline } from '@/app/components/PawTrailLoader';
+import { ShareVagaButton } from '@/app/components/ShareVagaButton';
 import { FotoEstrutura, AvaliacaoClinica, getUltimasAvaliacoesClinica } from '@/lib/api';
 
 export type VagaDetalheData = {
+  id?: string;
   clinica?: string;
   clinicaId?: string;
   clinicaLogoUrl?: string | null;
@@ -185,19 +187,29 @@ export function VagaDetalheView({
       </button>
 
       <div className={`rounded-3xl p-5 sm:p-6 mb-6 shadow-lg ${apagada ? 'bg-paws-header-closed' : 'bg-paws-header-open'}`}>
-        <div className="flex items-center gap-2 flex-wrap mb-2.5">
-          {encerramento ? (
-            <span className={`inline-flex items-center gap-1.5 text-[12px] font-extrabold pl-2.5 pr-3.5 py-[7px] rounded-full ${confirmada ? 'bg-white text-primaryDeep' : 'bg-white text-ink'}`}>
-              {confirmada ? <CheckCircleIcon className="w-3 h-3" /> : <LockIcon className="w-3 h-3" />} {encerramento.pill}
-            </span>
-          ) : vaga.status === 'ABERTA' && (
-            <span className="inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[11px] font-extrabold pl-2 pr-2.5 py-1 rounded-full">
-              <span className="w-[6px] h-[6px] rounded-full shrink-0 bg-primary" />
-              Aberta
-            </span>
+        <div className="flex items-start justify-between gap-2 mb-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            {encerramento ? (
+              <span className={`inline-flex items-center gap-1.5 text-[12px] font-extrabold pl-2.5 pr-3.5 py-[7px] rounded-full ${confirmada ? 'bg-white text-primaryDeep' : 'bg-white text-ink'}`}>
+                {confirmada ? <CheckCircleIcon className="w-3 h-3" /> : <LockIcon className="w-3 h-3" />} {encerramento.pill}
+              </span>
+            ) : vaga.status === 'ABERTA' && (
+              <span className="inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[11px] font-extrabold pl-2 pr-2.5 py-1 rounded-full">
+                <span className="w-[6px] h-[6px] rounded-full shrink-0 bg-primary" />
+                Aberta
+              </span>
+            )}
+            <span className="text-white bg-white/15 text-xs font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">{vaga.categoria}</span>
+            {vaga.perto && <span className="bg-secondary text-white text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full">Perto de você</span>}
+          </div>
+          {vaga.id && (
+            <ShareVagaButton
+              vagaId={vaga.id}
+              titulo={`${vaga.categoria}${vaga.clinica ? ` — ${vaga.clinica}` : ''}`}
+              variant="on-color"
+              align="right"
+            />
           )}
-          <span className="text-white bg-white/15 text-xs font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">{vaga.categoria}</span>
-          {vaga.perto && <span className="bg-secondary text-white text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full">Perto de você</span>}
         </div>
 
         <div className="flex items-center gap-3.5">

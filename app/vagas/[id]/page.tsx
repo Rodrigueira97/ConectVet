@@ -151,6 +151,7 @@ function VagaPublicaInner() {
     <>
       <VagaDetalheView
         vaga={{
+          id: vaga.id,
           clinica: vaga.clinica?.nome,
           clinicaId: vaga.clinica?.id,
           clinicaLogoUrl: vaga.clinica?.logoUrl,

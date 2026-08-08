@@ -13,6 +13,7 @@ import {
   CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon, StarIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
+import { ShareVagaButton } from '@/app/components/ShareVagaButton';
 import { QuemSomosView } from '@/app/components/QuemSomos';
 import { AvaliacaoCandidatura } from '@/app/components/AvaliacaoCandidatura';
 import { PawTrailLoader } from '@/app/components/PawTrailLoader';
@@ -649,8 +650,8 @@ function ProfissionalPageInner() {
           <div className="text-[12.5px] text-gray-500 leading-relaxed line-clamp-2">{v.descricao}</div>
         )}
 
-        {/* Favoritar e a ação principal, lado a lado — as duas únicas coisas
-            clicáveis do card além do próprio card */}
+        {/* Favoritar, compartilhar e a ação principal, lado a lado — as
+            únicas coisas clicáveis do card além do próprio card */}
         <div className="flex items-center gap-2">
           <button
             onClick={(e) => { e.stopPropagation(); alternarFavorito(v.id); }}
@@ -659,6 +660,7 @@ function ProfissionalPageInner() {
           >
             <HeartIcon className="w-4 h-4" filled={favorita} />
           </button>
+          <ShareVagaButton vagaId={v.id} titulo={`${CATEGORIA_LABEL[v.categoria]} — ${v.clinica?.nome || 'ConectVet'}`} />
           {preenchidaPorMim ? (
             <div className="flex-1 min-w-0 flex items-center gap-2.5 py-2.5 px-3.5 rounded-[11px] bg-primary">
               <div className="w-7 h-7 rounded-[9px] bg-white/20 flex items-center justify-center shrink-0">
@@ -740,6 +742,7 @@ function ProfissionalPageInner() {
           return (
             <VagaDetalheView
               vaga={{
+                id: vagaSelecionada.id,
                 clinica: vagaSelecionada.clinica?.nome,
                 clinicaId: vagaSelecionada.clinica?.id,
                 clinicaLogoUrl: vagaSelecionada.clinica?.logoUrl,
