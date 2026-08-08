@@ -6,45 +6,22 @@ import { PublicHeader } from '@/app/components/PublicHeader';
 import { ContaSidebar } from '@/app/components/ContaSidebar';
 import { LoginGate } from '@/app/components/LoginGate';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
-import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
-import { SidebarSkeleton } from '@/app/components/skeletons/SidebarSkeleton';
+import { VagaCardPublica } from '@/app/components/VagaCardPublica';
+import { VagaDetalheSkeleton } from '@/app/components/skeletons/VagaDetalheSkeleton';
 import { EmptyState } from '@/app/components/EmptyState';
 import { SearchIcon } from '@/app/components/icons';
 import { useToast } from '@/app/components/Toast';
 import { useContaLogada } from '@/app/hooks/useContaLogada';
 import {
   ApiError, CATEGORIA_LABEL, Candidatura, Vaga,
-  candidatar as apiCandidatar, getMinhasCandidaturas, getToken, getVaga,
+  candidatar as apiCandidatar, getFeed, getMinhasCandidaturas, getToken, getVaga,
 } from '@/lib/api';
 
 export default function VagaPublicaPage() {
   return (
-    <Suspense fallback={<VagaPublicaSkeleton />}>
+    <Suspense fallback={<VagaDetalheSkeleton />}>
       <VagaPublicaInner />
     </Suspense>
-  );
-}
-
-// `sidebar` espelha a sidebar de app logado (ver useContaLogada) — só
-// entra quando já sabemos que quem abriu a vaga está logado, pra não
-// trocar de layout no meio do carregamento.
-function VagaPublicaSkeleton({ sidebar = false }: { sidebar?: boolean }) {
-  const conteudo = <div className="max-w-[720px] mx-auto p-8"><CardSkeleton /></div>;
-
-  if (sidebar) {
-    return (
-      <div className="flex min-h-screen flex-col md:flex-row">
-        <SidebarSkeleton />
-        <main className="flex-1 overflow-y-auto bg-paws">{conteudo}</main>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-paws">
-      <div className="bg-white h-[62px]" />
-      {conteudo}
-    </div>
   );
 }
 
@@ -62,6 +39,7 @@ function VagaPublicaInner() {
   const [minhaCandidatura, setMinhaCandidatura] = useState<Candidatura | null>(null);
   const [gateAberto, setGateAberto] = useState(false);
   const [candidatando, setCandidatando] = useState(false);
+  const [outrasVagas, setOutrasVagas] = useState<Vaga[]>([]);
 
   useEffect(() => {
     let cancelado = false;
@@ -80,6 +58,19 @@ function VagaPublicaInner() {
       .then((cs) => setMinhaCandidatura(cs.find((c) => c.vagaId === vagaId) || null))
       .catch(() => {});
   }, [logged, vagaId]);
+
+  // Outras vagas da mesma clínica — só faz sentido oferecer isso a quem
+  // ainda não tem conta: quem está logado já tem o feed inteiro, filtros e
+  // favoritos à disposição na própria sidebar.
+  const clinicaId = vaga?.clinica?.id;
+  useEffect(() => {
+    if (logged !== false || !clinicaId) { setOutrasVagas([]); return; }
+    let cancelado = false;
+    getFeed({ clinicaId })
+      .then((vs) => { if (!cancelado) setOutrasVagas(vs.filter((v) => v.id !== vagaId && !vagaEncerrada(v))); })
+      .catch(() => {});
+    return () => { cancelado = true; };
+  }, [logged, clinicaId, vagaId]);
 
   // Quem chegou aqui de volta de um cadastro (ver LoginGate → /cadastro?next=)
   // ganha um empurrãozinho: toast de boas-vindas + botão de candidatar-se em
@@ -113,7 +104,7 @@ function VagaPublicaInner() {
   }
 
   if (loading || logged === undefined || (logged && !conta)) {
-    return <VagaPublicaSkeleton sidebar={logged === true} />;
+    return <VagaDetalheSkeleton sidebar={logged === true} outrasVagas={logged === false} />;
   }
 
   if (erro || !vaga) {
@@ -207,6 +198,18 @@ function VagaPublicaInner() {
     <div className="min-h-screen bg-paws">
       <PublicHeader />
       {detalhe}
+      {outrasVagas.length > 0 && (
+        <div className="max-w-[1080px] mx-auto px-8 pb-8">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+            <div className="text-[15px] font-extrabold text-ink mb-3">Outras vagas de {vaga.clinica?.nome}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {outrasVagas.map((v) => (
+                <VagaCardPublica key={v.id} vaga={v} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
