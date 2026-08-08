@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado, isPlantaoNoturno, valorSugeridoNoturno } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, FilterIcon, DownloadIcon, LockIcon, PawIcon, StarIcon, ArrowRightIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, DownloadIcon, LockIcon, PawIcon, StarIcon, ArrowRightIcon, InfoIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { QuemSomosView } from '@/app/components/QuemSomos';
@@ -30,8 +30,6 @@ import {
 type Tab = 'home' | 'criar-vaga' | 'candidatos' | 'pagamento' | 'avaliacoes' | 'perfil' | 'quem-somos';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
 type PainelFiltro = 'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido';
-
-const VAGAS_POR_PAGINA = 6;
 
 function withCurrent(list: string[], current: string) {
   return current && !list.includes(current) ? [...list, current] : list;
@@ -444,6 +442,16 @@ function ClinicaPageInner() {
 
   const minVal = vagaForm.categoria ? MIN_VALORES[vagaForm.categoria] : undefined;
   const valorNum = parseFloat(vagaForm.valor);
+  // Média do que outras clínicas do mesmo estado pagam nessa categoria, calculada em cima do
+  // feed público (já carregado pra Home) — só mostra com pelo menos 2 vagas comparáveis, pra
+  // não exibir uma "média" baseada num único ponto fora da curva.
+  const categoriaApi = vagaForm.categoria ? CATEGORIA_VALUE[vagaForm.categoria] : undefined;
+  const vagasComparaveis = categoriaApi && clinica
+    ? feed.filter((v) => v.categoria === categoriaApi && v.clinicaId !== clinica.id && v.estado === clinica.estado)
+    : [];
+  const mediaRegiao = vagasComparaveis.length >= 2
+    ? Math.round(vagasComparaveis.reduce((soma, v) => soma + Number(v.valor), 0) / vagasComparaveis.length)
+    : null;
   let horaLabel = '';
   if (vagaForm.horaInicio && vagaForm.horaFim) {
     const [h1, m1] = vagaForm.horaInicio.split(':').map(Number);
@@ -727,9 +735,12 @@ function ClinicaPageInner() {
 
   const selectedMv = minhasVagas.find((m) => m.id === selectedMvId) || null;
   const selectedCand = candidatos.find((c) => c.id === selectedCandId) || null;
+  // Mesma conta do card "Precisa de você" na Home (candidatura pendente + pagamento retido
+  // aguardando confirmação) — o número do badge da sidebar precisa bater com o do card.
   const pendingTotal = minhasVagas
     .filter((mv) => mv.status === 'ABERTA' && !vagaExpirada(mv))
-    .reduce((sum, mv) => sum + (mv.candidaturas || []).filter((c) => c.status === 'PENDENTE').length, 0);
+    .reduce((sum, mv) => sum + (mv.candidaturas || []).filter((c) => c.status === 'PENDENTE').length, 0)
+    + minhasVagas.filter((mv) => mv.status === 'PREENCHIDA' && mv.pagamento?.status === 'RETIDO').length;
 
   const vagasAtivas = minhasVagas.filter((v) => v.status === 'ABERTA').length;
   const vagasConsideradas = minhasVagas.filter((v) => v.status !== 'CANCELADA');
@@ -951,6 +962,12 @@ function ClinicaPageInner() {
                       {vagaErrors.valor && <span className="text-xs font-semibold text-danger">{vagaErrors.valor}</span>}
                       {minVal && !vagaErrors.valor && (
                         <span className="text-xs text-gray-500">Mínimo para esta categoria: R$ {minVal}</span>
+                      )}
+                      {mediaRegiao !== null && (
+                        <div className="flex items-start gap-2 bg-primaryTint text-primaryDeep text-[11.5px] font-semibold leading-relaxed rounded-xl px-3 py-2.5 mt-1">
+                          <InfoIcon className="w-3.5 h-3.5 shrink-0 mt-px" />
+                          Outras clínicas da região pagam em média <b>R$ {mediaRegiao}</b> por plantão de {vagaForm.categoria}.
+                        </div>
                       )}
                       {minVal && isPlantaoNoturno(vagaForm.horaInicio) && !isNaN(valorNum) && valorNum >= minVal && valorNum < valorSugeridoNoturno(minVal) && (
                         <div className="flex items-center gap-3 rounded-xl px-3.5 py-3 mt-1" style={{ background: 'linear-gradient(135deg, #0a2f4d, #123b5c)' }}>
