@@ -1380,7 +1380,6 @@ function ProfissionalPageInner() {
                   </div>
                   <div className="bg-white rounded-2xl p-4 text-center">
                     <div className="text-xl font-extrabold text-ink">{tempoNaPlataforma(perfil.createdAt)}</div>
-                    <div className="text-[11px] font-bold text-gray-500 mt-0.5">Na plataforma</div>
                   </div>
                 </div>
 
