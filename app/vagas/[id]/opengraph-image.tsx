@@ -52,7 +52,10 @@ function Marca({ mark }: { mark: string }) {
       </div>
       <div style={{ display: 'flex', fontSize: 34, fontWeight: 700 }}>
         <span style={{ color: '#042d4c' }}>conect</span>
-        <span style={{ color: '#00706b' }}>vet</span>
+        {/* primaryTint — o teal escuro (primaryDeep) testado antes ficava
+            perto demais do fundo gradiente; esse tom claro (já um token da
+            paleta) garante contraste sem sair dela. */}
+        <span style={{ color: '#dcf4f2' }}>vet</span>
       </div>
     </div>
   );
