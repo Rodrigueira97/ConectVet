@@ -19,7 +19,11 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   // campo preenchido, então cai num resumo automático pra nunca ficar em
   // branco no card de quem recebe o link.
   const resumoAutomatico = [categoria, local, `R$ ${vaga.valor}`].filter(Boolean).join(' · ');
-  const descricao = (vaga.descricao?.trim() || resumoAutomatico).slice(0, 200);
+  const descricaoCompleta = vaga.descricao?.trim() || resumoAutomatico;
+  const LIMITE_DESCRICAO = 200;
+  const descricao = descricaoCompleta.length > LIMITE_DESCRICAO
+    ? `${descricaoCompleta.slice(0, LIMITE_DESCRICAO - 3).trimEnd()}...`
+    : descricaoCompleta;
   const titulo = `${categoria} — ${clinica}`;
 
   return {
