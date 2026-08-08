@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { formatDataBR, vagaEncerrada } from '@/lib/mockData';
 import { PublicHeader } from '@/app/components/PublicHeader';
+import { PublicFooter } from '@/app/components/PublicFooter';
 import { ContaSidebar } from '@/app/components/ContaSidebar';
 import { LoginGate } from '@/app/components/LoginGate';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
@@ -122,6 +123,7 @@ function VagaPublicaInner() {
             />
           </div>
         </div>
+        <PublicFooter />
       </div>
     );
   }
@@ -210,6 +212,7 @@ function VagaPublicaInner() {
           </div>
         </div>
       )}
+      <PublicFooter />
     </div>
   );
 }

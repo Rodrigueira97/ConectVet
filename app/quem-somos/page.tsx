@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { PublicHeader } from '@/app/components/PublicHeader';
+import { PublicFooter } from '@/app/components/PublicFooter';
 import { QuemSomosView } from '@/app/components/QuemSomos';
 
 // Versão pública da mesma aba que já existe dentro dos painéis logados
@@ -12,6 +13,7 @@ export default function QuemSomosPublico() {
     <div className="min-h-screen bg-paws">
       <PublicHeader />
       <QuemSomosView ctaLabel="Ver vagas disponíveis" onCta={() => router.push('/')} />
+      <PublicFooter />
     </div>
   );
 }

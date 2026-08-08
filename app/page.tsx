@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { correspondeAproximado, hojeBrasil, normalizarBusca, vagaEncerrada } from '@/lib/mockData';
 import { PublicHeader } from '@/app/components/PublicHeader';
+import { PublicFooter } from '@/app/components/PublicFooter';
 import { VagaCardPublica } from '@/app/components/VagaCardPublica';
 import { DateField } from '@/app/components/DateField';
 import { EmptyState } from '@/app/components/EmptyState';
@@ -275,6 +276,7 @@ function HomePublicaInner() {
           </div>
         )}
       </div>
+      <PublicFooter />
     </div>
   );
 }

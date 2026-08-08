@@ -87,6 +87,16 @@ a:hover { color: #00847e; }
   background-repeat: repeat;
   background-size: 220px 220px;
 }
+/* Rodapé das páginas públicas (PublicFooter.tsx) — mesma família visual do
+   .bg-paws-header-closed (ink + patinhas), só que mais discreta: o rodapé é
+   um bloco grande e constante no fim da página, não um cartão de destaque. */
+.bg-paws-footer {
+  background-color: #042d4c;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cg transform='translate(16 22) rotate(-18) scale(0.56)' fill='%23ffffff' fill-opacity='0.05'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3Cg transform='translate(130 120) rotate(24) scale(0.44)' fill='%23ffffff' fill-opacity='0.04'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 240px 240px;
+}
+
 .bg-paws-header-closed {
   background-color: #042d4c;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg transform='translate(14 20) rotate(-18) scale(0.5)' fill='%23ffffff' fill-opacity='0.07'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3Cg transform='translate(120 110) rotate(24) scale(0.4)' fill='%23ffffff' fill-opacity='0.06'%3E%3Cellipse cx='50' cy='63' rx='20' ry='16'/%3E%3Ccircle cx='24' cy='32' r='10'/%3E%3Ccircle cx='41' cy='15' r='9'/%3E%3Ccircle cx='59' cy='15' r='9'/%3E%3Ccircle cx='76' cy='32' r='10'/%3E%3C/g%3E%3C/svg%3E");

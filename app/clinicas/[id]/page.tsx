@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { vagaEncerrada } from '@/lib/mockData';
 import { PublicHeader } from '@/app/components/PublicHeader';
+import { PublicFooter } from '@/app/components/PublicFooter';
 import { ContaSidebar } from '@/app/components/ContaSidebar';
 import { PerfilClinicaView } from '@/app/components/PerfilClinica';
 import { PerfilClinicaSkeleton } from '@/app/components/skeletons/PerfilClinicaSkeleton';
@@ -73,6 +74,7 @@ function ClinicaPublicaInner() {
             />
           </div>
         </div>
+        <PublicFooter />
       </div>
     );
   }
@@ -106,6 +108,7 @@ function ClinicaPublicaInner() {
         avaliacoes={avaliacoes}
         onBack={() => router.back()}
       />
+      <PublicFooter />
     </div>
   );
 }
