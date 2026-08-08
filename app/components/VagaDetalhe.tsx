@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { buildEndereco, mapsLink, motivoVagaFechada, plantaoEncerrado } from '@/lib/mockData';
-import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CloseIcon, LockIcon, MoneyIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
+import { BuildingIcon, CalendarIcon, ChevronLeftIcon, CheckCircleIcon, CheckIcon, CloseIcon, InfoIcon, LockIcon, MoneyIcon, PawIcon, PinIcon, WarningIcon, XCircleIcon } from '@/app/components/icons';
 import { PawTrailInline } from '@/app/components/PawTrailLoader';
 import { FotoEstrutura, AvaliacaoClinica, getUltimasAvaliacoesClinica } from '@/lib/api';
 
@@ -69,7 +69,7 @@ function encerramentoInfo(vaga: VagaDetalheData, preenchidaPorMim?: boolean): { 
 }
 
 export function VagaDetalheView({
-  vaga, onBack, actionLabel, onAction, actionDisabled, actionLoading, compatStatus, perfilFuncao, preenchidaPorMim,
+  vaga, onBack, actionLabel, onAction, actionDisabled, actionLoading, compatStatus, perfilFuncao, preenchidaPorMim, confirmarCandidatura, onVerCandidaturas,
 }: {
   vaga: VagaDetalheData;
   onBack: () => void;
@@ -80,6 +80,18 @@ export function VagaDetalheView({
   compatStatus?: 'compativel' | 'incompativel' | 'aplicada' | 'encerrada';
   perfilFuncao?: string;
   preenchidaPorMim?: boolean;
+  // true só quando `onAction` significa "candidatar-se a esta vaga" (as duas
+  // telas do profissional). A clínica gerenciando candidatos usa o mesmo
+  // `onAction`/`actionLabel` pra outra coisa ("Gerenciar candidatos") e não
+  // deve passar isso — sem essa distinção explícita não dá pra saber, só
+  // pelo `compatStatus`, se o botão é uma candidatura (as duas telas do
+  // profissional nem sempre concordam sobre quando `compatStatus` vale
+  // 'compativel').
+  confirmarCandidatura?: boolean;
+  // Chamado quando o profissional confirma a saída da tela de sucesso pelo
+  // botão "Ver em Minhas candidaturas" — cada página decide pra onde isso
+  // leva (rota própria ou troca de aba de uma SPA).
+  onVerCandidaturas?: () => void;
 }) {
   const local = buildEndereco(vaga);
   const localCurto = [vaga.bairro, vaga.cidade].filter(Boolean).join(', ') || vaga.cidade;
@@ -98,6 +110,55 @@ export function VagaDetalheView({
   const apagada = fechada && !confirmada;
   const incompativel = compatStatus === 'incompativel';
   const aplicada = compatStatus === 'aplicada';
+
+  // Candidatar-se ganha uma revisão antes de enviar (evita candidatura errada
+  // entre plantões parecidos publicados no mesmo fim de semana) e uma tela de
+  // sucesso mais clara, com o que vem a seguir — troca o toast (que passa
+  // despercebido) por uma confirmação forte. Só entra em jogo pra quem pode
+  // mesmo se candidatar: a clínica gerenciando candidatos usa o mesmo
+  // `onAction`, mas nunca manda `compatStatus`, então não abre essa revisão.
+  const ehCandidatura = !!confirmarCandidatura;
+  const [sheetStage, setSheetStage] = useState<'closed' | 'confirm' | 'success'>('closed');
+  const [confetti, setConfetti] = useState<{ dx: number; dy: number; spin: number; delay: number; color: string }[]>([]);
+  const eraLoading = useRef(false);
+
+  useEffect(() => {
+    if (eraLoading.current && !actionLoading) {
+      if (compatStatus === 'aplicada') {
+        const cores = ['#00a19a', '#00706b', '#2e8cad', '#dcf4f2'];
+        const n = 9;
+        setConfetti(Array.from({ length: n }, (_, i) => {
+          const angulo = (Math.PI * 2 * i) / n + (Math.random() * 0.5 - 0.25);
+          const dist = 46 + Math.random() * 26;
+          return {
+            dx: Math.cos(angulo) * dist,
+            dy: Math.sin(angulo) * dist - 6,
+            spin: Math.random() * 140 - 70,
+            delay: Math.random() * 0.12,
+            color: cores[i % cores.length],
+          };
+        }));
+        setSheetStage('success');
+      } else if (sheetStage === 'confirm') {
+        // Deu erro — o toast de erro (disparado por quem chama onAction) já avisa, só fecha a revisão.
+        setSheetStage('closed');
+      }
+    }
+    eraLoading.current = !!actionLoading;
+  }, [actionLoading, compatStatus, sheetStage]);
+
+  useEffect(() => {
+    if (sheetStage === 'closed') return;
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !(sheetStage === 'confirm' && actionLoading)) setSheetStage('closed');
+    }
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [sheetStage, actionLoading]);
+
+  function handleCtaClick() {
+    if (ehCandidatura) setSheetStage('confirm'); else onAction?.();
+  }
 
   const [avaliacoesClinica, setAvaliacoesClinica] = useState<AvaliacaoClinica[]>([]);
   const [avaliacoesCarregadas, setAvaliacoesCarregadas] = useState(false);
@@ -376,7 +437,7 @@ export function VagaDetalheView({
             ) : (
               <button
                 disabled={actionDisabled || actionLoading}
-                onClick={onAction}
+                onClick={handleCtaClick}
                 className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors flex items-center justify-center ${
                   actionLoading
                     ? 'bg-white text-primaryDeep shadow-lg cursor-default'
@@ -423,7 +484,7 @@ export function VagaDetalheView({
             ) : (
               <button
                 disabled={actionDisabled || actionLoading}
-                onClick={onAction}
+                onClick={handleCtaClick}
                 className={`w-full py-[15px] rounded-2xl text-[15px] font-extrabold transition-colors flex items-center justify-center ${
                   actionLoading
                     ? 'bg-primary text-white cursor-default'
@@ -442,6 +503,165 @@ export function VagaDetalheView({
             )}
           </div>
         </>
+      )}
+
+      {sheetStage !== 'closed' && (
+        <div
+          className="fixed inset-0 z-50 bg-[rgba(4,20,25,0.55)] flex items-end sm:items-center justify-center p-0 sm:p-6"
+          onClick={(e) => { if (e.target === e.currentTarget && !(sheetStage === 'confirm' && actionLoading)) setSheetStage('closed'); }}
+        >
+          <div className="w-full sm:max-w-[400px] bg-white rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
+            {sheetStage === 'confirm' ? (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-primaryDeep">Confirmar candidatura</span>
+                  <button
+                    onClick={() => !actionLoading && setSheetStage('closed')}
+                    disabled={actionLoading}
+                    aria-label="Fechar"
+                    className="w-7 h-7 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-gray-200 disabled:opacity-40"
+                  >
+                    <CloseIcon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="text-[19px] font-extrabold text-ink mb-4">Revise antes de enviar</div>
+
+                <div className="bg-gray-50 rounded-2xl p-4 mb-3.5">
+                  <div className="flex items-center gap-2.5 pb-3 mb-3 border-b border-gray-200">
+                    <div className="w-9 h-9 rounded-[10px] bg-white border border-gray-200 text-gray-300 flex items-center justify-center shrink-0 overflow-hidden">
+                      {vaga.clinicaLogoUrl ? (
+                        <img src={vaga.clinicaLogoUrl} alt={vaga.clinica} className="w-full h-full object-cover" />
+                      ) : (
+                        <BuildingIcon className="w-4 h-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[13.5px] font-extrabold text-ink truncate">{vaga.clinica}</div>
+                      <div className="text-[11.5px] font-bold text-gray-500">{vaga.categoria}</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[12.5px] font-bold text-gray-500">Quando</span>
+                      <span className="text-[13.5px] font-extrabold text-ink text-right">{formatQuando(vaga.data)} · {vaga.horaInicio} – {vaga.horaFim}</span>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[12.5px] font-bold text-gray-500">Duração</span>
+                      <span className="text-[13.5px] font-extrabold text-ink">{horasLabel}</span>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[12.5px] font-bold text-gray-500">Valor</span>
+                      <span className="text-[13.5px] font-extrabold text-ink">R$ {valorNum}</span>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[12.5px] font-bold text-gray-500">Onde</span>
+                      <span className="text-[13.5px] font-extrabold text-ink text-right">{localCurto}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5 bg-primaryTint rounded-2xl px-3.5 py-3 mb-4">
+                  <InfoIcon className="w-4 h-4 text-primaryDeep shrink-0 mt-px" />
+                  <p className="text-[12.5px] font-semibold text-primaryDeep leading-relaxed m-0">
+                    A clínica analisa seu perfil e você recebe uma resposta por aqui — geralmente em até 24h.
+                  </p>
+                </div>
+
+                <button
+                  disabled={actionLoading}
+                  onClick={onAction}
+                  className="w-full py-[15px] rounded-2xl text-[14.5px] font-extrabold bg-primary hover:bg-primaryDark text-white flex items-center justify-center disabled:opacity-85"
+                >
+                  {actionLoading ? <PawTrailInline /> : 'Confirmar candidatura'}
+                </button>
+                <button
+                  disabled={actionLoading}
+                  onClick={() => setSheetStage('closed')}
+                  className="w-full py-3 mt-1.5 rounded-2xl text-[13px] font-extrabold text-gray-500 hover:text-ink disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <div className="text-center">
+                <div className="relative h-[110px] flex items-center justify-center mb-1">
+                  <span className="absolute inset-0 pointer-events-none">
+                    {confetti.map((b, i) => (
+                      <span
+                        key={i}
+                        className="cand-paw-bit"
+                        style={{ '--dx': `${b.dx}px`, '--dy': `${b.dy}px`, '--spin': `${b.spin}deg`, animationDelay: `${b.delay}s`, color: b.color } as CSSProperties}
+                      >
+                        <PawIcon className="w-full h-full" />
+                      </span>
+                    ))}
+                  </span>
+                  <span className="cand-ring absolute w-[88px] h-[88px] rounded-full border-2 border-primary" />
+                  <span className="cand-stamp relative w-[88px] h-[88px] rounded-full bg-primaryTint flex items-center justify-center shadow-[0_8px_20px_-8px_rgba(0,112,107,0.45)]">
+                    <PawIcon className="w-11 h-10 text-primaryDeep" />
+                  </span>
+                  <span className="cand-badge absolute top-[62px] left-[62px] w-[30px] h-[30px] rounded-full bg-primaryDeep border-[3px] border-white flex items-center justify-center">
+                    <CheckIcon className="w-3.5 h-3.5 text-white" />
+                  </span>
+                </div>
+
+                <div className="cand-fade text-[19px] font-extrabold text-ink mt-1 mb-1.5" style={{ animationDelay: '.5s' }}>
+                  Candidatura enviada!
+                </div>
+                <p className="cand-fade text-[13px] leading-relaxed text-gray-700 mb-4" style={{ animationDelay: '.58s' }}>
+                  A {vaga.clinica} recebeu seu interesse no plantão de {formatQuando(vaga.data).toLowerCase()}. Você não precisa fazer mais nada agora.
+                </p>
+
+                <div className="cand-fade text-left mb-4" style={{ animationDelay: '.68s' }}>
+                  <div className="relative flex gap-3 pb-4">
+                    <span className="absolute left-[8px] top-[20px] bottom-[-2px] w-[2px] bg-gray-200" />
+                    <span className="relative z-10 w-[17px] h-[17px] rounded-full bg-primaryDeep flex items-center justify-center shrink-0 mt-px">
+                      <CheckIcon className="w-[9px] h-[9px] text-white" />
+                    </span>
+                    <div>
+                      <div className="text-[13px] font-extrabold text-ink">Candidatura enviada</div>
+                      <div className="text-[12px] text-gray-500 mt-0.5">Agora</div>
+                    </div>
+                  </div>
+                  <div className="relative flex gap-3 pb-4">
+                    <span className="absolute left-[8px] top-[20px] bottom-[-2px] w-[2px] bg-gray-200" />
+                    <span className="cand-dot-now relative z-10 w-[17px] h-[17px] rounded-full bg-white border-[2.5px] border-primary shrink-0 mt-px" />
+                    <div>
+                      <div className="text-[13px] font-extrabold text-ink">Em análise pela clínica</div>
+                      <div className="text-[12px] text-gray-500 mt-0.5">Normalmente responde em até 24h</div>
+                    </div>
+                  </div>
+                  <div className="relative flex gap-3">
+                    <span className="relative z-10 w-[17px] h-[17px] rounded-full bg-white border-2 border-gray-300 shrink-0 mt-px" />
+                    <div>
+                      <div className="text-[13px] font-extrabold text-gray-400">Resposta</div>
+                      <div className="text-[12px] text-gray-500 mt-0.5">Avisamos pelas notificações do app e em Minhas candidaturas</div>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="cand-fade text-[11.5px] text-gray-400 leading-relaxed mb-4" style={{ animationDelay: '.74s' }}>
+                  Mudou de ideia? Você pode cancelar essa candidatura em Minhas candidaturas antes da clínica responder.
+                </p>
+
+                <div className="cand-fade" style={{ animationDelay: '.8s' }}>
+                  <button
+                    onClick={() => { setSheetStage('closed'); onVerCandidaturas?.(); }}
+                    className="w-full py-[15px] rounded-2xl text-[14.5px] font-extrabold bg-primary hover:bg-primaryDark text-white"
+                  >
+                    Ver em Minhas candidaturas →
+                  </button>
+                  <button
+                    onClick={() => setSheetStage('closed')}
+                    className="w-full py-3 mt-1.5 rounded-2xl text-[13px] font-extrabold text-gray-500 hover:text-ink"
+                  >
+                    Voltar para vagas
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

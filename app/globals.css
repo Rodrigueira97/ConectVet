@@ -93,3 +93,57 @@ a:hover { color: #00847e; }
   background-repeat: repeat;
   background-size: 220px 220px;
 }
+
+/* Sucesso da candidatura (VagaDetalhe.tsx) — a patinha "carimba" no centro,
+   um anel pulsa e se apaga por trás, o selinho de check aparece com um
+   pouco de atraso, e confetes em formato de patinha se espalham. Tudo em
+   classes simples (sem "is-playing") porque o React desmonta/remonta esses
+   elementos a cada abertura do painel de sucesso, o que já reinicia a
+   animação sozinho. */
+@keyframes candStampIn {
+  0%   { opacity: 0; transform: scale(1.7) rotate(-18deg) translateY(-12px); }
+  55%  { opacity: 1; transform: scale(.92) rotate(3deg) translateY(0); }
+  78%  { transform: scale(1.05) rotate(-1deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes candThud {
+  0% { transform: scale(1); } 45% { transform: scale(.96); } 100% { transform: scale(1); }
+}
+.cand-stamp {
+  animation: candStampIn .62s cubic-bezier(.34,1.4,.4,1) .05s both, candThud .3s ease .55s;
+}
+@keyframes candRingPulse {
+  0% { opacity: .6; transform: scale(.55); } 100% { opacity: 0; transform: scale(1.85); }
+}
+.cand-ring { animation: candRingPulse .8s ease-out .05s both; }
+
+@keyframes candBadgePop {
+  0% { opacity: 0; transform: scale(.2); } 70% { transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); }
+}
+.cand-badge { animation: candBadgePop .4s cubic-bezier(.3,1.7,.4,1) .42s both; }
+
+@keyframes candFadeUp {
+  from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); }
+}
+.cand-fade { opacity: 0; animation: candFadeUp .4s ease both; }
+
+@keyframes candPawBitFly {
+  0%   { opacity: 0; transform: translate(0,0) scale(.5) rotate(0deg); }
+  16%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.85) rotate(var(--spin)); }
+}
+.cand-paw-bit {
+  position: absolute; top: 50%; left: 50%; width: 11px; height: 10px; margin: -5px 0 0 -5.5px; opacity: 0;
+  animation: candPawBitFly .85s cubic-bezier(.2,.7,.3,1) forwards;
+}
+
+@keyframes candDotPulse {
+  0% { box-shadow: 0 0 0 0 rgba(0,161,154,.4); } 70% { box-shadow: 0 0 0 7px rgba(0,161,154,0); } 100% { box-shadow: 0 0 0 0 rgba(0,161,154,0); }
+}
+.cand-dot-now { animation: candDotPulse 1.6s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cand-stamp, .cand-badge, .cand-fade { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .cand-ring, .cand-paw-bit { animation: none !important; opacity: 0 !important; }
+  .cand-dot-now { animation: none !important; }
+}

@@ -97,7 +97,9 @@ function VagaPublicaInner() {
       const nova = await apiCandidatar(vaga.id);
       setMinhaCandidatura(nova);
       setGateAberto(false);
-      toast.success('Candidatura enviada', { message: `${vaga.clinica?.nome || 'A clínica'} vai te avisar por aqui assim que responder.` });
+      // Sem toast.success aqui: a própria VagaDetalheView mostra a tela de
+      // sucesso (carimbo + linha do tempo) assim que `actionLoading` volta a
+      // false com `compatStatus === 'aplicada'` — um toast por cima seria redundante.
     } catch (err) {
       toast.error('Não foi possível enviar a candidatura', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
@@ -168,6 +170,10 @@ function VagaPublicaInner() {
         onAction={onClickCandidatar}
         preenchidaPorMim={preenchidaPorMim}
         compatStatus={applied && !preenchidaPorMim ? 'aplicada' : undefined}
+        // Visitante sem conta continua indo direto pro LoginGate (onClickCandidatar cuida
+        // disso) — a revisão só entra depois que já sabemos quem é.
+        confirmarCandidatura={!applied && !encerrada && !!logged}
+        onVerCandidaturas={() => router.push('/profissional?tab=historico')}
       />
 
       {gateAberto && (

@@ -331,7 +331,9 @@ function ProfissionalPageInner() {
     try {
       const nova = await apiCandidatar(v.id);
       setCandidaturas((prev) => [{ ...nova, vaga: v }, ...prev]);
-      toast.success('Candidatura enviada', { message: `${v.clinica?.nome || 'A clínica'} vai te avisar por aqui assim que responder.` });
+      // Sem toast.success aqui: a própria VagaDetalheView mostra a tela de
+      // sucesso (carimbo + linha do tempo) assim que `actionLoading` volta a
+      // false com `compatStatus === 'aplicada'` — um toast por cima seria redundante.
     } catch (err) {
       toast.error('Não foi possível enviar a candidatura', {
         message: err instanceof ApiError ? err.message : undefined,
@@ -759,6 +761,8 @@ function ProfissionalPageInner() {
               compatStatus={encerrada ? 'encerrada' : applied ? 'aplicada' : compat ? 'compativel' : 'incompativel'}
               perfilFuncao={CATEGORIA_LABEL[perfil.funcao]}
               preenchidaPorMim={preenchidaPorMim}
+              confirmarCandidatura={!applied && !encerrada && compat}
+              onVerCandidaturas={() => setTab('historico')}
             />
           );
         })() : (
