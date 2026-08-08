@@ -19,11 +19,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   // campo preenchido, então cai num resumo automático pra nunca ficar em
   // branco no card de quem recebe o link.
   const resumoAutomatico = [categoria, local, `R$ ${vaga.valor}`].filter(Boolean).join(' · ');
-  const descricaoBase = vaga.descricao?.trim() || resumoAutomatico;
-  // Chamada pra ação no fim da descrição — é o texto que aparece embaixo do
-  // link no WhatsApp/etc., então vale terminar com um convite pra clicar.
-  const chamada = ' Clique para saber mais.';
-  const descricao = `${descricaoBase.slice(0, 200 - chamada.length)}${chamada}`;
+  const descricao = (vaga.descricao?.trim() || resumoAutomatico).slice(0, 200);
   const titulo = `${categoria} — ${clinica}`;
 
   return {

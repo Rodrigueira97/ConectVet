@@ -123,9 +123,11 @@ export default async function Image({ params }: { params: { id: string } }) {
             }}
           >
             {/* "Plantão" em dourado — a mesma cor da estrela de avaliação
-                que já aparece nesse cabeçalho na página da vaga. */}
-            <span style={{ color: '#ffd666' }}>Plantão</span>
-            <span>{` para ${categoria}`}</span>
+                que já aparece nesse cabeçalho na página da vaga. Espaço via
+                margin, não via caractere " " no texto — o gerador de imagem
+                (Satori) não preserva espaço solto entre spans assim. */}
+            <span style={{ display: 'flex', color: '#ffd666' }}>Plantão</span>
+            <span style={{ display: 'flex', marginLeft: 8 }}>{`para ${categoria}`}</span>
           </div>
           <Marca mark={mark} />
         </div>

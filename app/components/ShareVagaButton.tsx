@@ -60,7 +60,7 @@ export function ShareVagaButton({
     e.stopPropagation();
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
-        await navigator.share({ title: titulo, text: titulo, url: link() });
+        await navigator.share({ title: titulo, text: `${titulo} — Clique para saber mais.`, url: link() });
       } catch (err) {
         // AbortError = a pessoa cancelou a folha nativa, não é um erro nosso.
         if ((err as Error)?.name !== 'AbortError') setOpen(true);
@@ -83,7 +83,7 @@ export function ShareVagaButton({
 
   function onWhatsapp(e: React.MouseEvent) {
     e.stopPropagation();
-    const texto = `${titulo} — ${link()}`;
+    const texto = `${titulo}\n\nClique para saber mais: ${link()}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener,noreferrer');
     setOpen(false);
   }
@@ -91,7 +91,7 @@ export function ShareVagaButton({
   function onEmail(e: React.MouseEvent) {
     e.stopPropagation();
     const assunto = `Vaga: ${titulo}`;
-    const corpo = `Dá uma olhada nessa vaga no ConectVet:\n\n${link()}`;
+    const corpo = `Dá uma olhada nessa vaga no ConectVet! Clique para saber mais:\n\n${link()}`;
     window.location.href = `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
     setOpen(false);
   }
