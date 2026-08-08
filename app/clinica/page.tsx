@@ -1,10 +1,10 @@
 'use client';
 import { ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado, isPlantaoNoturno, valorSugeridoNoturno, correspondeAproximado, normalizarBusca } from '@/lib/mockData';
+import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado, isPlantaoNoturno, valorSugeridoNoturno } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, GridIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, FilterIcon, DownloadIcon, LockIcon, PawIcon, StarIcon, ArrowRightIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, FilterIcon, DownloadIcon, LockIcon, PawIcon, StarIcon, ArrowRightIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { QuemSomosView } from '@/app/components/QuemSomos';
@@ -21,17 +21,13 @@ import { PawTrailLoader } from '@/app/components/PawTrailLoader';
 import { useToast } from '@/app/components/Toast';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE, isVeterinarioFormado,
-  // CATEGORIAS daqui vem em enum (VETERINARIO_CLINICO...), pareado com CATEGORIA_LABEL e com
-  // Vaga.categoria — só pro filtro da Home. O CATEGORIAS de @/lib/mockData (rótulo em
-  // português, pareado com MIN_VALORES) continua servindo o formulário de Criar vaga.
-  CATEGORIAS as CATEGORIAS_API,
   Vaga, Candidatura, Clinica, Avaliacao, ProfissionalPublico, AvaliacaoProfissional,
   getClinicaMe, updateClinicaMe, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
   getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
   getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos, getFeed, getProfissionalPorId, getUltimasAvaliacoesProfissional,
 } from '@/lib/api';
 
-type Tab = 'home' | 'criar-vaga' | 'painel' | 'candidatos' | 'pagamento' | 'avaliacoes' | 'perfil' | 'quem-somos';
+type Tab = 'home' | 'criar-vaga' | 'candidatos' | 'pagamento' | 'avaliacoes' | 'perfil' | 'quem-somos';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
 type PainelFiltro = 'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido';
 
@@ -67,13 +63,6 @@ function localDaVaga(v: { rua: string; numero: string; complemento?: string | nu
 // Plantões que atravessam a madrugada só encerram depois do horaFim, não na virada do dia.
 function vagaExpirada(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
   return v.status === 'ABERTA' && plantaoEncerrado(v);
-}
-
-// Versão mais ampla de vagaExpirada, usada só pra ordenar o feed da Home (mistura vagas de
-// todas as clínicas): qualquer vaga que não seja mais "aberta pra valer" afunda na lista —
-// preenchida, concluída e cancelada também, não só a aberta cujo prazo passou.
-function vagaFechada(v: { data: string; horaInicio: string; horaFim: string; status: string }) {
-  return v.status !== 'ABERTA' || plantaoEncerrado(v);
 }
 
 function buildVagaDetalhe(mv: Vaga): VagaDetalheData {
@@ -256,16 +245,6 @@ function ClinicaPageInner() {
   const vagaDetalheId = searchParams.get('detalhe');
   const profDetalheId = searchParams.get('prof');
 
-  // categoria fica como string solta (não tipada como Categoria) de propósito: essa vem da
-  // API (enum tipo VETERINARIO_CLINICO), diferente do Categoria de @/lib/types usado no
-  // formulário de Criar vaga (rótulo em português) — ver import de CATEGORIAS_API abaixo.
-  const filtros = {
-    busca: searchParams.get('busca') || '',
-    categoria: searchParams.get('categoria') || '',
-    cidade: searchParams.get('cidade') || '',
-    data: searchParams.get('data') || '',
-  };
-
   // Trocar de aba pela sidebar precisa fechar o detalhe de vaga aberto — ele é
   // renderizado com prioridade sobre as abas, então sem isso a tela ficava "presa".
   function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next, detalhe: null, prof: null }); }
@@ -274,7 +253,7 @@ function ClinicaPageInner() {
   // isso o detalhe, que tem prioridade de renderização sobre as abas, ficava "por cima".
   function irParaCandidatos(mvId: string) { goTo({ vaga: mvId, tab: 'candidatos', detalhe: null, prof: null }); }
   function irParaPagamento(mvId: string, candId: string) { goTo({ vaga: mvId, cand: candId, tab: 'pagamento' }); }
-  function voltarAoPainel() { goTo({ tab: 'painel', vaga: null, cand: null, prof: null }); }
+  function voltarAoPainel() { goTo({ tab: null, vaga: null, cand: null, prof: null }); }
   function abrirPerfilProfissional(profId: string) { goTo({ prof: profId }); }
   function fecharPerfilProfissional() { goTo({ prof: null }); }
 
@@ -287,8 +266,6 @@ function ClinicaPageInner() {
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [avaliacoesSubTab, setAvaliacoesSubTab] = useState<'pendentes' | 'recebidas'>('pendentes');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
-  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const mainRef = useRef<HTMLElement | null>(null);
 
   // Abrir/fechar o detalhe da vaga troca o conteúdo dentro do mesmo <main>, sem navegação de
@@ -398,15 +375,6 @@ function ClinicaPageInner() {
     getCandidatosDaVaga(selectedMvId).then(setCandidatos).catch(() => {}).finally(() => setCandidatosLoading(false));
   }, [tab, selectedMvId]);
 
-  // Data filtra no servidor (mesmo padrão do feed do profissional) — só a primeira carga
-  // (já feita acima) fica de fora, senão duplicaria a busca inicial. Cidade filtra aqui do
-  // lado do cliente (ver feedFiltrado), pra tolerar acento e erro de digitação.
-  const jaCarregouFeed = useRef(false);
-  useEffect(() => {
-    if (!jaCarregouFeed.current) { jaCarregouFeed.current = true; return; }
-    getFeed({ data: filtros.data || undefined }).then(setFeed).catch(() => {});
-  }, [filtros.data]);
-
   async function refreshMinhasVagas() {
     setMinhasVagas(await getMinhasVagas());
   }
@@ -473,158 +441,6 @@ function ClinicaPageInner() {
   const enderecoParaExibir = vagaForm.outroEndereco
     ? buildEndereco(vagaForm)
     : clinica ? buildEndereco(clinica) : '';
-
-  // Feed da Home: mesma vitrine que o profissional vê, cidade/data já vêm filtradas do
-  // servidor (efeito acima); categoria e busca livre filtram aqui, e o que já fechou
-  // (de qualquer clínica) afunda pro final em vez de sumir.
-  const feedFiltrado = feed
-    .filter((v) => {
-      if (filtros.categoria && v.categoria !== filtros.categoria) return false;
-      if (filtros.cidade && !correspondeAproximado(v.cidade, filtros.cidade)) return false;
-      const local = localDaVaga(v);
-      if (filtros.busca && !normalizarBusca(`${v.clinica?.nome} ${CATEGORIA_LABEL[v.categoria]} ${local}`).includes(normalizarBusca(filtros.busca))) return false;
-      return true;
-    })
-    .sort((a, b) => Number(vagaFechada(a)) - Number(vagaFechada(b)));
-  const feedPaginado = feedFiltrado.slice(0, visiveis);
-  const temMaisVagas = visiveis < feedFiltrado.length;
-
-  function atualizarFiltro(novo: Partial<typeof filtros>) {
-    const patch: Record<string, string | null> = {};
-    if ('busca' in novo) patch.busca = novo.busca || null;
-    if ('categoria' in novo) patch.categoria = novo.categoria || null;
-    if ('cidade' in novo) patch.cidade = novo.cidade || null;
-    if ('data' in novo) patch.data = novo.data || null;
-    goTo(patch, 'replace');
-    setVisiveis(VAGAS_POR_PAGINA);
-  }
-  function limparFiltros() {
-    atualizarFiltro({ busca: '', categoria: '', cidade: '', data: '' });
-  }
-  const filtrosAtivos = [filtros.cidade, filtros.data, filtros.categoria].filter(Boolean).length;
-  const algumFiltroAtivo = filtrosAtivos > 0 || !!filtros.busca;
-
-  // Scroll infinito da Home — mesmo critério (elemento com overflow próprio ou janela) usado
-  // no feed do profissional, porque aqui também não dá pra saber de antemão qual dos dois rola.
-  useEffect(() => {
-    if (tab !== 'home') return;
-    const el = mainRef.current;
-    function faltamParaFim() {
-      if (el) {
-        const elRolavel = el.scrollHeight > el.clientHeight + 1;
-        if (elRolavel) return el.scrollHeight - el.scrollTop - el.clientHeight;
-      }
-      return document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
-    }
-    function verificarScroll() {
-      if (faltamParaFim() > 200) return;
-      setVisiveis((v) => (v < feedFiltrado.length ? Math.min(v + VAGAS_POR_PAGINA, feedFiltrado.length) : v));
-    }
-    el?.addEventListener('scroll', verificarScroll, { passive: true });
-    window.addEventListener('scroll', verificarScroll, { passive: true });
-    window.addEventListener('resize', verificarScroll);
-    return () => {
-      el?.removeEventListener('scroll', verificarScroll);
-      window.removeEventListener('scroll', verificarScroll);
-      window.removeEventListener('resize', verificarScroll);
-    };
-  }, [tab, feedFiltrado.length]);
-
-  function renderVagaCard(v: Vaga) {
-    const propria = !!(clinica && v.clinicaId === clinica.id);
-    const expirada = vagaExpirada(v);
-    const local = localDaVaga(v);
-    const localCurto = [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ');
-    const badge = statusBadge(expirada ? 'encerrada' : v.status.toLowerCase());
-    // Vaga própria: busca a versão de minhasVagas, que tem as candidaturas — o feed
-    // público não traz esse detalhe (nem deveria, pras vagas das outras clínicas).
-    const mv = propria ? minhasVagas.find((m) => m.id === v.id) : undefined;
-    const totalCandidatos = mv?.candidaturas?.length || 0;
-    const pendentes = mv?.candidaturas?.filter((c) => c.status === 'PENDENTE').length || 0;
-    return (
-      <div
-        key={v.id}
-        onClick={() => abrirDetalheVaga(v.id)}
-        className="flex flex-col gap-3 bg-white border border-gray-200 rounded-2xl shadow-sm p-4 cursor-pointer hover:border-secondary/40 hover:shadow-[0_4px_14px_rgba(4,45,76,0.06)] transition-[border-color,box-shadow] duration-150"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex gap-2.5 min-w-0">
-            <div className="w-[42px] h-[42px] rounded-xl border border-gray-200 bg-white text-gray-300 flex items-center justify-center shrink-0 overflow-hidden">
-              {v.clinica?.logoUrl ? (
-                <img src={v.clinica.logoUrl} alt={v.clinica.nome} className="w-full h-full object-cover" />
-              ) : (
-                <BuildingIcon className="w-[18px] h-[18px]" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <div className="text-[16.5px] font-extrabold text-ink truncate">{v.clinica?.nome}</div>
-              <div className="mt-0.5"><RatingBadge notaMedia={v.clinica?.notaMedia} totalAvaliacoes={v.clinica?.totalAvaliacoes} hideWhenEmpty /></div>
-            </div>
-          </div>
-          <div className="font-extrabold text-[15px] px-3 py-1.5 rounded-[11px] whitespace-nowrap shrink-0 bg-primaryTint text-primaryDeep">
-            R$ {v.valor}
-          </div>
-        </div>
-
-        <div className="flex gap-1.5 flex-wrap">
-          <span className="bg-primaryTint text-primaryDeep text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">
-            {CATEGORIA_LABEL[v.categoria]}
-          </span>
-          {propria && <span className="bg-ink text-white text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">Sua vaga</span>}
-          <span className={`${badge.className} rounded-full`}>{badge.label}</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 rounded-[13px] bg-gray-50 overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
-            <CalendarIcon className="w-[15px] h-[15px] text-primary shrink-0" />
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Data</span>
-              <span className="text-[12.5px] font-bold text-ink truncate">{formatDataBR(v.data)}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b sm:border-b-0 sm:border-r border-gray-100">
-            <ClockIcon className="w-[15px] h-[15px] text-primary shrink-0" />
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Horário</span>
-              <span className="text-[12.5px] font-bold text-ink truncate">{v.horaInicio} – {v.horaFim}</span>
-            </div>
-          </div>
-          <a
-            href={mapsLink(local)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-100"
-          >
-            <PinIcon className="w-[15px] h-[15px] text-primary shrink-0" />
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wide shrink-0">Local</span>
-              <span className="text-[12.5px] font-bold text-ink truncate">{localCurto}</span>
-            </div>
-          </a>
-        </div>
-
-        {v.descricao && <div className="text-[12.5px] text-gray-500 leading-relaxed line-clamp-2">{v.descricao}</div>}
-
-        {propria && (
-          <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center pt-3 border-t border-gray-100 flex-wrap gap-2">
-            <div className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-gray-500">
-              <UsersIcon className="w-[15px] h-[15px] text-gray-400" />
-              {totalCandidatos === 0 ? 'Nenhum candidato ainda' : (
-                <>
-                  <b className="text-ink font-extrabold">{totalCandidatos}</b> candidato{totalCandidatos > 1 ? 's' : ''}
-                  {pendentes > 0 && <span className="text-amber-600"> · {pendentes} pendente{pendentes > 1 ? 's' : ''}</span>}
-                </>
-              )}
-            </div>
-            <button onClick={() => irParaCandidatos(v.id)} className="px-4 py-2 rounded-lg bg-secondary text-white text-xs font-extrabold">
-              Gerenciar candidatos
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   const minVal = vagaForm.categoria ? MIN_VALORES[vagaForm.categoria] : undefined;
   const valorNum = parseFloat(vagaForm.valor);
@@ -957,9 +773,8 @@ function ClinicaPageInner() {
         accent="primary"
         subtitle="Clínica"
         items={[
-          { key: 'home', label: 'Home', icon: <HomeIcon /> },
+          { key: 'home', label: 'Home', icon: <HomeIcon />, count: pendingTotal },
           { key: 'criar-vaga', label: 'Criar vaga', icon: <PlusIcon /> },
-          { key: 'painel', label: 'Painel', icon: <GridIcon />, count: pendingTotal },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
           { key: 'avaliacoes', label: 'Avaliações', icon: <StarIcon />, count: avaliacoesPendentes.length },
           { key: 'quem-somos', label: 'Quem somos', icon: <PawIcon className="w-[18px] h-4" /> },
@@ -996,151 +811,6 @@ function ClinicaPageInner() {
           />
         ) : (
         <>
-        {tab === 'home' && (
-          <div className="max-w-[1080px] mx-auto p-8">
-            <h1 className="text-2xl font-extrabold mb-1 text-white">Vagas na plataforma</h1>
-            <p className="text-sm text-white/85 mb-5">Todas as vagas publicadas, incluindo as suas</p>
-            <div className="relative mb-3">
-              <SearchIcon className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${filtros.busca ? 'text-primary' : 'text-gray-400'}`} />
-              <input
-                value={filtros.busca}
-                onChange={(e) => atualizarFiltro({ busca: e.target.value })}
-                placeholder="Buscar por clínica, categoria ou local..."
-                className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-gray-300 text-sm bg-white"
-              />
-            </div>
-            {/* Filtros: linha inline no desktop */}
-            <div className="hidden md:flex gap-2.5 flex-wrap items-center mb-4">
-              <div className="relative">
-                <PinIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.cidade ? 'text-primary' : 'text-gray-400'}`} />
-                <input
-                  value={filtros.cidade}
-                  onChange={(e) => atualizarFiltro({ cidade: e.target.value })}
-                  placeholder="Cidade"
-                  className="pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white w-32"
-                />
-              </div>
-              <DateField
-                label="Data"
-                hideLabel
-                compact
-                clearable
-                value={filtros.data}
-                onChange={(v) => atualizarFiltro({ data: v })}
-                min={hojeBrasil()}
-                placeholder="Qualquer data"
-              />
-              <div className="relative">
-                <FilterIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.categoria ? 'text-primary' : 'text-gray-400'}`} />
-                <select
-                  value={filtros.categoria}
-                  onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
-                  className={`pl-8 pr-3 py-2 rounded-full border border-gray-300 text-sm bg-white appearance-none ${filtros.categoria ? 'text-ink' : 'text-gray-400'}`}
-                >
-                  <option value="">Todas categorias</option>
-                  {CATEGORIAS_API.map((c) => <option key={c} value={c} className="text-ink">{CATEGORIA_LABEL[c]}</option>)}
-                </select>
-              </div>
-              <button
-                onClick={limparFiltros}
-                disabled={!algumFiltroAtivo}
-                className="flex items-center gap-1.5 text-sm font-bold text-white/90 ml-auto px-2.5 py-2 rounded-full hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
-              >
-                <CloseIcon className="w-3 h-3" /> Limpar filtros
-              </button>
-            </div>
-
-            {/* Filtros: botão + painel no mobile */}
-            <div className="md:hidden mb-4">
-              <button
-                onClick={() => setFiltrosAbertos((v) => !v)}
-                className="inline-flex items-center gap-1.5 text-sm font-bold text-white bg-white/15 px-3.5 py-2.5 rounded-full"
-              >
-                <FilterIcon className="w-3.5 h-3.5" /> Filtros
-                {filtrosAtivos > 0 && (
-                  <span className="bg-white text-primaryDeep text-[11px] font-extrabold rounded-full min-w-[17px] h-[17px] flex items-center justify-center px-1">
-                    {filtrosAtivos}
-                  </span>
-                )}
-              </button>
-              {filtrosAbertos && (
-                <div className="flex flex-col gap-3 bg-white rounded-2xl p-3.5 mt-2.5 shadow-sm">
-                  <div>
-                    <div className="text-xs font-bold text-gray-500 mb-1">Cidade</div>
-                    <div className="relative">
-                      <PinIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.cidade ? 'text-primary' : 'text-gray-400'}`} />
-                      <input
-                        value={filtros.cidade}
-                        onChange={(e) => atualizarFiltro({ cidade: e.target.value })}
-                        placeholder="Qualquer cidade"
-                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <DateField
-                      label="Data"
-                      value={filtros.data}
-                      onChange={(v) => atualizarFiltro({ data: v })}
-                      min={hojeBrasil()}
-                      placeholder="Qualquer data"
-                      clearable
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-gray-500 mb-1">Categoria</div>
-                    <div className="relative">
-                      <FilterIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${filtros.categoria ? 'text-primary' : 'text-gray-400'}`} />
-                      <select
-                        value={filtros.categoria}
-                        onChange={(e) => atualizarFiltro({ categoria: e.target.value })}
-                        className={`w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm bg-white appearance-none ${filtros.categoria ? 'text-ink' : 'text-gray-400'}`}
-                      >
-                        <option value="">Todas categorias</option>
-                        {CATEGORIAS_API.map((c) => <option key={c} value={c} className="text-ink">{CATEGORIA_LABEL[c]}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  {algumFiltroAtivo && (
-                    <button
-                      onClick={limparFiltros}
-                      className="flex items-center justify-center gap-1.5 text-sm font-bold text-danger bg-red-50 rounded-lg py-2.5"
-                    >
-                      <CloseIcon className="w-3 h-3" /> Limpar filtros
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-[14px]">
-              {feedPaginado.map((v) => renderVagaCard(v))}
-              {feedFiltrado.length === 0 && (
-                <div className="bg-white rounded-2xl shadow-sm p-10">
-                  <EmptyState
-                    icon={<SearchIcon className="w-6 h-6" />}
-                    title="Nenhuma vaga encontrada"
-                    description={
-                      algumFiltroAtivo
-                        ? 'Nenhuma vaga bate com os filtros que você escolheu. Tente remover algum filtro ou ampliar a busca.'
-                        : 'No momento não há vagas publicadas na plataforma.'
-                    }
-                    actionLabel={algumFiltroAtivo ? 'Limpar filtros' : undefined}
-                    actionIcon={<CloseIcon className="w-3.5 h-3.5" />}
-                    onAction={algumFiltroAtivo ? limparFiltros : undefined}
-                    actionVariant="ghost"
-                  />
-                </div>
-              )}
-            </div>
-            {temMaisVagas && (
-              <div className="flex items-center justify-center py-6">
-                <PawTrailLoader label="Carregando mais vagas..." />
-              </div>
-            )}
-          </div>
-        )}
-
         {tab === 'criar-vaga' && (
           <div className="max-w-[1080px] mx-auto p-8">
             <div className="text-sm font-bold text-primaryTint mb-1">{editingId ? 'Editar vaga' : 'Nova vaga'}</div>
@@ -1413,11 +1083,10 @@ function ClinicaPageInner() {
           </div>
         )}
 
-        {tab === 'painel' && (() => {
+        {tab === 'home' && (() => {
           const totalVagas = minhasVagas.length;
           const abertaCount = minhasVagas.filter((v) => v.status === 'ABERTA' && !vagaExpirada(v)).length;
           const encerradaCount = minhasVagas.filter((v) => vagaExpirada(v)).length;
-          const retidoCount = minhasVagas.filter((v) => v.status === 'PREENCHIDA' && v.pagamento?.status === 'RETIDO').length;
           const concluidaCount = minhasVagas.filter((v) => v.status === 'CONCLUIDA').length;
           const preenchidaCount = minhasVagas.filter((v) => v.status === 'PREENCHIDA').length;
           const canceladaCount = minhasVagas.filter((v) => v.status === 'CANCELADA').length;
@@ -1432,12 +1101,6 @@ function ClinicaPageInner() {
                   ? minhasVagas.filter((v) => v.status === 'ABERTA' && !vagaExpirada(v))
                   : minhasVagas.filter((v) => v.status.toLowerCase() === painelFiltro);
 
-          const statCards: { key: typeof painelFiltro; label: string; value: number; iconBg: string; iconFg: string; icon: ReactNode }[] = [
-            { key: 'todas', label: 'Total de vagas', value: totalVagas, iconBg: 'bg-secondary/10', iconFg: 'text-secondary', icon: <GridIcon className="w-4 h-4" /> },
-            { key: 'aberta', label: 'Abertas', value: abertaCount, iconBg: 'bg-primaryTint', iconFg: 'text-primaryDeep', icon: <CheckCircleIcon className="w-4 h-4" /> },
-            { key: 'retido', label: 'Aguardando sua ação', value: retidoCount, iconBg: 'bg-amber-100', iconFg: 'text-amber-700', icon: <WarningIcon className="w-4 h-4" /> },
-            { key: 'concluida', label: 'Concluídas', value: concluidaCount, iconBg: 'bg-gray-100', iconFg: 'text-gray-500', icon: <CheckCircleIcon className="w-4 h-4" /> },
-          ];
           const filtros: { key: typeof painelFiltro; label: string; count: number }[] = [
             { key: 'todas', label: 'Todas', count: totalVagas },
             { key: 'aberta', label: 'Abertas', count: abertaCount },
@@ -1447,42 +1110,63 @@ function ClinicaPageInner() {
             { key: 'cancelada', label: 'Canceladas', count: canceladaCount },
           ];
 
+          // "Precisa de você": junta pagamento retido esperando confirmação de presença (já
+          // aconteceu, só falta confirmar) com candidatura pendente esperando resposta — as duas
+          // coisas que travam a clínica se ela não abrir o app. Corta em 6 linhas pra não empurrar
+          // o resto da Home pra baixo da dobra quando a clínica tem muita coisa pendente.
+          const pagamentosRetidos = minhasVagas.filter((v) => v.status === 'PREENCHIDA' && v.pagamento?.status === 'RETIDO');
+          const precisaDeVoce = pagamentosRetidos.length + candidatosPendentes.length;
+          const MAX_PRECISA_DE_VOCE = 6;
+
           return (
             <div className="max-w-[1080px] mx-auto p-8">
-              <h1 className="text-2xl font-extrabold mb-1 text-white">Painel da clínica</h1>
-              <p className="text-sm text-white/85 mb-6">Como sua clínica está indo, vagas publicadas e candidatos</p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
-                <div className="bg-white rounded-2xl p-4">
-                  <div className="text-xl font-extrabold text-ink">{vagasAtivas}</div>
-                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Vagas ativas</div>
+              <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
+                <div>
+                  <h1 className="text-2xl font-extrabold mb-1 text-white">Olá, {clinica.nome} 👋</h1>
+                  <p className="text-sm text-white/85">
+                    {precisaDeVoce > 0
+                      ? `${precisaDeVoce} coisa${precisaDeVoce > 1 ? 's' : ''} esperando sua resposta hoje`
+                      : minhasVagas.length > 0
+                        ? 'Tudo em dia — nenhuma pendência agora'
+                        : 'Publique sua primeira vaga pra começar a receber candidaturas'}
+                  </p>
                 </div>
-                <div className="bg-white rounded-2xl p-4">
-                  <div className="text-xl font-extrabold text-ink">{taxaPreenchimento !== null ? `${taxaPreenchimento}%` : '—'}</div>
-                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Taxa de preenchimento</div>
-                </div>
-                <div className="bg-white rounded-2xl p-4">
-                  <div className="text-xl font-extrabold text-ink">{notaMedia !== null ? notaMedia.toFixed(1) : '—'}</div>
-                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Avaliação recebida</div>
-                </div>
-                <div className="bg-white rounded-2xl p-4">
-                  <div className="text-xl font-extrabold text-ink">R$ {retidoTotal.toFixed(2)}</div>
-                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Retido, aguardando confirmação</div>
-                </div>
+                <button
+                  onClick={() => setTab('criar-vaga')}
+                  className="inline-flex items-center gap-2 bg-white text-primaryDeep text-sm font-extrabold px-4 py-2.5 rounded-xl shadow-sm shrink-0"
+                >
+                  <PlusIcon className="w-4 h-4" /> Criar vaga
+                </button>
               </div>
 
-              <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-6">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-sm font-extrabold text-ink">Candidatos aguardando resposta</div>
-                  {candidatosPendentes.length > 0 && (
-                    <span className="bg-amber-100 text-amber-700 text-[11px] font-extrabold px-2 py-0.5 rounded-full">{candidatosPendentes.length}</span>
-                  )}
-                </div>
-                {candidatosPendentes.length === 0 ? (
-                  <div className="text-sm text-gray-400 mt-2">Nenhum candidato pendente no momento.</div>
-                ) : (
+              {precisaDeVoce > 0 ? (
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-sm font-extrabold text-ink">Precisa de você</div>
+                    <span className="bg-amber-100 text-amber-700 text-[11px] font-extrabold px-2 py-0.5 rounded-full">{precisaDeVoce}</span>
+                  </div>
                   <div className="flex flex-col">
-                    {candidatosPendentes.map(({ candidatura: c, vaga: v }) => (
+                    {pagamentosRetidos.slice(0, MAX_PRECISA_DE_VOCE).map((v) => {
+                      const hired = (v.candidaturas || []).find((c) => c.status === 'ACEITO');
+                      return (
+                        <div key={v.pagamento!.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
+                          <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                            <WarningIcon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13px] font-bold text-ink truncate">{hired?.profissional?.nome || 'O profissional'} concluiu o plantão de {formatDataBR(v.data)}</div>
+                            <div className="text-[12px] text-gray-500 truncate">Confirme se ele compareceu pra liberar o pagamento</div>
+                          </div>
+                          <button
+                            onClick={() => handleLiberarPagamento(v.pagamento!.id)}
+                            className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold shrink-0"
+                          >
+                            Confirmar
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {candidatosPendentes.slice(0, Math.max(0, MAX_PRECISA_DE_VOCE - pagamentosRetidos.length)).map(({ candidatura: c, vaga: v }) => (
                       <div key={c.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
                         <div className="w-8 h-8 rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-xs font-extrabold shrink-0">
                           {(c.profissional?.nome || '?').slice(0, 1).toUpperCase()}
@@ -1500,21 +1184,35 @@ function ClinicaPageInner() {
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                  {precisaDeVoce > MAX_PRECISA_DE_VOCE && (
+                    <div className="text-xs font-bold text-gray-400 text-center pt-3 mt-1 border-t border-gray-50">
+                      + {precisaDeVoce - MAX_PRECISA_DE_VOCE} outro{precisaDeVoce - MAX_PRECISA_DE_VOCE > 1 ? 's' : ''} na lista de vagas abaixo
+                    </div>
+                  )}
+                </div>
+              ) : minhasVagas.length > 0 ? (
+                <div className="flex items-center gap-2.5 bg-white/15 text-white text-[13px] font-bold rounded-2xl px-4 py-3 mb-5">
+                  <CheckCircleIcon className="w-4 h-4 shrink-0" /> Tudo em dia por aqui — nenhuma pendência no momento.
+                </div>
+              ) : null}
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                {statCards.map((s) => (
-                  <button
-                    key={s.key}
-                    onClick={() => setPainelFiltro(s.key)}
-                    className={`text-left bg-white rounded-2xl p-4 shadow-sm border-[1.5px] transition-colors ${painelFiltro === s.key ? 'border-primary' : 'border-transparent'}`}
-                  >
-                    <div className={`w-[30px] h-[30px] rounded-[9px] flex items-center justify-center mb-2 ${s.iconBg} ${s.iconFg}`}>{s.icon}</div>
-                    <div className="text-2xl font-extrabold text-ink leading-none">{s.value}</div>
-                    <div className="text-xs font-bold text-gray-400 mt-1.5">{s.label}</div>
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{vagasAtivas}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Vagas ativas</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{taxaPreenchimento !== null ? `${taxaPreenchimento}%` : '—'}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Taxa de preenchimento</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">{notaMedia !== null ? notaMedia.toFixed(1) : '—'}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Avaliação recebida</div>
+                </div>
+                <div className="bg-white rounded-2xl p-4">
+                  <div className="text-xl font-extrabold text-ink">R$ {retidoTotal.toFixed(2)}</div>
+                  <div className="text-[11px] font-bold text-gray-500 mt-0.5">Retido, aguardando confirmação</div>
+                </div>
               </div>
 
               <div className="flex gap-2 flex-wrap mb-5">
@@ -1677,7 +1375,7 @@ function ClinicaPageInner() {
 
         {tab === 'candidatos' && selectedMv && (
           <div className="max-w-[1080px] mx-auto p-8">
-            <button onClick={voltarAoPainel} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar ao painel</button>
+            <button onClick={voltarAoPainel} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar</button>
             <h1 className="text-xl font-extrabold mb-1 text-white">Candidatos — {CATEGORIA_LABEL[selectedMv.categoria]}</h1>
             <p className="text-sm text-white/85 mb-6">
               <b className="font-bold text-white">{localDaVaga(selectedMv)}</b> · <b className="font-bold text-white">{formatDataBR(selectedMv.data)}</b>
@@ -2141,9 +1839,9 @@ function ClinicaPageInner() {
                     icon={<StarIcon className="w-6 h-6" />}
                     title="Nenhuma avaliação pendente"
                     description="Assim que uma vaga for concluída, ela aparece aqui pra você avaliar o profissional."
-                    actionLabel="Ver painel"
+                    actionLabel="Ver vagas"
                     actionIcon={<ArrowRightIcon className="w-3.5 h-3.5" />}
-                    onAction={() => setTab('painel')}
+                    onAction={() => setTab('home')}
                   />
                 </div>
               ) : (
