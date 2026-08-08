@@ -60,7 +60,7 @@ export function ShareVagaButton({
     e.stopPropagation();
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
-        await navigator.share({ title: titulo, text: `${titulo} — Clique para saber mais.`, url: link() });
+        await navigator.share({ title: titulo, text: 'Clique para saber mais.', url: link() });
       } catch (err) {
         // AbortError = a pessoa cancelou a folha nativa, não é um erro nosso.
         if ((err as Error)?.name !== 'AbortError') setOpen(true);
