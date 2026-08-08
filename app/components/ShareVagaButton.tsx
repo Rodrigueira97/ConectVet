@@ -83,7 +83,7 @@ export function ShareVagaButton({
 
   function onWhatsapp(e: React.MouseEvent) {
     e.stopPropagation();
-    const texto = `${titulo}\n\nClique para saber mais: ${link()}`;
+    const texto = `Clique para saber mais: ${link()}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener,noreferrer');
     setOpen(false);
   }
