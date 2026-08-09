@@ -157,3 +157,12 @@ a:hover { color: #00847e; }
   .cand-ring, .cand-paw-bit { animation: none !important; opacity: 0 !important; }
   .cand-dot-now { animation: none !important; }
 }
+
+/* Recibo de plantão (ReciboModal): ao imprimir/"Salvar como PDF", esconde o resto do app
+   (o resto do chrome do modal já se esconde sozinho via classe print:hidden do Tailwind) e
+   deixa só o conteúdo marcado com #recibo-print, ocupando a folha inteira. */
+@media print {
+  body * { visibility: hidden; }
+  #recibo-print, #recibo-print * { visibility: visible; }
+  #recibo-print { position: absolute; top: 0; left: 0; width: 100%; margin: 0; }
+}

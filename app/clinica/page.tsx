@@ -15,6 +15,7 @@ import { RatingBadge } from '@/app/components/RatingBadge';
 import { EmptyState } from '@/app/components/EmptyState';
 import { NotificationBell } from '@/app/components/NotificationBell';
 import { RecorteFotoModal } from '@/app/components/RecorteFotoModal';
+import { ReciboModal } from '@/app/components/ReciboModal';
 import { DateField } from '@/app/components/DateField';
 import { TimeField } from '@/app/components/TimeField';
 import { PawTrailLoader } from '@/app/components/PawTrailLoader';
@@ -246,7 +247,9 @@ function ClinicaPageInner() {
   // Trocar de aba pela sidebar precisa fechar o detalhe de vaga aberto — ele é
   // renderizado com prioridade sobre as abas, então sem isso a tela ficava "presa".
   function setTab(next: Tab) { goTo({ tab: next === 'home' ? null : next, detalhe: null, prof: null }); }
-  function setPainelFiltro(next: PainelFiltro) { goTo({ filtro: next === 'todas' ? null : next }); }
+  // scroll: false — sem isso, trocar de filtro (que só troca um parâmetro na URL, o conteúdo
+  // continua na mesma tela) jogava a página pro topo a cada clique.
+  function setPainelFiltro(next: PainelFiltro) { goTo({ filtro: next === 'todas' ? null : next }, 'replace', { scroll: false }); }
   // Sai do detalhe da vaga (se algum estiver aberto) antes de entrar nos candidatos — sem
   // isso o detalhe, que tem prioridade de renderização sobre as abas, ficava "por cima".
   function irParaCandidatos(mvId: string) { goTo({ vaga: mvId, tab: 'candidatos', detalhe: null, prof: null }); }
@@ -264,6 +267,7 @@ function ClinicaPageInner() {
   const [avaliacoesPorCandidatura, setAvaliacoesPorCandidatura] = useState<Record<string, Avaliacao[]>>({});
   const [avaliacoesSubTab, setAvaliacoesSubTab] = useState<'pendentes' | 'recebidas'>('pendentes');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [reciboVagaId, setReciboVagaId] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
 
   // Abrir/fechar o detalhe da vaga troca o conteúdo dentro do mesmo <main>, sem navegação de
@@ -1342,6 +1346,14 @@ function ClinicaPageInner() {
                           {mv.status === 'ABERTA' && !expirada && (
                             <button onClick={() => cancelarVaga(mv.id)} className="px-3 py-2 rounded-lg text-danger text-xs font-bold hover:bg-red-50">Cancelar</button>
                           )}
+                          {mv.pagamento?.status === 'LIBERADO' && (
+                            <button
+                              onClick={() => setReciboVagaId(mv.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-ink text-xs font-bold hover:bg-gray-50"
+                            >
+                              <DownloadIcon className="w-3.5 h-3.5" /> Recibo
+                            </button>
+                          )}
                           <button onClick={() => irParaCandidatos(mv.id)} className="px-4 py-2 rounded-lg bg-secondary text-white text-xs font-extrabold">Ver candidatos</button>
                         </div>
                       </div>
@@ -1936,6 +1948,10 @@ function ClinicaPageInner() {
         onCancel={cancelarFilaFotos}
         onConfirm={handleFotoEstruturaCortada}
       />
+      {reciboVagaId && (() => {
+        const vagaRecibo = minhasVagas.find((m) => m.id === reciboVagaId);
+        return vagaRecibo ? <ReciboModal vaga={vagaRecibo} clinica={clinica} onClose={() => setReciboVagaId(null)} /> : null;
+      })()}
     </div>
   );
 }
