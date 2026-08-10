@@ -10,6 +10,11 @@
   font-display: swap;
 }
 
+/* No iOS, arrastar além do fim da página faz um "bounce" elástico que revela a cor
+   padrão do body — como o body nunca tem exatamente a cor de quem tá por cima (rodapé
+   escuro, telas com fundo teal etc.), esse bounce aparecia como um flash em branco
+   depois do rodapé. Desliga o elástico em vez de tentar casar a cor. */
+html, body { overscroll-behavior-y: none; }
 body { margin: 0; background: #f5f8f6; color: #14201b; }
 a { color: #00a19a; }
 a:hover { color: #00847e; }

@@ -20,13 +20,13 @@ export function PublicHeader() {
   }, []);
 
   return (
-    <header className="flex items-center justify-between gap-2 sm:gap-3 px-3.5 sm:px-8 py-3 sm:py-3.5 bg-white border-b border-gray-100">
+    <header className="flex items-center justify-between gap-2 sm:gap-3 px-3.5 sm:px-8 py-2.5 sm:py-3 bg-white border-b border-gray-100">
       <a href="/" className="flex items-center gap-2 sm:gap-2.5 shrink-0 min-w-0">
-        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-primary flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
           <img src="/logo.svg" alt="ConectVet" className="w-[70%] h-[70%] object-contain" />
         </div>
         <div className="leading-tight min-w-0">
-          <div className="text-[15px] sm:text-base font-bold font-brand whitespace-nowrap">
+          <div className="text-[17px] sm:text-[19px] font-bold font-brand whitespace-nowrap">
             <span className="text-ink">conect</span> <span className="text-primaryDeep">vet</span>
           </div>
         </div>
@@ -34,6 +34,7 @@ export function PublicHeader() {
 
       <nav className="hidden sm:flex items-center gap-5">
         <a href="/" className={`text-[13.5px] font-bold ${pathname === '/' ? 'text-ink' : 'text-gray-500 hover:text-ink'}`}>Home</a>
+        <a href="/vagas" className={`text-[13.5px] font-bold ${pathname === '/vagas' ? 'text-ink' : 'text-gray-500 hover:text-ink'}`}>Vagas</a>
         <a href="/quem-somos" className={`text-[13.5px] font-bold ${pathname === '/quem-somos' ? 'text-ink' : 'text-gray-500 hover:text-ink'}`}>Quem somos</a>
       </nav>
 

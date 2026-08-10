@@ -112,7 +112,7 @@ function VagaPublicaInner() {
   // pra quem já está logado.
   function onBack() {
     if (conta) router.push(conta.role === 'CLINICA' ? '/clinica' : '/profissional');
-    else router.push('/');
+    else router.push('/vagas');
   }
 
   if (loading || logged === undefined || (logged && !conta)) {
@@ -130,7 +130,7 @@ function VagaPublicaInner() {
               title="Vaga não encontrada"
               description="Essa vaga pode ter sido removida, ou o link que você seguiu está incorreto."
               actionLabel="Ver vagas disponíveis"
-              onAction={() => router.push('/')}
+              onAction={() => router.push('/vagas')}
             />
           </div>
         </div>

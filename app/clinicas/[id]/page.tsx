@@ -70,7 +70,7 @@ function ClinicaPublicaInner() {
               title="Clínica não encontrada"
               description="Esse perfil pode ter sido removido, ou o link que você seguiu está incorreto."
               actionLabel="Ver vagas disponíveis"
-              onAction={() => router.push('/')}
+              onAction={() => router.push('/vagas')}
             />
           </div>
         </div>

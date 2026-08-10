@@ -12,7 +12,7 @@ export default function QuemSomosPublico() {
   return (
     <div className="min-h-screen bg-paws">
       <PublicHeader />
-      <QuemSomosView ctaLabel="Ver vagas disponíveis" onCta={() => router.push('/')} />
+      <QuemSomosView ctaLabel="Ver vagas disponíveis" onCta={() => router.push('/vagas')} />
       <PublicFooter />
     </div>
   );
