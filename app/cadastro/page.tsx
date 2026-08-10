@@ -364,7 +364,7 @@ function CadastroPageInner() {
             </a>
             <div>
               <a href="/" className="text-xl font-extrabold">
-                <span className="text-ink">conect</span> <span className="text-[#003531]">vet</span>
+                <span className="text-ink">conect</span> <span className="text-primaryTint">vet</span>
               </a>
               <div className="text-sm text-white/85 mt-0.5">Crie sua conta para começar a usar a plataforma</div>
             </div>

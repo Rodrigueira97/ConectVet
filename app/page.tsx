@@ -9,6 +9,7 @@ import {
   StarIcon, BuildingIcon, UserIcon, PlusIcon, ArrowRightIcon,
 } from '@/app/components/icons';
 import { Vaga, getFeed } from '@/lib/api';
+import { vagaEncerrada } from '@/lib/mockData';
 
 // Landing page pública — a Home deixou de ser a lista de vagas (isso agora mora em
 // /vagas, com aba própria no menu) e virou vitrine: apresenta a proposta pros dois
@@ -20,7 +21,7 @@ export default function HomePublica() {
 
   useEffect(() => {
     getFeed()
-      .then((feed) => setDestaques(feed.filter((v) => v.status === 'ABERTA').slice(0, 3)))
+      .then((feed) => setDestaques(feed.filter((v) => v.status === 'ABERTA' && !vagaEncerrada(v)).slice(0, 3)))
       .catch(() => {});
   }, []);
 
@@ -133,7 +134,7 @@ export default function HomePublica() {
 
         <div className="max-w-[980px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="rounded-[22px] bg-primaryTint p-6 sm:p-7">
-            <div className="flex items-center gap-3 mb-4.5">
+            <div className="flex items-center gap-3 mb-[18px]">
               <div className="w-11 h-11 rounded-2xl bg-white shadow-[0_4px_12px_rgba(4,45,76,0.08)] flex items-center justify-center text-primaryDeep shrink-0">
                 <UserIcon className="w-5 h-5" />
               </div>
@@ -155,13 +156,13 @@ export default function HomePublica() {
                 </div>
               ))}
             </div>
-            <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 mt-5 text-[13px] font-extrabold px-4.5 py-2.5 rounded-xl text-white bg-primary">
+            <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 mt-5 text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-primary">
               Ver vagas abertas <ArrowRightIcon className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="rounded-[22px] bg-[#e4f0f6] p-6 sm:p-7">
-            <div className="flex items-center gap-3 mb-4.5">
+            <div className="flex items-center gap-3 mb-[18px]">
               <div className="w-11 h-11 rounded-2xl bg-white shadow-[0_4px_12px_rgba(4,45,76,0.08)] flex items-center justify-center text-secondary shrink-0">
                 <BuildingIcon className="w-5 h-5" />
               </div>
@@ -183,7 +184,7 @@ export default function HomePublica() {
                 </div>
               ))}
             </div>
-            <button onClick={() => router.push('/cadastro?role=clinica')} className="inline-flex items-center gap-1.5 mt-5 text-[13px] font-extrabold px-4.5 py-2.5 rounded-xl text-white bg-secondary">
+            <button onClick={() => router.push('/cadastro?role=clinica')} className="inline-flex items-center gap-1.5 mt-5 text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-secondary">
               Publicar uma vaga <ArrowRightIcon className="w-3.5 h-3.5" />
             </button>
           </div>
