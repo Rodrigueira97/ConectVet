@@ -1,29 +1,29 @@
 'use client';
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PublicHeader } from '@/app/components/PublicHeader';
 import { PublicFooter } from '@/app/components/PublicFooter';
-import { VagaCardPublica } from '@/app/components/VagaCardPublica';
 import {
-  SearchIcon, CalendarIcon, ClockIcon, CheckIcon, CheckCircleIcon, LockIcon, ShieldIcon,
-  StarIcon, BuildingIcon, UserIcon, PlusIcon, ArrowRightIcon,
+  SearchIcon, CalendarIcon, ClockIcon, CheckIcon, LockIcon, ShieldIcon,
+  StarIcon, BuildingIcon, UserIcon, PlusIcon, ArrowRightIcon, PinIcon,
 } from '@/app/components/icons';
-import { Vaga, getFeed } from '@/lib/api';
-import { vagaEncerrada } from '@/lib/mockData';
 
 // Landing page pública — a Home deixou de ser a lista de vagas (isso agora mora em
 // /vagas, com aba própria no menu) e virou vitrine: apresenta a proposta pros dois
 // lados (profissional e clínica) e dá um gostinho das vagas abertas, sem duplicar o
 // feed completo. Detalhado num protótipo antes de aplicar (ver histórico da conversa).
+//
+// Os cards de vaga aqui embaixo são exemplos fixos (clínica/cidade fictícias), não a
+// vaga real de ninguém — é vitrine, não a listagem de verdade (essa mora em /vagas,
+// com dado ao vivo). Evita expor a clínica/cidade real de quem já usa a plataforma
+// numa tela de marketing pública.
+const VAGAS_EXEMPLO = [
+  { clinica: 'Clínica Vetville', categoria: 'Veterinário Clínico', local: 'Pinheiros, São Paulo - SP', data: '12/08', horario: '08:00–18:00', valor: 320 },
+  { clinica: 'São Francisco', categoria: 'Auxiliar', local: 'Moema, São Paulo - SP', data: '15/08', horario: '13:00–21:00', valor: 100 },
+  { clinica: 'PetSaúde Jardins', categoria: 'Veterinário Especialista', local: 'Vila Mariana, São Paulo - SP', data: '20/08', horario: '08:00–14:00', valor: 280 },
+];
+
 export default function HomePublica() {
   const router = useRouter();
-  const [destaques, setDestaques] = useState<Vaga[]>([]);
-
-  useEffect(() => {
-    getFeed()
-      .then((feed) => setDestaques(feed.filter((v) => v.status === 'ABERTA' && !vagaEncerrada(v)).slice(0, 3)))
-      .catch(() => {});
-  }, []);
 
   return (
     <div className="min-h-screen bg-paws">
@@ -91,16 +91,23 @@ export default function HomePublica() {
                 </g>
               </svg>
             </div>
-            {destaques[0] && (
-              <div className="absolute top-1.5 right-6 z-[1] w-[230px] bg-white rounded-2xl shadow-[0_20px_44px_rgba(4,45,76,0.22)] p-3.5 -rotate-[4deg]">
-                <span className="inline-block text-[9px] font-extrabold uppercase bg-primaryTint text-primaryDeep px-2 py-0.5 rounded-full mb-1.5">
-                  {destaques[0].clinica?.nome}
-                </span>
-                <div className="text-[13.5px] font-extrabold text-ink">{destaques[0].bairro}, {destaques[0].cidade} - {destaques[0].estado}</div>
-                <div className="text-[15px] font-extrabold text-primaryDeep mt-2">R$ {destaques[0].valor}</div>
-              </div>
-            )}
-            <div className="absolute bottom-2.5 left-0 z-[1] w-[190px] bg-ink text-white rounded-xl px-3.5 py-2.5 text-[11.5px] font-bold flex items-center gap-1.5 shadow-[0_12px_26px_rgba(4,45,76,0.3)]">
+            <div className="absolute top-1.5 right-6 z-[1] w-[230px] bg-white rounded-2xl shadow-[0_20px_44px_rgba(4,45,76,0.22)] p-3.5 -rotate-[4deg]">
+              <span className="inline-block text-[9px] font-extrabold uppercase bg-primaryTint text-primaryDeep px-2 py-0.5 rounded-full mb-1.5">
+                Veterinário Clínico
+              </span>
+              <div className="text-[13.5px] font-extrabold text-ink">Clínica Vetville</div>
+              <div className="text-[11px] font-semibold text-gray-500 mt-0.5">Pinheiros, São Paulo - SP · sáb, 08:00–18:00</div>
+              <div className="text-[15px] font-extrabold text-primaryDeep mt-2">R$ 320</div>
+            </div>
+            <div className="absolute bottom-14 left-0 z-[1] w-[190px] bg-white rounded-2xl shadow-[0_20px_44px_rgba(4,45,76,0.22)] p-3.5 rotate-[3deg]">
+              <span className="inline-block text-[9px] font-extrabold uppercase bg-[#e4f0f6] text-secondary px-2 py-0.5 rounded-full mb-1.5">
+                Auxiliar
+              </span>
+              <div className="text-[13.5px] font-extrabold text-ink">São Francisco</div>
+              <div className="text-[11px] font-semibold text-gray-500 mt-0.5">Moema, São Paulo - SP</div>
+              <div className="text-[15px] font-extrabold text-primaryDeep mt-2">R$ 100</div>
+            </div>
+            <div className="absolute bottom-2.5 right-2 z-[1] w-[190px] bg-ink text-white rounded-xl px-3.5 py-2.5 text-[11.5px] font-bold flex items-center gap-1.5 shadow-[0_12px_26px_rgba(4,45,76,0.3)]">
               <CheckIcon className="w-3.5 h-3.5 text-[#baf0ea] shrink-0" /> Candidatura enviada!
             </div>
           </div>
@@ -228,23 +235,43 @@ export default function HomePublica() {
       </section>
 
       {/* ================= vagas em destaque ================= */}
-      {destaques.length > 0 && (
-        <section className="bg-white px-5 sm:px-8 py-12 sm:py-14">
-          <div className="max-w-[560px] mx-auto text-center mb-8">
-            <span className="inline-block text-[11px] font-extrabold uppercase tracking-wide text-primaryDeep bg-primaryTint px-3 py-1.5 rounded-full mb-3">Agora mesmo</span>
-            <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink mb-2 -tracking-[0.01em]">Tem plantão aberto agora</h2>
-            <p className="text-sm text-gray-500">Um gostinho do que já tá disponível — a lista completa fica na aba Vagas.</p>
-          </div>
-          <div className="max-w-[1040px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            {destaques.map((v) => <VagaCardPublica key={v.id} vaga={v} />)}
-          </div>
-          <div className="text-center mt-6">
-            <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 text-sm font-extrabold text-primaryDeep">
-              Ver todas as vagas <ArrowRightIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </section>
-      )}
+      <section className="bg-white px-5 sm:px-8 py-12 sm:py-14">
+        <div className="max-w-[560px] mx-auto text-center mb-8">
+          <span className="inline-block text-[11px] font-extrabold uppercase tracking-wide text-primaryDeep bg-primaryTint px-3 py-1.5 rounded-full mb-3">Agora mesmo</span>
+          <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink mb-2 -tracking-[0.01em]">Tem plantão aberto agora</h2>
+          <p className="text-sm text-gray-500">Um gostinho do que já tá disponível — a lista completa fica na aba Vagas.</p>
+        </div>
+        <div className="max-w-[1040px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          {VAGAS_EXEMPLO.map((v) => (
+            <div key={v.clinica} onClick={() => router.push('/vagas')} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 cursor-pointer hover:border-secondary/40 transition-colors">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-300 shrink-0">
+                    <BuildingIcon className="w-4 h-4" />
+                  </div>
+                  <div className="text-[13.5px] font-extrabold text-ink truncate">{v.clinica}</div>
+                </div>
+                <div className="text-[13px] font-extrabold bg-primaryTint text-primaryDeep px-2.5 py-1 rounded-lg shrink-0">R$ {v.valor}</div>
+              </div>
+              <span className="inline-block text-[9px] font-extrabold uppercase bg-primaryTint text-primaryDeep px-2.5 py-1 rounded-full mb-2.5">{v.categoria}</span>
+              <div className="flex flex-col gap-1.5 bg-gray-50 rounded-lg px-3 py-2 mb-3">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#33454f]">
+                  <CalendarIcon className="w-3 h-3 text-primary shrink-0" /> {v.data} · {v.horario}
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#33454f]">
+                  <PinIcon className="w-3 h-3 text-primary shrink-0" /> {v.local}
+                </div>
+              </div>
+              <div className="text-center bg-primary text-white text-xs font-extrabold py-2.5 rounded-lg">Candidatar-se</div>
+            </div>
+          ))}
+        </div>
+        <div className="text-center mt-6">
+          <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 text-sm font-extrabold text-primaryDeep">
+            Ver todas as vagas <ArrowRightIcon className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </section>
 
       {/* ================= marca em destaque ================= */}
       <section className="bg-white px-5 sm:px-8 pb-4 pt-0">
