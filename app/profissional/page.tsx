@@ -823,7 +823,7 @@ function ProfissionalPageInner() {
               )}
               <label className="flex items-center gap-2 text-sm font-semibold text-white/90 ml-1">
                 <input type="checkbox" checked={filtros.naoCandidatadas} onChange={(e) => atualizarFiltro({ naoCandidatadas: e.target.checked })} />
-                Só as que eu não candidatei
+                Vagas abertas
               </label>
               <button
                 onClick={limparFiltros}
@@ -893,7 +893,7 @@ function ProfissionalPageInner() {
                   )}
                   <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                     <input type="checkbox" checked={filtros.naoCandidatadas} onChange={(e) => atualizarFiltro({ naoCandidatadas: e.target.checked })} />
-                    Só as que eu não candidatei
+                    Vagas abertas
                   </label>
                   {algumFiltroAtivo && (
                     <button
