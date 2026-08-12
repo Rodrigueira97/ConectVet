@@ -350,6 +350,16 @@ export async function uploadArquivos(files: File[]): Promise<string[]> {
   return urls;
 }
 
+// Documentos enviados antes da migração pro R2 ficaram salvos no disco local
+// do servidor (efêmero, some a cada deploy) e sua URL tem "/uploads/" no
+// caminho — ex.: "https://.../uploads/xxx.pdf". As novas vão direto pro
+// bucket R2 e nunca têm esse segmento. Usamos isso pra distinguir um link
+// morto de um documento de verdade, já que o arquivo antigo não existe mais
+// em lugar nenhum (só reenviar resolve).
+export function documentoIndisponivel(url: string | null | undefined): boolean {
+  return !!url && /\/uploads\//.test(url);
+}
+
 // ---------- Clínicas ----------
 
 export function getClinicaMe() {

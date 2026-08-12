@@ -10,7 +10,7 @@ import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, MailIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
-  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon, StarIcon,
+  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon, StarIcon, WarningIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { ShareVagaButton } from '@/app/components/ShareVagaButton';
@@ -28,7 +28,7 @@ import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS, isVeterinarioFormado,
   Vaga, Candidatura, Profissional, Avaliacao,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
-  getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura, desistirCandidatura,
+  getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura, desistirCandidatura, documentoIndisponivel,
 } from '@/lib/api';
 
 const VAGAS_POR_PAGINA = 6;
@@ -1434,19 +1434,34 @@ function ProfissionalPageInner() {
                       {isVeterinarioFormado(perfil.funcao) && perfil.crmv && (
                         <div className="text-xs text-gray-500 font-semibold mt-0.5">Nº do CRMV: <span className="font-extrabold text-gray-700">{perfil.crmv}</span></div>
                       )}
-                      <span className="inline-flex items-center gap-1 bg-primaryTint text-primaryDeep text-[10.5px] font-extrabold px-2 py-0.5 rounded-full mt-1.5">
-                        <CheckIcon className="w-2.5 h-2.5" /> Enviado
-                      </span>
+                      {documentoIndisponivel(perfil.comprovanteUrl) ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10.5px] font-extrabold px-2 py-0.5 rounded-full mt-1.5">
+                          <WarningIcon className="w-2.5 h-2.5" /> Documento indisponível
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-primaryTint text-primaryDeep text-[10.5px] font-extrabold px-2 py-0.5 rounded-full mt-1.5">
+                          <CheckIcon className="w-2.5 h-2.5" /> Enviado
+                        </span>
+                      )}
                     </div>
-                    <a
-                      href={perfil.comprovanteUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Ver documento"
-                      className="w-[42px] h-[42px] rounded-full bg-white border border-gray-200 text-primary flex items-center justify-center shrink-0 shadow-sm hover:bg-primaryTint"
-                    >
-                      <EyeIcon className="w-[18px] h-[18px]" />
-                    </a>
+                    {documentoIndisponivel(perfil.comprovanteUrl) ? (
+                      <span
+                        title="Esse documento foi enviado antes de uma atualização do sistema e se perdeu — fale com o suporte pra reenviar."
+                        className="w-[42px] h-[42px] rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0"
+                      >
+                        <WarningIcon className="w-[18px] h-[18px]" />
+                      </span>
+                    ) : (
+                      <a
+                        href={perfil.comprovanteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Ver documento"
+                        className="w-[42px] h-[42px] rounded-full bg-white border border-gray-200 text-primary flex items-center justify-center shrink-0 shadow-sm hover:bg-primaryTint"
+                      >
+                        <EyeIcon className="w-[18px] h-[18px]" />
+                      </a>
+                    )}
                   </div>
 
                   {perfil.curriculoUrl && (
