@@ -687,8 +687,7 @@ function ProfissionalPageInner() {
                 <CheckCircleIcon className="w-[15px] h-[15px] text-primaryDeep" />
               </div>
               <div className="min-w-0">
-                <div className="text-[10px] font-extrabold uppercase tracking-wide text-primaryDeep/70">Candidatura enviada</div>
-                <div className="text-[13.5px] font-extrabold text-primaryDeep leading-snug">Acompanhe em Minhas candidaturas</div>
+                <div className="text-[13.5px] font-extrabold text-primaryDeep leading-snug">Candidatura enviada</div>
               </div>
             </div>
           ) : (
