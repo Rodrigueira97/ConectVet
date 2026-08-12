@@ -10,7 +10,7 @@ import { Sidebar } from '@/app/components/Sidebar';
 import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, MailIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
-  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon, StarIcon, WarningIcon,
+  CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon, StarIcon, WarningIcon, UploadIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { ShareVagaButton } from '@/app/components/ShareVagaButton';
@@ -252,6 +252,7 @@ function ProfissionalPageInner() {
   const [savingPerfil, setSavingPerfil] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoParaCortar, setFotoParaCortar] = useState<File | null>(null);
+  const [uploadingComprovante, setUploadingComprovante] = useState(false);
   const [editandoPerfil, setEditandoPerfil] = useState(false);
   const [feed, setFeed] = useState<Vaga[]>([]);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
@@ -548,6 +549,22 @@ function ProfissionalPageInner() {
       toast.error('Não foi possível enviar a foto', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setUploadingFoto(false);
+    }
+  }
+
+  async function handleComprovanteSelecionado(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setUploadingComprovante(true);
+    try {
+      const comprovanteUrl = await uploadArquivo(file);
+      const atualizado = await updateProfissionalMe({ comprovanteUrl });
+      setPerfil(atualizado);
+      toast.success('Documento reenviado', { message: 'Sua carteirinha/comprovante foi atualizada.' });
+    } catch (err) {
+      toast.error('Não foi possível enviar o documento', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setUploadingComprovante(false);
     }
   }
 
@@ -1435,9 +1452,12 @@ function ProfissionalPageInner() {
                         <div className="text-xs text-gray-500 font-semibold mt-0.5">Nº do CRMV: <span className="font-extrabold text-gray-700">{perfil.crmv}</span></div>
                       )}
                       {documentoIndisponivel(perfil.comprovanteUrl) ? (
-                        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10.5px] font-extrabold px-2 py-0.5 rounded-full mt-1.5">
-                          <WarningIcon className="w-2.5 h-2.5" /> Documento indisponível
-                        </span>
+                        <>
+                          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10.5px] font-extrabold px-2 py-0.5 rounded-full mt-1.5">
+                            <WarningIcon className="w-2.5 h-2.5" /> Documento indisponível
+                          </span>
+                          <div className="text-xs text-gray-500 mt-1">Esse documento se perdeu numa atualização do sistema. Reenvie pra manter seu perfil verificado.</div>
+                        </>
                       ) : (
                         <span className="inline-flex items-center gap-1 bg-primaryTint text-primaryDeep text-[10.5px] font-extrabold px-2 py-0.5 rounded-full mt-1.5">
                           <CheckIcon className="w-2.5 h-2.5" /> Enviado
@@ -1445,12 +1465,24 @@ function ProfissionalPageInner() {
                       )}
                     </div>
                     {documentoIndisponivel(perfil.comprovanteUrl) ? (
-                      <span
-                        title="Esse documento foi enviado antes de uma atualização do sistema e se perdeu — fale com o suporte pra reenviar."
-                        className="w-[42px] h-[42px] rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0"
+                      <label
+                        aria-label="Reenviar documento"
+                        title="Reenviar documento"
+                        className={`w-[42px] h-[42px] rounded-full bg-white border border-amber-300 text-amber-600 flex items-center justify-center shrink-0 shadow-sm hover:bg-amber-50 cursor-pointer ${uploadingComprovante ? 'opacity-60 pointer-events-none' : ''}`}
                       >
-                        <WarningIcon className="w-[18px] h-[18px]" />
-                      </span>
+                        {uploadingComprovante ? (
+                          <div className="w-4 h-4 border-2 border-amber-200 border-t-amber-600 rounded-full animate-spin" />
+                        ) : (
+                          <UploadIcon className="w-[18px] h-[18px]" />
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="hidden"
+                          disabled={uploadingComprovante}
+                          onChange={(e) => { handleComprovanteSelecionado(e.target.files); e.target.value = ''; }}
+                        />
+                      </label>
                     ) : (
                       <a
                         href={perfil.comprovanteUrl}

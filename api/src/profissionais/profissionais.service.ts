@@ -58,6 +58,11 @@ export class ProfissionaisService {
     if (dto.fotoUrl !== undefined && existente.fotoUrl && existente.fotoUrl !== dto.fotoUrl) {
       await this.uploads.deleteByUrl(existente.fotoUrl);
     }
+    // Idem pro comprovante reenviado — o antigo só é apagado do R2 se de fato
+    // estava lá (deleteByUrl ignora silenciosamente o link morto pré-R2).
+    if (dto.comprovanteUrl !== undefined && existente.comprovanteUrl && existente.comprovanteUrl !== dto.comprovanteUrl) {
+      await this.uploads.deleteByUrl(existente.comprovanteUrl);
+    }
 
     // Esse update não mexe no User, então o e-mail de `existente` (que já
     // veio achatado de buscarPorUserId) continua valendo — sem isso o front

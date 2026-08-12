@@ -40,4 +40,10 @@ export class UpdateProfissionalDto {
   @IsOptional()
   @IsString()
   curriculoUrl?: string | null;
+
+  // Reenvio da carteirinha/comprovante quando o link salvo no cadastro
+  // ficou indisponível (ex.: documento enviado antes da migração pro R2).
+  @IsOptional()
+  @IsString()
+  comprovanteUrl?: string;
 }
