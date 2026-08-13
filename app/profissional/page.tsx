@@ -980,23 +980,29 @@ function ProfissionalPageInner() {
             <h1 className="text-2xl font-extrabold mb-1 text-white">Minhas candidaturas</h1>
             <p className="text-sm text-white/85 mb-5">Acompanhe o status das vagas que você se candidatou</p>
 
-            <div className="flex gap-2 flex-wrap mb-5">
-              {([
-                ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['RECUSADO', 'Recusadas'], ['ENCERRADA', 'Encerradas'], ['DESISTIU', 'Desistências'],
-              ] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => selecionarFiltroCandidaturas(key)}
-                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap ${
-                    filtroCandidaturas === key ? 'bg-white text-primaryDeep' : 'bg-white/15 text-white hover:bg-white/25'
-                  }`}
-                >
-                  {label}
-                  <span className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-full ${filtroCandidaturas === key ? 'bg-primaryTint text-primaryDeep' : 'bg-white/25 text-white'}`}>
-                    {contagemStatus[key]}
-                  </span>
-                </button>
-              ))}
+            {/* Rolagem horizontal em vez de quebrar linha — com 7 chips, um flex-wrap normal
+                sobrava o último sozinho numa segunda linha em telas mais estreitas. O gradiente
+                na borda direita avisa que dá pra arrastar pra ver mais. */}
+            <div className="relative mb-5">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+                {([
+                  ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['RECUSADO', 'Recusadas'], ['ENCERRADA', 'Encerradas'], ['DESISTIU', 'Desistências'],
+                ] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => selecionarFiltroCandidaturas(key)}
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap shrink-0 ${
+                      filtroCandidaturas === key ? 'bg-white text-primaryDeep' : 'bg-white/15 text-white hover:bg-white/25'
+                    }`}
+                  >
+                    {label}
+                    <span className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-full ${filtroCandidaturas === key ? 'bg-primaryTint text-primaryDeep' : 'bg-white/25 text-white'}`}>
+                      {contagemStatus[key]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="absolute top-0 right-0 bottom-0.5 w-8 bg-gradient-to-r from-transparent to-primary pointer-events-none" />
             </div>
 
             <div className="flex flex-col gap-[14px]">

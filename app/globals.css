@@ -19,6 +19,11 @@ body { margin: 0; background: #f5f8f6; color: #14201b; }
 a { color: #00a19a; }
 a:hover { color: #00847e; }
 
+/* Fileiras de chip que rolam de lado (ex.: filtros de "Minhas candidaturas") em vez de
+   quebrar linha — some a barra de rolagem, mas o scroll continua funcionando normal. */
+.scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
 /* Evita o zoom automático do Safari iOS ao focar campos com fonte < 16px */
 @media (max-width: 767px) {
   input, select, textarea {
