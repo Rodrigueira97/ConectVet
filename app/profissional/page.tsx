@@ -1120,7 +1120,7 @@ function ProfissionalPageInner() {
                       <StepperCandidatura passos={passosDaCandidatura(c, status)} />
                       {status === 'PENDENTE' && (
                         <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-amber-800">
-                          <ClockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> Aguardando resposta da clínica. Depois disso, ainda faltam 2 etapas até o plantão.
+                          <ClockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> Aguardando resposta da clínica.
                         </div>
                       )}
                       {status === 'ACEITO' && (
