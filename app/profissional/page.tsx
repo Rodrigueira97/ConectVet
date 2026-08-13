@@ -62,17 +62,29 @@ function statusDaCandidatura(c: Candidatura): StatusCandidatura {
   return c.status;
 }
 
-type PassoJornada = { label: string; state: 'done' | 'current' | 'fail' };
+type PassoJornada = { label: string; state: 'done' | 'current' | 'upcoming' | 'fail'; caption?: string };
 
+// Estados em andamento (pendente/aceita/concluída) sempre desenham as 4 etapas fixas
+// da jornada — inclusive as que ainda não aconteceram — pra quem está aguardando
+// saber de cara quanto falta. Estados finais (recusada/encerrada/desistência) não têm
+// "próxima etapa" de verdade, então continuam mostrando só o trecho percorrido + o motivo.
 function passosDaCandidatura(c: Candidatura, status: StatusCandidatura): PassoJornada[] {
   const vagaStatus = c.vaga?.status;
+  const v = c.vaga;
+  const enviadaCaption = formatDataBR(c.createdAt);
+
   if (status === 'PENDENTE') {
-    return [{ label: 'Enviada', state: 'done' }, { label: 'Em análise', state: 'current' }];
+    return [
+      { label: 'Enviada', state: 'done', caption: enviadaCaption },
+      { label: 'Em análise', state: 'current', caption: 'Agora' },
+      { label: 'Aceita', state: 'upcoming', caption: 'Se for aprovado' },
+      { label: 'Concluída', state: 'upcoming', caption: 'Após o plantão' },
+    ];
   }
   if (status === 'ENCERRADA') {
     const ultimoLabel = vagaStatus === 'CANCELADA' ? 'Vaga cancelada' : 'Prazo encerrado';
     return [
-      { label: 'Enviada', state: 'done' },
+      { label: 'Enviada', state: 'done', caption: enviadaCaption },
       { label: 'Em análise', state: 'done' },
       { label: ultimoLabel, state: 'fail' },
     ];
@@ -80,16 +92,17 @@ function passosDaCandidatura(c: Candidatura, status: StatusCandidatura): PassoJo
   if (status === 'RECUSADO') {
     const ultimoLabel = vagaStatus === 'CANCELADA' ? 'Vaga cancelada' : vagaStatus === 'ABERTA' ? 'Não foi dessa vez' : 'Preenchida por outro';
     return [
-      { label: 'Enviada', state: 'done' },
+      { label: 'Enviada', state: 'done', caption: enviadaCaption },
       { label: 'Em análise', state: 'done' },
       { label: ultimoLabel, state: 'fail' },
     ];
   }
   if (status === 'ACEITO') {
     return [
-      { label: 'Enviada', state: 'done' },
+      { label: 'Enviada', state: 'done', caption: enviadaCaption },
       { label: 'Em análise', state: 'done' },
-      { label: 'Aceita', state: 'current' },
+      { label: 'Aceita', state: 'current', caption: v && plantaoAindaNaoComecou(v) ? 'Falta o plantão' : 'Aguardando confirmação' },
+      { label: 'Concluída', state: 'upcoming', caption: v ? `Após ${formatDataBR(v.data)}` : 'Após o plantão' },
     ];
   }
   if (status === 'DESISTIU') {
@@ -100,10 +113,10 @@ function passosDaCandidatura(c: Candidatura, status: StatusCandidatura): PassoJo
     ];
   }
   return [
-    { label: 'Enviada', state: 'done' },
+    { label: 'Enviada', state: 'done', caption: enviadaCaption },
     { label: 'Em análise', state: 'done' },
     { label: 'Aceita', state: 'done' },
-    { label: 'Concluída', state: 'done' },
+    { label: 'Concluída', state: 'done', caption: v ? formatDataBR(v.data) : undefined },
   ];
 }
 
@@ -148,8 +161,14 @@ function StepperCandidatura({ passos }: { passos: PassoJornada[] }) {
             <div className={`absolute top-[13px] right-1/2 w-full h-0.5 z-0 ${passos[i - 1].state === 'done' ? 'bg-primary' : 'bg-gray-200'}`} />
           )}
           <div
-            className={`relative z-10 w-[26px] h-[26px] rounded-full flex items-center justify-center text-[11px] font-extrabold border-[3px] border-white ${
-              p.state === 'done' ? 'bg-primary text-white' : p.state === 'current' ? 'bg-primaryTint text-primaryDeep ring-4 ring-primaryTint' : 'bg-red-100 text-red-700'
+            className={`relative z-10 w-[26px] h-[26px] rounded-full flex items-center justify-center text-[11px] font-extrabold ${
+              p.state === 'done'
+                ? 'bg-primary text-white border-[3px] border-white'
+                : p.state === 'current'
+                ? 'bg-primaryTint text-primaryDeep ring-4 ring-primaryTint border-[3px] border-white'
+                : p.state === 'upcoming'
+                ? 'bg-white text-gray-300 border-2 border-dashed border-gray-200'
+                : 'bg-red-100 text-red-700 border-[3px] border-white'
             }`}
           >
             {p.state === 'done' ? <CheckIcon className="w-3 h-3" /> : p.state === 'fail' ? <CloseIcon className="w-3 h-3" /> : i + 1}
@@ -157,6 +176,11 @@ function StepperCandidatura({ passos }: { passos: PassoJornada[] }) {
           <div className={`text-[10px] font-bold text-center mt-1.5 leading-tight px-0.5 ${p.state === 'current' || p.state === 'done' ? 'text-ink' : 'text-gray-400'}`}>
             {p.label}
           </div>
+          {p.caption && (
+            <div className={`text-[9px] font-semibold text-center mt-0.5 leading-tight px-0.5 ${p.state === 'current' ? 'text-primaryDeep' : 'text-gray-400'}`}>
+              {p.caption}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -1096,7 +1120,7 @@ function ProfissionalPageInner() {
                       <StepperCandidatura passos={passosDaCandidatura(c, status)} />
                       {status === 'PENDENTE' && (
                         <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-amber-800">
-                          <ClockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> Aguardando resposta da clínica.
+                          <ClockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> Aguardando resposta da clínica. Depois disso, ainda faltam 2 etapas até o plantão.
                         </div>
                       )}
                       {status === 'ACEITO' && (
