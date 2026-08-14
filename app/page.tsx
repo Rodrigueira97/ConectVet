@@ -175,7 +175,7 @@ export default function HomePublica() {
               </div>
               <div>
                 <div className="text-lg font-extrabold text-ink">Para clínicas</div>
-                <div className="text-xs font-bold text-gray-500">Cobertura rápida, sem compromisso longo</div>
+                <div className="text-xs font-bold text-gray-500">Crie vagas quando e onde quiser</div>
               </div>
             </div>
             <div className="flex flex-col gap-3.5 mb-5">
