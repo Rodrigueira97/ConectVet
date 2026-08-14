@@ -123,7 +123,7 @@ export default function HomePublica() {
           <ShieldIcon className="w-3.5 h-3.5 text-primaryDeep" /> Perfis avaliados
         </span>
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-ink bg-gray-50 px-3.5 py-2 rounded-full">
-          <LockIcon className="w-3.5 h-3.5 text-primaryDeep" /> Pagamento protegido até confirmar presença
+          <LockIcon className="w-3.5 h-3.5 text-primaryDeep" /> Segurança no pagamento
         </span>
       </section>
 
