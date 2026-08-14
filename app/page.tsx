@@ -256,10 +256,14 @@ export default function HomePublica() {
             <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink mb-2 -tracking-[0.01em]">Tem plantão aberto agora</h2>
             <p className="text-sm text-gray-500">Um gostinho do que já tá disponível</p>
           </div>
-          <div className="max-w-[1040px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          <div className="max-w-[1040px] mx-auto flex flex-wrap justify-center gap-3.5">
             {carregandoVagas
-              ? Array.from({ length: VAGAS_EM_DESTAQUE }).map((_, i) => <CardSkeleton key={i} />)
-              : vagas.map((v) => <VagaCardPublica key={v.id} vaga={v} />)}
+              ? Array.from({ length: VAGAS_EM_DESTAQUE }).map((_, i) => (
+                  <div key={i} className="w-full md:w-[calc((100%-1.75rem)/3)]"><CardSkeleton /></div>
+                ))
+              : vagas.map((v) => (
+                  <div key={v.id} className="w-full md:w-[calc((100%-1.75rem)/3)]"><VagaCardPublica vaga={v} /></div>
+                ))}
           </div>
           <div className="text-center mt-6">
             <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 text-sm font-extrabold text-primaryDeep">
