@@ -153,9 +153,9 @@ export default function HomePublica() {
             <div className="flex flex-col gap-3.5">
               {[
                 { icon: <ClockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Escolha os plantões</b> que encaixam na sua agenda, sem vínculo fixo.</> },
-                { icon: <CheckIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Perfil visível</b> se destaca pras clínicas antes mesmo de se candidatar.</> },
-                { icon: <LockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Pagamento seguro</b> ao fim do plantão, seu pagamento será liberado.</> },
-                { icon: <StarIcon className="w-3.5 h-3.5" />, text: <>Cada <b className="font-extrabold text-ink">avaliação boa fica no seu histórico</b>, abrindo mais portas.</> },
+                { icon: <CheckIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Perfil avaliado</b> te destaca para as clínicas antes mesmo de se candidatar.</> },
+                { icon: <LockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Pagamento seguro</b>, ao fim do plantão seu pagamento será liberado.</> },
+                { icon: <StarIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Avalie depois do plantão</b> - sua próxima escolha fica mais fácil.</> },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-2.5">
                   <div className="w-[26px] h-[26px] rounded-lg bg-white flex items-center justify-center text-primaryDeep shrink-0 mt-px">{item.icon}</div>
