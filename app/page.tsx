@@ -150,7 +150,7 @@ export default function HomePublica() {
                 <div className="text-xs font-bold text-gray-500">Trabalhe quando e onde quiser.</div>
               </div>
             </div>
-            <div className="flex flex-col gap-3.5">
+            <div className="flex flex-col gap-3.5 mb-5">
               {[
                 { icon: <ClockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Escolha os plantões</b> que encaixam na sua agenda, sem vínculo fixo.</> },
                 { icon: <CheckIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Perfil avaliado</b> te destaca para as clínicas antes mesmo de se candidatar.</> },
@@ -178,7 +178,7 @@ export default function HomePublica() {
                 <div className="text-xs font-bold text-gray-500">Cobertura rápida, sem compromisso longo</div>
               </div>
             </div>
-            <div className="flex flex-col gap-3.5">
+            <div className="flex flex-col gap-3.5 mb-5">
               {[
                 { icon: <PlusIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Publique em minutos</b> e comece a receber candidaturas na hora.</> },
                 { icon: <ShieldIcon className="w-3.5 h-3.5" />, text: <>Veja <b className="font-extrabold text-ink">histórico e avaliações</b> antes de aceitar profissionais.</> },
