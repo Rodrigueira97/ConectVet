@@ -155,7 +155,7 @@ export default function HomePublica() {
                 { icon: <ClockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Escolha os plantões</b> que encaixam na sua agenda, sem vínculo fixo.</> },
                 { icon: <CheckIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Perfil avaliado</b> te destaca para as clínicas antes mesmo de se candidatar.</> },
                 { icon: <LockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Pagamento seguro</b>, ao fim do plantão seu pagamento será liberado.</> },
-                { icon: <StarIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Avalie depois do plantão</b> - sua próxima escolha fica mais fácil.</> },
+                { icon: <StarIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Avalie a clínica</b> depois do plantão - sua próxima escolha fica mais fácil.</> },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-2.5 min-h-[44px]">
                   <div className="w-[26px] h-[26px] rounded-lg bg-white flex items-center justify-center text-primaryDeep shrink-0 mt-px">{item.icon}</div>
@@ -183,7 +183,7 @@ export default function HomePublica() {
                 { icon: <PlusIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Publique em minutos</b> e comece a receber candidaturas na hora.</> },
                 { icon: <ShieldIcon className="w-3.5 h-3.5" />, text: <>Veja <b className="font-extrabold text-ink">histórico e avaliações</b> antes de aceitar profissionais.</> },
                 { icon: <LockIcon className="w-3.5 h-3.5" />, text: <>O valor <b className="font-extrabold text-ink">só é liberado depois que você confirma</b> a presença.</> },
-                { icon: <StarIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Avalie depois do plantão</b> — sua próxima escolha fica mais fácil.</> },
+                { icon: <StarIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Avalie o profissional</b> depois do plantão - sua próxima escolha fica mais fácil.</> },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-2.5 min-h-[44px]">
                   <div className="w-[26px] h-[26px] rounded-lg bg-white flex items-center justify-center text-secondary shrink-0 mt-px">{item.icon}</div>
