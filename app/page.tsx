@@ -163,7 +163,7 @@ export default function HomePublica() {
                 </div>
               ))}
             </div>
-            <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 mt-auto pt-5 text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-primary self-start">
+            <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 mt-auto text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-primary self-start">
               Ver vagas abertas <ArrowRightIcon className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -191,7 +191,7 @@ export default function HomePublica() {
                 </div>
               ))}
             </div>
-            <button onClick={() => router.push('/cadastro?role=clinica')} className="inline-flex items-center gap-1.5 mt-auto pt-5 text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-secondary self-start">
+            <button onClick={() => router.push('/cadastro?role=clinica')} className="inline-flex items-center gap-1.5 mt-auto text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-secondary self-start">
               Publicar uma vaga <ArrowRightIcon className="w-3.5 h-3.5" />
             </button>
           </div>
