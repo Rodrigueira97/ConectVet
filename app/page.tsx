@@ -131,11 +131,11 @@ export default function HomePublica() {
       <section className="bg-white px-5 sm:px-8 py-12 sm:py-14">
         <div className="max-w-[560px] mx-auto text-center mb-8">
           <span className="inline-block text-[11px] font-extrabold uppercase tracking-wide text-primaryDeep bg-primaryTint px-3 py-1.5 rounded-full mb-3">
-            Por que ConectVet?
+            Por que ConectVet ?
           </span>
           <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink mb-2 -tracking-[0.01em]">Conectando os dois lados do plantão</h2>
           <p className="text-sm text-gray-500 leading-relaxed">
-            Do lado de quem publica e do lado de quem se candidata, todos os detalhes pensados para a solução de problemas reais.
+            Do lado de quem publica e do lado de quem se candidata, todos os detalhes pensados para facilitar a rotina veterinária.
           </p>
         </div>
 
