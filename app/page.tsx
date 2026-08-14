@@ -146,15 +146,15 @@ export default function HomePublica() {
                 <UserIcon className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-lg font-extrabold text-ink">Pra profissionais</div>
-                <div className="text-xs font-bold text-gray-500">Trabalhe quando e onde fizer sentido</div>
+                <div className="text-lg font-extrabold text-ink">Para profissionais</div>
+                <div className="text-xs font-bold text-gray-500">Trabalhe quando e onde quiser.</div>
               </div>
             </div>
             <div className="flex flex-col gap-3.5">
               {[
                 { icon: <ClockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Escolha os plantões</b> que encaixam na sua agenda, sem vínculo fixo.</> },
-                { icon: <CheckIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Perfil verificado</b> te destaca pras clínicas antes mesmo de se candidatar.</> },
-                { icon: <LockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Pagamento reservado</b> assim que você é aceito — só falta comparecer.</> },
+                { icon: <CheckIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Perfil visível</b> se destaca pras clínicas antes mesmo de se candidatar.</> },
+                { icon: <LockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Pagamento seguro</b> ao fim do plantão, seu pagamento será liberado.</> },
                 { icon: <StarIcon className="w-3.5 h-3.5" />, text: <>Cada <b className="font-extrabold text-ink">avaliação boa fica no seu histórico</b>, abrindo mais portas.</> },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-2.5">
@@ -174,14 +174,14 @@ export default function HomePublica() {
                 <BuildingIcon className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-lg font-extrabold text-ink">Pra clínicas</div>
+                <div className="text-lg font-extrabold text-ink">Para clínicas</div>
                 <div className="text-xs font-bold text-gray-500">Cobertura rápida, sem compromisso longo</div>
               </div>
             </div>
             <div className="flex flex-col gap-3.5">
               {[
                 { icon: <PlusIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Publique em minutos</b> e comece a receber candidaturas na hora.</> },
-                { icon: <ShieldIcon className="w-3.5 h-3.5" />, text: <>Veja <b className="font-extrabold text-ink">histórico e avaliações</b> antes de aceitar alguém.</> },
+                { icon: <ShieldIcon className="w-3.5 h-3.5" />, text: <>Veja <b className="font-extrabold text-ink">histórico e avaliações</b> antes de aceitar profissionais.</> },
                 { icon: <LockIcon className="w-3.5 h-3.5" />, text: <>O valor <b className="font-extrabold text-ink">só é liberado depois que você confirma</b> a presença.</> },
                 { icon: <StarIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Avalie depois do plantão</b> — sua próxima escolha fica mais fácil.</> },
               ].map((item, i) => (
