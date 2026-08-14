@@ -140,7 +140,7 @@ export default function HomePublica() {
         </div>
 
         <div className="max-w-[980px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="rounded-[22px] bg-primaryTint p-6 sm:p-7">
+          <div className="h-full flex flex-col rounded-[22px] bg-primaryTint p-6 sm:p-7">
             <div className="flex items-center gap-3 mb-[18px]">
               <div className="w-11 h-11 rounded-2xl bg-white shadow-[0_4px_12px_rgba(4,45,76,0.08)] flex items-center justify-center text-primaryDeep shrink-0">
                 <UserIcon className="w-5 h-5" />
@@ -157,18 +157,18 @@ export default function HomePublica() {
                 { icon: <LockIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Pagamento seguro</b>, ao fim do plantão seu pagamento será liberado.</> },
                 { icon: <StarIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Avalie depois do plantão</b> - sua próxima escolha fica mais fácil.</> },
               ].map((item, i) => (
-                <div key={i} className="flex items-start gap-2.5">
+                <div key={i} className="flex items-start gap-2.5 min-h-[44px]">
                   <div className="w-[26px] h-[26px] rounded-lg bg-white flex items-center justify-center text-primaryDeep shrink-0 mt-px">{item.icon}</div>
                   <div className="text-[13.5px] leading-relaxed text-[#33454f] font-semibold">{item.text}</div>
                 </div>
               ))}
             </div>
-            <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 mt-5 text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-primary">
+            <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 mt-auto pt-5 text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-primary self-start">
               Ver vagas abertas <ArrowRightIcon className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="rounded-[22px] bg-[#e4f0f6] p-6 sm:p-7">
+          <div className="h-full flex flex-col rounded-[22px] bg-[#e4f0f6] p-6 sm:p-7">
             <div className="flex items-center gap-3 mb-[18px]">
               <div className="w-11 h-11 rounded-2xl bg-white shadow-[0_4px_12px_rgba(4,45,76,0.08)] flex items-center justify-center text-secondary shrink-0">
                 <BuildingIcon className="w-5 h-5" />
@@ -185,13 +185,13 @@ export default function HomePublica() {
                 { icon: <LockIcon className="w-3.5 h-3.5" />, text: <>O valor <b className="font-extrabold text-ink">só é liberado depois que você confirma</b> a presença.</> },
                 { icon: <StarIcon className="w-3.5 h-3.5" />, text: <><b className="font-extrabold text-ink">Avalie depois do plantão</b> — sua próxima escolha fica mais fácil.</> },
               ].map((item, i) => (
-                <div key={i} className="flex items-start gap-2.5">
+                <div key={i} className="flex items-start gap-2.5 min-h-[44px]">
                   <div className="w-[26px] h-[26px] rounded-lg bg-white flex items-center justify-center text-secondary shrink-0 mt-px">{item.icon}</div>
                   <div className="text-[13.5px] leading-relaxed text-[#33454f] font-semibold">{item.text}</div>
                 </div>
               ))}
             </div>
-            <button onClick={() => router.push('/cadastro?role=clinica')} className="inline-flex items-center gap-1.5 mt-5 text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-secondary">
+            <button onClick={() => router.push('/cadastro?role=clinica')} className="inline-flex items-center gap-1.5 mt-auto pt-5 text-[13px] font-extrabold px-[18px] py-2.5 rounded-xl text-white bg-secondary self-start">
               Publicar uma vaga <ArrowRightIcon className="w-3.5 h-3.5" />
             </button>
           </div>
