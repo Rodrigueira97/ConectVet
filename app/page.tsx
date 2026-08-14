@@ -135,7 +135,7 @@ export default function HomePublica() {
           </span>
           <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink mb-2 -tracking-[0.01em]">Conectando os dois lados do plantão</h2>
           <p className="text-sm text-gray-500 leading-relaxed">
-            Cada detalhe existe pra resolver um problema real — do lado de quem publica e do lado de quem se candidata.
+            Do lado de quem publica e do lado de quem se candidata, todos os detalhes pensados para a solução de problemas reais.
           </p>
         </div>
 
