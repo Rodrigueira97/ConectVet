@@ -1487,6 +1487,22 @@ function ClinicaPageInner() {
                         </div>
                       )}
 
+                      {/* Presença já foi confirmada, mas o profissional ainda não configurou onde
+                          receber — sem isso, o card ficava mudo depois de "Confirmar presença" e
+                          parecia que nada tinha acontecido. */}
+                      {mv.status === 'CONCLUIDA' && mv.pagamento && mv.pagamento.status === 'LIBERADO_PENDENTE' && (
+                        <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2 bg-primaryTint rounded-[13px] px-3.5 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primaryDeep shrink-0" />
+                            <span className="text-[10px] font-extrabold uppercase tracking-wide text-primaryDeep">Aguardando o profissional configurar Pix</span>
+                          </div>
+                          <div className="flex items-start gap-2 text-xs font-bold text-primaryDeep leading-relaxed">
+                            <LockIcon className="w-4 h-4 shrink-0 mt-px" />
+                            Presença confirmada — o pagamento libera sozinho assim que {hired?.profissional?.nome || 'o profissional'} configurar onde receber no perfil dele. Nada pra você fazer aqui.
+                          </div>
+                        </div>
+                      )}
+
                       <div onClick={(e) => e.stopPropagation()} className="flex justify-between items-center pt-3 border-t border-gray-100 flex-wrap gap-2">
                         <div className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-gray-500">
                           <UsersIcon className="w-[15px] h-[15px] text-gray-400" />

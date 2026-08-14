@@ -169,6 +169,7 @@ export type ProfissionalResumo = {
   notaMedia?: number | null;
   totalAvaliacoes?: number;
   fotoUrl?: string | null;
+  telefone?: string | null;
 };
 
 export type Candidatura = {
@@ -211,8 +212,18 @@ export type Pagamento = {
   createdAt: string;
   liberadoEm: string | null;
   reembolsadoEm: string | null;
-  vaga?: { categoria: Categoria; cidade: string; estado: string; rua: string; numero: string };
-  candidatura?: { profissional: { nome: string } };
+  vaga?: {
+    categoria: Categoria;
+    cidade: string;
+    estado: string;
+    rua: string;
+    numero: string;
+    data: string;
+    horaInicio: string;
+    horaFim: string;
+    clinica: { nome: string };
+  };
+  candidatura?: { profissional: { nome: string; telefone?: string | null } };
 };
 
 export type ContaRecebimentoStatus = 'NAO_CONFIGURADA' | 'EM_ANALISE' | 'APROVADA' | 'RECUSADA';

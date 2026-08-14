@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { buildEndereco, statusBadge } from '@/lib/mockData';
+import { buildEndereco, statusBadge, onlyDigits, formatDataBR } from '@/lib/mockData';
 import { Sidebar } from '@/app/components/Sidebar';
-import { GridIcon } from '@/app/components/icons';
+import { GridIcon, WhatsappIcon } from '@/app/components/icons';
 import { AdminPageSkeleton } from '@/app/components/skeletons/AdminPageSkeleton';
 import {
   ApiError, getToken, clearSession,
@@ -111,6 +111,25 @@ export default function AdminPage() {
                   <div className="text-sm text-gray-500 mt-1">
                     {local} · bruto <b className="font-bold text-gray-700">R$ {Number(p.valorBruto).toFixed(2)}</b> · taxa <b className="font-bold text-gray-700">R$ {Number(p.taxa).toFixed(2)}</b> · repasse <b className="font-bold text-gray-700">R$ {Number(p.valorLiquido).toFixed(2)}</b>
                   </div>
+                  {p.status === 'LIBERADO_PENDENTE' && (
+                    <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                      <div className="text-xs font-bold text-amber-700">
+                        Aguardando {p.candidatura?.profissional.nome || 'o profissional'} configurar a chave Pix pra liberar sozinho.
+                      </div>
+                      {p.candidatura?.profissional.telefone && (
+                        <a
+                          href={`https://wa.me/55${onlyDigits(p.candidatura.profissional.telefone)}?text=${encodeURIComponent(
+                            `Oi ${p.candidatura.profissional.nome}! Aqui é a equipe ConectVet — seu pagamento do plantão de ${p.vaga ? formatDataBR(p.vaga.data) : ''}${p.vaga ? `, ${p.vaga.horaInicio}–${p.vaga.horaFim}` : ''} na ${p.vaga?.clinica.nome || 'clínica'} tá esperando você configurar a chave Pix no seu perfil pra liberar. Consegue fazer isso agora?`,
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#25d366] text-white text-[11px] font-extrabold"
+                        >
+                          <WhatsappIcon className="w-3 h-3" /> Chamar no WhatsApp
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <div className={badge.className}>{badge.label}</div>
