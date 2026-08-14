@@ -1,10 +1,15 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PublicHeader } from '@/app/components/PublicHeader';
 import { PublicFooter } from '@/app/components/PublicFooter';
+import { VagaCardPublica } from '@/app/components/VagaCardPublica';
+import { CardSkeleton } from '@/app/components/skeletons/CardSkeleton';
+import { vagaEncerrada } from '@/lib/mockData';
+import { Vaga, getFeed } from '@/lib/api';
 import {
-  SearchIcon, CalendarIcon, ClockIcon, CheckIcon, LockIcon, ShieldIcon,
-  StarIcon, BuildingIcon, UserIcon, PlusIcon, ArrowRightIcon, PinIcon,
+  SearchIcon, ClockIcon, CheckIcon, LockIcon, ShieldIcon,
+  StarIcon, BuildingIcon, UserIcon, PlusIcon, ArrowRightIcon,
 } from '@/app/components/icons';
 
 // Landing page pública — a Home deixou de ser a lista de vagas (isso agora mora em
@@ -12,18 +17,27 @@ import {
 // lados (profissional e clínica) e dá um gostinho das vagas abertas, sem duplicar o
 // feed completo. Detalhado num protótipo antes de aplicar (ver histórico da conversa).
 //
-// Os cards de vaga aqui embaixo são exemplos fixos (clínica/cidade fictícias), não a
-// vaga real de ninguém — é vitrine, não a listagem de verdade (essa mora em /vagas,
-// com dado ao vivo). Evita expor a clínica/cidade real de quem já usa a plataforma
-// numa tela de marketing pública.
-const VAGAS_EXEMPLO = [
-  { clinica: 'Clínica Vetville', categoria: 'Veterinário Clínico', local: 'Pinheiros, São Paulo - SP', data: '12/08', horario: '08:00–18:00', valor: 320 },
-  { clinica: 'São Francisco', categoria: 'Auxiliar', local: 'Moema, São Paulo - SP', data: '15/08', horario: '13:00–21:00', valor: 100 },
-  { clinica: 'PetSaúde Jardins', categoria: 'Veterinário Especialista', local: 'Vila Mariana, São Paulo - SP', data: '20/08', horario: '08:00–14:00', valor: 280 },
-];
+// Os cards de vaga aqui embaixo já são vagas reais e abertas na plataforma (mesmo
+// feed público de /vagas), só limitadas às 3 mais recentes — antes eram exemplos
+// fixos, mas isso soava falso pra quem já conhecia a plataforma.
+const VAGAS_EM_DESTAQUE = 3;
 
 export default function HomePublica() {
   const router = useRouter();
+  const [vagas, setVagas] = useState<Vaga[]>([]);
+  const [carregandoVagas, setCarregandoVagas] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    getFeed()
+      .then((feed) => {
+        if (cancelado) return;
+        setVagas(feed.filter((v) => !vagaEncerrada(v)).slice(0, VAGAS_EM_DESTAQUE));
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelado) setCarregandoVagas(false); });
+    return () => { cancelado = true; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-paws">
@@ -202,15 +216,15 @@ export default function HomePublica() {
       <section className="bg-[#eef7f6] px-5 sm:px-8 py-12 sm:py-14">
         <div className="max-w-[560px] mx-auto text-center mb-8">
           <span className="inline-block text-[11px] font-extrabold uppercase tracking-wide text-primaryDeep bg-white px-3 py-1.5 rounded-full mb-3">Passo a passo</span>
-          <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink -tracking-[0.01em]">Como funciona, dos dois lados</h2>
+          <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink -tracking-[0.01em]">Como funciona</h2>
         </div>
         <div className="max-w-[980px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-7">
           <div>
             <div className="flex items-center gap-2 text-[13px] font-extrabold text-ink mb-4"><span className="w-2 h-2 rounded-full bg-primary" />Profissional</div>
             {[
               ['Encontre um plantão', 'Filtre por cidade, data e categoria.'],
-              ['Candidate-se em 1 clique', 'A clínica recebe sua candidatura na hora.'],
-              ['Confirme e receba', 'Pagamento garantido assim que você é aceito.'],
+              ['Candidate-se em um clique', 'A clínica recebe sua candidatura na hora.'],
+              ['Confirme e receba', 'Pagamento garantido após o plantão'],
             ].map(([title, desc], i) => (
               <div key={title} className={`flex gap-3.5 py-3.5 ${i > 0 ? 'border-t border-ink/10' : ''}`}>
                 <div className="w-[30px] h-[30px] rounded-[10px] bg-primary text-white flex items-center justify-center text-[13px] font-extrabold shrink-0">{i + 1}</div>
@@ -221,7 +235,7 @@ export default function HomePublica() {
           <div>
             <div className="flex items-center gap-2 text-[13px] font-extrabold text-ink mb-4"><span className="w-2 h-2 rounded-full bg-secondary" />Clínica</div>
             {[
-              ['Publique a vaga', 'Endereço, data, valor — pronto em minutos.'],
+              ['Publique a vaga', 'Endereço, data, categoria e valor.'],
               ['Escolha entre os candidatos', 'Perfil e avaliações à vista antes de aceitar.'],
               ['Confirme a presença', 'Só aí o pagamento é liberado ao profissional.'],
             ].map(([title, desc], i) => (
@@ -235,43 +249,25 @@ export default function HomePublica() {
       </section>
 
       {/* ================= vagas em destaque ================= */}
-      <section className="bg-white px-5 sm:px-8 py-12 sm:py-14">
-        <div className="max-w-[560px] mx-auto text-center mb-8">
-          <span className="inline-block text-[11px] font-extrabold uppercase tracking-wide text-primaryDeep bg-primaryTint px-3 py-1.5 rounded-full mb-3">Agora mesmo</span>
-          <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink mb-2 -tracking-[0.01em]">Tem plantão aberto agora</h2>
-          <p className="text-sm text-gray-500">Um gostinho do que já tá disponível — a lista completa fica na aba Vagas.</p>
-        </div>
-        <div className="max-w-[1040px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-3.5">
-          {VAGAS_EXEMPLO.map((v) => (
-            <div key={v.clinica} onClick={() => router.push('/vagas')} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 cursor-pointer hover:border-secondary/40 transition-colors">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-300 shrink-0">
-                    <BuildingIcon className="w-4 h-4" />
-                  </div>
-                  <div className="text-[13.5px] font-extrabold text-ink truncate">{v.clinica}</div>
-                </div>
-                <div className="text-[13px] font-extrabold bg-primaryTint text-primaryDeep px-2.5 py-1 rounded-lg shrink-0">R$ {v.valor}</div>
-              </div>
-              <span className="inline-block text-[9px] font-extrabold uppercase bg-primaryTint text-primaryDeep px-2.5 py-1 rounded-full mb-2.5">{v.categoria}</span>
-              <div className="flex flex-col gap-1.5 bg-gray-50 rounded-lg px-3 py-2 mb-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#33454f]">
-                  <CalendarIcon className="w-3 h-3 text-primary shrink-0" /> {v.data} · {v.horario}
-                </div>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#33454f]">
-                  <PinIcon className="w-3 h-3 text-primary shrink-0" /> {v.local}
-                </div>
-              </div>
-              <div className="text-center bg-primary text-white text-xs font-extrabold py-2.5 rounded-lg">Candidatar-se</div>
-            </div>
-          ))}
-        </div>
-        <div className="text-center mt-6">
-          <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 text-sm font-extrabold text-primaryDeep">
-            Ver todas as vagas <ArrowRightIcon className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </section>
+      {(carregandoVagas || vagas.length > 0) && (
+        <section className="bg-white px-5 sm:px-8 py-12 sm:py-14">
+          <div className="max-w-[560px] mx-auto text-center mb-8">
+            <span className="inline-block text-[11px] font-extrabold uppercase tracking-wide text-primaryDeep bg-primaryTint px-3 py-1.5 rounded-full mb-3">Agora mesmo</span>
+            <h2 className="text-2xl sm:text-[26px] font-extrabold text-ink mb-2 -tracking-[0.01em]">Tem plantão aberto agora</h2>
+            <p className="text-sm text-gray-500">Um gostinho do que já tá disponível</p>
+          </div>
+          <div className="max-w-[1040px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            {carregandoVagas
+              ? Array.from({ length: VAGAS_EM_DESTAQUE }).map((_, i) => <CardSkeleton key={i} />)
+              : vagas.map((v) => <VagaCardPublica key={v.id} vaga={v} />)}
+          </div>
+          <div className="text-center mt-6">
+            <button onClick={() => router.push('/vagas')} className="inline-flex items-center gap-1.5 text-sm font-extrabold text-primaryDeep">
+              Ver todas as vagas <ArrowRightIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ================= marca em destaque ================= */}
       <section className="bg-white px-5 sm:px-8 pb-4 pt-0">
@@ -281,7 +277,7 @@ export default function HomePublica() {
           </div>
           <img src="/logo_escrita.svg" alt="ConectVet" className="w-[min(360px,80%)] mx-auto mb-3.5" />
           <p className="text-[13px] font-bold text-gray-500 max-w-[420px] mx-auto leading-relaxed">
-            A marca que conecta clínicas veterinárias e profissionais — em um lugar só.
+            A marca que conecta clínicas veterinárias e profissionais
           </p>
         </div>
       </section>
