@@ -40,8 +40,48 @@ enum CandidaturaStatus {
 }
 
 enum PagamentoStatus {
+  // Candidatura aceita, clínica ainda não escolheu Pix/Cartão.
+  AGUARDANDO_COBRANCA
+  // Cobrança enviada ao gateway (fake, por enquanto), esperando confirmação.
+  PROCESSANDO
+  // Recusado / expirado — clínica pode tentar de novo ou desistir da contratação.
+  FALHOU
+  // Cobrança aprovada, valor retido.
   RETIDO
+  // Presença confirmada, mas o profissional ainda não configurou onde receber.
+  LIBERADO_PENDENTE
+  // Valor transferido ao profissional.
   LIBERADO
+  // Devolvido à clínica — não compareceu ou desistência.
+  REEMBOLSADO
+  // Nenhum valor chegou a ser cobrado (desistência antes da cobrança ser aprovada).
+  CANCELADO
+  // Contestação/chargeback depois de já Liberado — resolução manual (fora de escopo por enquanto).
+  EM_DISPUTA
+}
+
+enum FormaPagamento {
+  PIX
+  CARTAO
+}
+
+enum MotivoReembolso {
+  NAO_COMPARECEU
+  DESISTENCIA
+}
+
+enum ContaRecebimentoStatus {
+  NAO_CONFIGURADA
+  EM_ANALISE
+  APROVADA
+  RECUSADA
+}
+
+enum TipoChavePix {
+  CPF
+  EMAIL
+  TELEFONE
+  ALEATORIA
 }
 
 enum AvaliacaoAutor {
@@ -57,6 +97,8 @@ enum NotificacaoTipo {
   AVALIACAO_RECEBIDA
   PROFISSIONAL_DESISTIU
   VAGA_REABERTA
+  MARCADO_NAO_COMPARECEU
+  PAGAMENTO_LIBERADO_PENDENTE
 }
 
 model User {
@@ -148,13 +190,29 @@ model Profissional {
   regioesAtendimento String
   observacoes        String?
 
-  candidaturas Candidatura[]
-  avaliacoes   Avaliacao[]
+  candidaturas      Candidatura[]
+  avaliacoes        Avaliacao[]
+  contaRecebimento  ContaRecebimento?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("profissionais")
+}
+
+model ContaRecebimento {
+  id             String       @id @default(cuid())
+  profissionalId String       @unique
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  status       ContaRecebimentoStatus @default(NAO_CONFIGURADA)
+  tipoChavePix TipoChavePix?
+  chavePix     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("contas_recebimento")
 }
 
 model Vaga {
@@ -181,7 +239,7 @@ model Vaga {
   status VagaStatus @default(ABERTA)
 
   candidaturas Candidatura[]
-  pagamento    Pagamento?
+  pagamentos   Pagamento[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -210,19 +268,33 @@ model Candidatura {
 
 model Pagamento {
   id            String      @id @default(cuid())
-  vagaId        String      @unique
+  vagaId        String
   vaga          Vaga        @relation(fields: [vagaId], references: [id], onDelete: Cascade)
   candidaturaId String      @unique
   candidatura   Candidatura @relation(fields: [candidaturaId], references: [id], onDelete: Cascade)
 
-  valorBruto   Decimal         @db.Decimal(10, 2)
-  taxa         Decimal         @db.Decimal(10, 2)
-  valorLiquido Decimal         @db.Decimal(10, 2)
-  status       PagamentoStatus @default(RETIDO)
+  // valorLiquido = o que o profissional recebe; taxa = comissão da ConectVet (5%);
+  // valorBruto = valorLiquido + taxa (o que já era cobrado da clínica antes do gateway).
+  valorBruto   Decimal @db.Decimal(10, 2)
+  taxa         Decimal @db.Decimal(10, 2)
+  valorLiquido Decimal @db.Decimal(10, 2)
+
+  status PagamentoStatus @default(AGUARDANDO_COBRANCA)
+
+  // Só preenchidos depois que a clínica escolhe a forma de pagamento (POST .../cobrar).
+  formaPagamento FormaPagamento?
+  taxaGateway    Decimal         @default(0) @db.Decimal(10, 2)
+  // valorTotal = valorBruto + taxaGateway — o que a clínica efetivamente paga.
+  valorTotal     Decimal?        @db.Decimal(10, 2)
+  motivoFalha    String?
+
+  motivoReembolso MotivoReembolso?
+  reembolsadoEm   DateTime?
 
   createdAt  DateTime  @default(now())
   liberadoEm DateTime?
 
+  @@index([vagaId])
   @@map("pagamentos")
 }
 

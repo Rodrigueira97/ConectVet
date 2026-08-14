@@ -204,8 +204,16 @@ export function statusBadge(status: string) {
     aceito: ['bg-primaryTint', 'text-primaryDeep', 'Aceito'],
     recusado: ['bg-danger/10', 'text-danger', 'Recusado'],
     desistiu: ['bg-gray-100', 'text-gray-500', 'Desistiu'],
+    nao_compareceu: ['bg-danger/10', 'text-danger', 'Não compareceu'],
+    aguardando_cobranca: ['bg-gray-100', 'text-gray-500', 'Aguardando cobrança'],
+    processando: ['bg-secondary/10', 'text-secondary', 'Processando'],
+    falhou: ['bg-danger/10', 'text-danger', 'Falhou'],
     retido: ['bg-amber-100', 'text-amber-700', 'Retido'],
+    liberado_pendente: ['bg-amber-100', 'text-amber-700', 'Liberação pendente'],
     liberado: ['bg-primaryTint', 'text-primaryDeep', 'Liberado'],
+    reembolsado: ['bg-gray-100', 'text-gray-500', 'Reembolsado'],
+    cancelado: ['bg-gray-100', 'text-gray-500', 'Cancelado'],
+    em_disputa: ['bg-danger/10', 'text-danger', 'Em disputa'],
   };
   const [bg, fg, label] = map[status] || map.pendente;
   return { className: `${bg} ${fg} font-bold text-xs px-2.5 py-1 rounded-lg whitespace-nowrap`, label };

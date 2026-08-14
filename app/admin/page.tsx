@@ -50,6 +50,8 @@ export default function AdminPage() {
   const totalRetido = pagamentos.filter((p) => p.status === 'RETIDO').reduce((s, p) => s + Number(p.valorLiquido), 0);
   const totalLiberado = pagamentos.filter((p) => p.status === 'LIBERADO').reduce((s, p) => s + Number(p.valorLiquido), 0);
   const totalTaxa = pagamentos.reduce((s, p) => s + Number(p.taxa), 0);
+  const totalReembolsado = pagamentos.filter((p) => p.status === 'REEMBOLSADO').reduce((s, p) => s + Number(p.valorLiquido), 0);
+  const precisamDeAtencao = pagamentos.filter((p) => p.status === 'LIBERADO_PENDENTE' || p.status === 'EM_DISPUTA').length;
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -71,7 +73,7 @@ export default function AdminPage() {
 
         {error && <div className="text-sm font-semibold text-danger bg-red-50 rounded-lg p-3 mb-4">{error}</div>}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
             <div className="text-xs font-bold text-gray-500">Retido com a plataforma</div>
             <div className="text-xl font-extrabold mt-1.5">R$ {totalRetido.toFixed(2)}</div>
@@ -83,6 +85,16 @@ export default function AdminPage() {
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
             <div className="text-xs font-bold text-gray-500">Taxa arrecadada (5%)</div>
             <div className="text-xl font-extrabold mt-1.5">R$ {totalTaxa.toFixed(2)}</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-7">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+            <div className="text-xs font-bold text-gray-500">Reembolsado (não compareceu/desistência)</div>
+            <div className="text-xl font-extrabold mt-1.5">R$ {totalReembolsado.toFixed(2)}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+            <div className="text-xs font-bold text-gray-500">Precisam de atenção (liberação pendente/disputa)</div>
+            <div className="text-xl font-extrabold mt-1.5">{precisamDeAtencao}</div>
           </div>
         </div>
 

@@ -98,6 +98,9 @@ function post<T>(path: string, body?: unknown) {
 function patch<T>(path: string, body?: unknown) {
   return request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined });
 }
+function put<T>(path: string, body?: unknown) {
+  return request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined });
+}
 
 // ---------- Tipos ----------
 
@@ -178,6 +181,20 @@ export type Candidatura = {
   vaga?: Vaga;
 };
 
+export type PagamentoStatus =
+  | 'AGUARDANDO_COBRANCA'
+  | 'PROCESSANDO'
+  | 'FALHOU'
+  | 'RETIDO'
+  | 'LIBERADO_PENDENTE'
+  | 'LIBERADO'
+  | 'REEMBOLSADO'
+  | 'CANCELADO'
+  | 'EM_DISPUTA';
+
+export type FormaPagamento = 'PIX' | 'CARTAO';
+export type MotivoReembolso = 'NAO_COMPARECEU' | 'DESISTENCIA';
+
 export type Pagamento = {
   id: string;
   vagaId: string;
@@ -185,11 +202,28 @@ export type Pagamento = {
   valorBruto: string;
   taxa: string;
   valorLiquido: string;
-  status: 'RETIDO' | 'LIBERADO';
+  status: PagamentoStatus;
+  formaPagamento: FormaPagamento | null;
+  taxaGateway: string;
+  valorTotal: string | null;
+  motivoFalha: string | null;
+  motivoReembolso: MotivoReembolso | null;
   createdAt: string;
   liberadoEm: string | null;
+  reembolsadoEm: string | null;
   vaga?: { categoria: Categoria; cidade: string; estado: string; rua: string; numero: string };
   candidatura?: { profissional: { nome: string } };
+};
+
+export type ContaRecebimentoStatus = 'NAO_CONFIGURADA' | 'EM_ANALISE' | 'APROVADA' | 'RECUSADA';
+export type TipoChavePix = 'CPF' | 'EMAIL' | 'TELEFONE' | 'ALEATORIA';
+
+export type ContaRecebimento = {
+  id: string | null;
+  profissionalId: string;
+  status: ContaRecebimentoStatus;
+  tipoChavePix: TipoChavePix | null;
+  chavePix: string | null;
 };
 
 export type Vaga = {
@@ -461,8 +495,30 @@ export function listarPagamentos() {
   return get<Pagamento[]>('/pagamentos');
 }
 
+export function cobrarPagamento(id: string, formaPagamento: FormaPagamento) {
+  return patch<Pagamento>(`/pagamentos/${id}/cobrar`, { formaPagamento });
+}
+
+export function simularPagamento(id: string, resultado: 'aprovado' | 'recusado', motivo?: string) {
+  return patch<Pagamento>(`/pagamentos/${id}/simular`, { resultado, motivo });
+}
+
+export function marcarNaoCompareceu(id: string) {
+  return patch<Pagamento>(`/pagamentos/${id}/nao-compareceu`);
+}
+
 export function liberarPagamento(id: string) {
   return patch<Pagamento>(`/pagamentos/${id}/liberar`);
+}
+
+// ---------- Conta de recebimento (Pix do profissional) ----------
+
+export function getContaRecebimento() {
+  return get<ContaRecebimento>('/conta-recebimento/me');
+}
+
+export function salvarContaRecebimento(payload: { tipoChavePix: TipoChavePix; chavePix: string }) {
+  return put<ContaRecebimento>('/conta-recebimento/me', payload);
 }
 
 // ---------- Avaliações ----------

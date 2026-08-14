@@ -8,6 +8,10 @@ import { CreateVagaDto } from './dto/create-vaga.dto';
 import { UpdateVagaDto } from './dto/update-vaga.dto';
 import { Categoria, VagaStatus } from '../../generated/prisma/enums';
 import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
+import {
+  comPagamentoMaisRecente,
+  PAGAMENTO_MAIS_RECENTE_INCLUDE,
+} from '../pagamentos/pagamento.utils';
 
 @Injectable()
 export class VagasService {
@@ -67,7 +71,7 @@ export class VagasService {
     const clinica = await this.prisma.clinica.findUniqueOrThrow({
       where: { userId: clinicaUserId },
     });
-    return this.prisma.vaga.findMany({
+    const vagas = await this.prisma.vaga.findMany({
       where: { clinicaId: clinica.id },
       include: {
         candidaturas: {
@@ -83,10 +87,11 @@ export class VagasService {
             },
           },
         },
-        pagamento: true,
+        pagamentos: PAGAMENTO_MAIS_RECENTE_INCLUDE,
       },
       orderBy: { createdAt: 'desc' },
     });
+    return vagas.map(comPagamentoMaisRecente);
   }
 
   async buscarPorId(id: string) {
@@ -109,7 +114,7 @@ export class VagasService {
             },
           },
         },
-        pagamento: true,
+        pagamentos: PAGAMENTO_MAIS_RECENTE_INCLUDE,
       },
     });
     if (!vaga) throw new NotFoundException('Vaga não encontrada.');
@@ -118,7 +123,10 @@ export class VagasService {
       await this.avaliacoesService.mediaPorClinicas([vaga.clinica.id])
     ).get(vaga.clinica.id) ?? { notaMedia: null, totalAvaliacoes: 0 };
 
-    return { ...vaga, clinica: { ...vaga.clinica, ...media } };
+    return {
+      ...comPagamentoMaisRecente(vaga),
+      clinica: { ...vaga.clinica, ...media },
+    };
   }
 
   private async garantirDona(clinicaUserId: string, vagaId: string) {

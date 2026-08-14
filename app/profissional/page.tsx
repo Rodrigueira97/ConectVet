@@ -26,9 +26,10 @@ import { RecorteFotoModal } from '@/app/components/RecorteFotoModal';
 import { useToast } from '@/app/components/Toast';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIAS, ESPECIALIDADES_VETERINARIAS, isVeterinarioFormado,
-  Vaga, Candidatura, Profissional, Avaliacao,
+  Vaga, Candidatura, Profissional, Avaliacao, ContaRecebimento, TipoChavePix,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
   getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura, desistirCandidatura, documentoIndisponivel,
+  getContaRecebimento, salvarContaRecebimento,
 } from '@/lib/api';
 
 const VAGAS_POR_PAGINA = 6;
@@ -54,10 +55,17 @@ function tempoNaPlataforma(createdAt: string) {
 
 const FAVORITOS_KEY = 'conectvet_vagas_favoritas';
 
-type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'RECUSADO' | 'ENCERRADA' | 'DESISTIU';
+type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'NAO_COMPARECEU' | 'RECUSADO' | 'ENCERRADA' | 'DESISTIU';
 
+// Vaga.status vira CONCLUIDA tanto quando o plantão foi pago normalmente
+// quanto quando a clínica marca "não compareceu" (reembolsa e fecha do mesmo
+// jeito) — a diferença mora só no Pagamento.motivoReembolso, por isso o front
+// não confunde "concluído com sucesso" com "não compareceu" na jornada do profissional.
 function statusDaCandidatura(c: Candidatura): StatusCandidatura {
-  if (c.status === 'ACEITO') return c.vaga?.status === 'CONCLUIDA' ? 'CONCLUIDA' : 'ACEITO';
+  if (c.status === 'ACEITO') {
+    if (c.vaga?.status !== 'CONCLUIDA') return 'ACEITO';
+    return c.vaga?.pagamento?.motivoReembolso === 'NAO_COMPARECEU' ? 'NAO_COMPARECEU' : 'CONCLUIDA';
+  }
   if (c.status === 'PENDENTE' && c.vaga && vagaEncerrada(c.vaga)) return 'ENCERRADA';
   return c.status;
 }
@@ -110,6 +118,13 @@ function passosDaCandidatura(c: Candidatura, status: StatusCandidatura): PassoJo
       { label: 'Enviada', state: 'done' },
       { label: 'Aceita', state: 'done' },
       { label: 'Você desistiu', state: 'fail' },
+    ];
+  }
+  if (status === 'NAO_COMPARECEU') {
+    return [
+      { label: 'Enviada', state: 'done' },
+      { label: 'Aceita', state: 'done' },
+      { label: 'Você não compareceu', state: 'fail', caption: v ? formatDataBR(v.data) : undefined },
     ];
   }
   return [
@@ -309,12 +324,16 @@ function ProfissionalPageInner() {
   const [cancelandoProcessandoId, setCancelandoProcessandoId] = useState<string | null>(null);
   const [desistindoId, setDesistindoId] = useState<string | null>(null);
   const [desistindoProcessandoId, setDesistindoProcessandoId] = useState<string | null>(null);
+  const [contaRecebimento, setContaRecebimento] = useState<ContaRecebimento | null>(null);
+  const [editandoRecebimento, setEditandoRecebimento] = useState(false);
+  const [recebimentoForm, setRecebimentoForm] = useState<{ tipoChavePix: TipoChavePix; chavePix: string }>({ tipoChavePix: 'CPF', chavePix: '' });
+  const [salvandoRecebimento, setSalvandoRecebimento] = useState(false);
 
   useEffect(() => {
     if (!getToken()) { router.push('/entrar'); return; }
     (async () => {
       try {
-        const [p, f, c] = await Promise.all([getProfissionalMe(), getFeed(), getMinhasCandidaturas()]);
+        const [p, f, c, conta] = await Promise.all([getProfissionalMe(), getFeed(), getMinhasCandidaturas(), getContaRecebimento()]);
         setPerfil(p);
         setPerfilForm({
           nome: p.nome, telefone: p.telefone || '', dataNascimento: p.dataNascimento ? p.dataNascimento.slice(0, 10) : '',
@@ -324,6 +343,8 @@ function ProfissionalPageInner() {
         });
         setFeed(f);
         setCandidaturas(c);
+        setContaRecebimento(conta);
+        if (conta.tipoChavePix) setRecebimentoForm({ tipoChavePix: conta.tipoChavePix, chavePix: conta.chavePix || '' });
 
         const aceitas = c.filter((x) => x.status === 'ACEITO');
         const pares = await Promise.all(aceitas.map(async (x) => [x.id, await getAvaliacoesPorCandidatura(x.id)] as const));
@@ -462,6 +483,7 @@ function ProfissionalPageInner() {
     PENDENTE: candidaturasComStatus.filter((c) => c.statusExibido === 'PENDENTE').length,
     ACEITO: candidaturasComStatus.filter((c) => c.statusExibido === 'ACEITO').length,
     CONCLUIDA: candidaturasComStatus.filter((c) => c.statusExibido === 'CONCLUIDA').length,
+    NAO_COMPARECEU: candidaturasComStatus.filter((c) => c.statusExibido === 'NAO_COMPARECEU').length,
     RECUSADO: candidaturasComStatus.filter((c) => c.statusExibido === 'RECUSADO').length,
     ENCERRADA: candidaturasComStatus.filter((c) => c.statusExibido === 'ENCERRADA').length,
     DESISTIU: candidaturasComStatus.filter((c) => c.statusExibido === 'DESISTIU').length,
@@ -552,6 +574,20 @@ function ProfissionalPageInner() {
       toast.error('Não foi possível salvar o perfil', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
       setSavingPerfil(false);
+    }
+  }
+
+  async function salvarRecebimento() {
+    setSalvandoRecebimento(true);
+    try {
+      const atualizado = await salvarContaRecebimento(recebimentoForm);
+      setContaRecebimento(atualizado);
+      setEditandoRecebimento(false);
+      toast.success('Chave Pix salva', { message: 'Todo plantão com presença confirmada libera automaticamente pra essa chave.' });
+    } catch (err) {
+      toast.error('Não foi possível salvar a chave Pix', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setSalvandoRecebimento(false);
     }
   }
 
@@ -1010,7 +1046,7 @@ function ProfissionalPageInner() {
             <div className="relative mb-5">
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
                 {([
-                  ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['RECUSADO', 'Recusadas'], ['ENCERRADA', 'Encerradas'], ['DESISTIU', 'Desistências'],
+                  ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['NAO_COMPARECEU', 'Não compareceu'], ['RECUSADO', 'Recusadas'], ['ENCERRADA', 'Encerradas'], ['DESISTIU', 'Desistências'],
                 ] as const).map(([key, label]) => (
                   <button
                     key={key}
@@ -1032,13 +1068,14 @@ function ProfissionalPageInner() {
             <div className="flex flex-col gap-[14px]">
               {candidaturasPaginadas.map((c) => {
                 const status = c.statusExibido;
-                const fechada = status === 'RECUSADO' || status === 'ENCERRADA' || status === 'DESISTIU';
+                const fechada = status === 'RECUSADO' || status === 'ENCERRADA' || status === 'DESISTIU' || status === 'NAO_COMPARECEU';
                 const v = c.vaga;
                 const local = v ? [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ') : '';
                 const STATUS_CHIP: Record<StatusCandidatura, { label: string; className: string }> = {
                   PENDENTE: { label: 'Pendente', className: 'bg-amber-100 text-amber-700' },
                   ACEITO: { label: 'Aceita', className: 'bg-primary text-white' },
                   CONCLUIDA: { label: 'Concluída', className: 'bg-secondary text-white' },
+                  NAO_COMPARECEU: { label: 'Não compareceu', className: 'bg-danger text-white' },
                   RECUSADO: { label: 'Recusada', className: 'bg-gray-100 text-gray-500' },
                   ENCERRADA: { label: 'Encerrada', className: 'bg-gray-100 text-gray-500' },
                   DESISTIU: { label: 'Desistência', className: 'bg-gray-100 text-gray-500' },
@@ -1150,6 +1187,11 @@ function ProfissionalPageInner() {
                       {status === 'DESISTIU' && (
                         <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-gray-500">
                           <CloseIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> Você desistiu desse plantão antes da data — a vaga voltou a ficar aberta pra outro profissional.
+                        </div>
+                      )}
+                      {status === 'NAO_COMPARECEU' && (
+                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-danger">
+                          <XCircleIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> A clínica marcou que você não compareceu a esse plantão — isso fica no seu histórico de confiabilidade.
                         </div>
                       )}
                     </div>
@@ -1545,6 +1587,79 @@ function ProfissionalPageInner() {
                       >
                         <DownloadIcon className="w-[18px] h-[18px]" />
                       </a>
+                    </div>
+                  )}
+                </div>
+
+                {/* Recebimento */}
+                <div className="bg-white rounded-2xl p-5 mb-3.5">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400">Recebimento</div>
+                    {contaRecebimento && (
+                      <span
+                        className={`text-[10.5px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                          contaRecebimento.status === 'APROVADA'
+                            ? 'bg-primaryTint text-primaryDeep'
+                            : contaRecebimento.status === 'EM_ANALISE'
+                            ? 'bg-amber-100 text-amber-700'
+                            : contaRecebimento.status === 'RECUSADA'
+                            ? 'bg-red-100 text-danger'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        {contaRecebimento.status === 'APROVADA' ? 'Aprovado' : contaRecebimento.status === 'EM_ANALISE' ? 'Em análise' : contaRecebimento.status === 'RECUSADA' ? 'Recusado' : 'Não configurado'}
+                      </span>
+                    )}
+                  </div>
+
+                  {!editandoRecebimento ? (
+                    <>
+                      {contaRecebimento?.status === 'APROVADA' ? (
+                        <div className="flex items-center justify-between gap-3 bg-gray-50 rounded-2xl p-3">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-bold text-gray-400 uppercase">{contaRecebimento.tipoChavePix}</div>
+                            <div className="text-sm font-extrabold text-ink truncate">{contaRecebimento.chavePix}</div>
+                          </div>
+                          <button onClick={() => setEditandoRecebimento(true)} className="shrink-0 text-xs font-bold text-primary hover:underline">Editar</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2.5 bg-amber-50 text-amber-700 rounded-2xl p-3">
+                          <WarningIcon className="w-4 h-4 shrink-0 mt-px" />
+                          <div className="flex-1">
+                            <div className="text-[12.5px] font-semibold leading-relaxed">Configure sua chave Pix pra receber assim que a clínica confirmar sua presença.</div>
+                            <button onClick={() => setEditandoRecebimento(true)} className="mt-2 px-3.5 py-1.5 rounded-lg bg-ink text-white text-xs font-bold">Configurar chave Pix</button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-2.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {(['CPF', 'EMAIL', 'TELEFONE', 'ALEATORIA'] as TipoChavePix[]).map((tipo) => (
+                          <button
+                            key={tipo}
+                            type="button"
+                            onClick={() => setRecebimentoForm((f) => ({ ...f, tipoChavePix: tipo }))}
+                            className={`rounded-lg border-[1.5px] py-2 text-center text-[11.5px] font-extrabold transition-colors ${
+                              recebimentoForm.tipoChavePix === tipo ? 'border-primary bg-primaryTint text-primaryDeep' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                            }`}
+                          >
+                            {tipo === 'CPF' ? 'CPF' : tipo === 'EMAIL' ? 'E-mail' : tipo === 'TELEFONE' ? 'Telefone' : 'Aleatória'}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        value={recebimentoForm.chavePix}
+                        onChange={(e) => setRecebimentoForm((f) => ({ ...f, chavePix: e.target.value }))}
+                        placeholder={recebimentoForm.tipoChavePix === 'CPF' ? 'Precisa ser o CPF do seu cadastro' : 'Sua chave Pix'}
+                        className="px-3 py-2.5 rounded-lg border border-gray-300 text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditandoRecebimento(false)} className="flex-1 px-3.5 py-2 rounded-lg border border-gray-300 text-sm font-bold">Cancelar</button>
+                        <button onClick={salvarRecebimento} disabled={salvandoRecebimento || !recebimentoForm.chavePix.trim()} className="flex-1 px-3.5 py-2 rounded-lg bg-primary text-white text-sm font-bold disabled:opacity-60">
+                          {salvandoRecebimento ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

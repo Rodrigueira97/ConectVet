@@ -12,6 +12,7 @@ import { PagamentosModule } from './pagamentos/pagamentos.module';
 import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
+import { ContaRecebimentoModule } from './conta-recebimento/conta-recebimento.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { NotificacoesModule } from './notificacoes/notificacoes.module';
     AvaliacoesModule,
     UploadsModule,
     NotificacoesModule,
+    ContaRecebimentoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -25,6 +25,7 @@ import {
   Vaga, Candidatura, Clinica, Avaliacao, ProfissionalPublico, AvaliacaoProfissional,
   getClinicaMe, updateClinicaMe, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
   getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
+  cobrarPagamento, simularPagamento, marcarNaoCompareceu,
   getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos, getFeed, getProfissionalPorId, getUltimasAvaliacoesProfissional,
 } from '@/lib/api';
 
@@ -324,6 +325,14 @@ function ClinicaPageInner() {
   const [avisoNoturno, setAvisoNoturno] = useState(false);
   // Só front por enquanto — nenhum gateway de verdade integrado ainda.
   const [formaPagamento, setFormaPagamento] = useState<'pix' | 'cartao'>('pix');
+  const [confirmandoContratacao, setConfirmandoContratacao] = useState(false);
+  const [cobrando, setCobrando] = useState(false);
+  const [simulando, setSimulando] = useState(false);
+  const [naoCompareceuId, setNaoCompareceuId] = useState<string | null>(null);
+  const [liberandoId, setLiberandoId] = useState<string | null>(null);
+  const [naoCompareceuWidgetId, setNaoCompareceuWidgetId] = useState<string | null>(null);
+  const [naoCompareceuWidgetProcessandoId, setNaoCompareceuWidgetProcessandoId] = useState<string | null>(null);
+  const [naoCompareceuProcessandoId, setNaoCompareceuProcessandoId] = useState<string | null>(null);
 
   function limparErroVaga(campo: string) {
     setVagaErrors((e) => {
@@ -372,7 +381,9 @@ function ClinicaPageInner() {
   }, [router]);
 
   useEffect(() => {
-    if (tab !== 'candidatos' || !selectedMvId) return;
+    // Também busca na aba de pagamento — dá pra chegar direto nela (sem passar pela
+    // aba de candidatos antes) pelo botão "Finalizar cobrança" na lista de vagas.
+    if ((tab !== 'candidatos' && tab !== 'pagamento') || !selectedMvId) return;
     setCandidatosLoading(true);
     getCandidatosDaVaga(selectedMvId).then(setCandidatos).catch(() => {}).finally(() => setCandidatosLoading(false));
   }, [tab, selectedMvId]);
@@ -603,25 +614,101 @@ function ClinicaPageInner() {
     }
   }
 
-  async function confirmarPagamento() {
+  /** Etapa 1: aceita a candidatura — cria o pagamento (ainda sem cobrança nenhuma). */
+  async function confirmarContratacao() {
     if (!selectedCandId) return;
+    setConfirmandoContratacao(true);
     try {
       await aceitarCandidatura(selectedCandId);
       await refreshMinhasVagas();
-      voltarAoPainel();
-      toast.success('Profissional contratado', { message: 'O pagamento fica retido até você confirmar a presença.' });
+      toast.success('Profissional contratado', { message: 'Agora escolha a melhor forma de pagamento pra você.' });
     } catch (err) {
-      toast.error('Não foi possível confirmar o pagamento', { message: err instanceof ApiError ? err.message : undefined });
+      toast.error('Não foi possível confirmar a contratação', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setConfirmandoContratacao(false);
+    }
+  }
+
+  /** Etapa 2: clínica escolheu Pix ou Cartão — "envia" a cobrança pro gateway (fake, por enquanto). */
+  async function handleCobrar() {
+    const pagamentoId = selectedMv?.pagamento?.id;
+    if (!pagamentoId) return;
+    setCobrando(true);
+    try {
+      await cobrarPagamento(pagamentoId, formaPagamento === 'pix' ? 'PIX' : 'CARTAO');
+      await refreshMinhasVagas();
+    } catch (err) {
+      toast.error('Não foi possível gerar a cobrança', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setCobrando(false);
+    }
+  }
+
+  /** Etapa 3 (dev): decide na mão o resultado da cobrança simulada. */
+  async function handleSimular(resultado: 'aprovado' | 'recusado') {
+    const pagamentoId = selectedMv?.pagamento?.id;
+    if (!pagamentoId) return;
+    setSimulando(true);
+    try {
+      const atualizado = await simularPagamento(pagamentoId, resultado);
+      await refreshMinhasVagas();
+      if (atualizado.status === 'RETIDO') {
+        voltarAoPainel();
+        toast.success('Pagamento aprovado', { message: 'O valor fica retido até você confirmar a presença do profissional.' });
+      }
+    } catch (err) {
+      toast.error('Não foi possível simular o pagamento', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setSimulando(false);
     }
   }
 
   async function handleLiberarPagamento(pagamentoId: string) {
+    setLiberandoId(pagamentoId);
     try {
-      await apiLiberarPagamento(pagamentoId);
+      const atualizado = await apiLiberarPagamento(pagamentoId);
       await refreshMinhasVagas();
-      toast.success('Pagamento liberado');
+      toast.success(
+        atualizado.status === 'LIBERADO' ? 'Pagamento liberado' : 'Presença confirmada',
+        atualizado.status === 'LIBERADO'
+          ? undefined
+          : { message: 'O profissional ainda não configurou onde receber — o valor libera assim que ele configurar.' },
+      );
     } catch (err) {
-      toast.error('Não foi possível liberar o pagamento', { message: err instanceof ApiError ? err.message : undefined });
+      toast.error('Não foi possível confirmar a presença', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setLiberandoId(null);
+    }
+  }
+
+  async function confirmarNaoCompareceu(pagamentoId: string) {
+    setNaoCompareceuProcessandoId(pagamentoId);
+    try {
+      await marcarNaoCompareceu(pagamentoId);
+      await refreshMinhasVagas();
+      setNaoCompareceuId(null);
+      toast.success('Marcado como não compareceu', { message: 'O valor retido foi devolvido pra você.' });
+    } catch (err) {
+      toast.error('Não foi possível registrar', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setNaoCompareceuProcessandoId(null);
+    }
+  }
+
+  /** Mesma ação de confirmarNaoCompareceu, só que a partir do widget "Precisa de você"
+   * (estado próprio pra não abrir a confirmação duas vezes se o mesmo pagamento também
+   * estiver visível na lista de vagas mais abaixo, na mesma tela). */
+  async function confirmarNaoCompareceuWidget(pagamentoId: string) {
+    setNaoCompareceuWidgetProcessandoId(pagamentoId);
+    try {
+      await marcarNaoCompareceu(pagamentoId);
+      await refreshMinhasVagas();
+      setNaoCompareceuWidgetId(null);
+      toast.success('Marcado como não compareceu', { message: 'O valor retido foi devolvido pra você.' });
+    } catch (err) {
+      toast.error('Não foi possível registrar', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setNaoCompareceuWidgetProcessandoId(null);
     }
   }
 
@@ -1176,14 +1263,40 @@ function ClinicaPageInner() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="text-[13px] font-bold text-ink truncate">{hired?.profissional?.nome || 'O profissional'} concluiu o plantão de {formatDataBR(v.data)}</div>
-                            <div className="text-[12px] text-gray-500 truncate">Confirme se ele compareceu pra liberar o pagamento</div>
+                            <div className="text-[12px] text-gray-500 truncate">
+                              {naoCompareceuWidgetId === v.pagamento!.id ? 'Confirma que não compareceu?' : 'Confirme se ele compareceu pra liberar o pagamento'}
+                            </div>
                           </div>
-                          <button
-                            onClick={() => handleLiberarPagamento(v.pagamento!.id)}
-                            className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold shrink-0"
-                          >
-                            Confirmar
-                          </button>
+                          {naoCompareceuWidgetId === v.pagamento!.id ? (
+                            <div className="flex gap-1.5 shrink-0">
+                              <button onClick={() => setNaoCompareceuWidgetId(null)} className="px-2.5 py-1.5 rounded-lg border border-gray-300 text-[11px] font-bold">
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => confirmarNaoCompareceuWidget(v.pagamento!.id)}
+                                disabled={naoCompareceuWidgetProcessandoId === v.pagamento!.id}
+                                className="px-2.5 py-1.5 rounded-lg bg-danger text-white text-[11px] font-extrabold disabled:opacity-60"
+                              >
+                                {naoCompareceuWidgetProcessandoId === v.pagamento!.id ? 'Enviando...' : 'Sim'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1.5 shrink-0">
+                              <button
+                                onClick={() => handleLiberarPagamento(v.pagamento!.id)}
+                                disabled={liberandoId === v.pagamento!.id}
+                                className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold disabled:opacity-60"
+                              >
+                                {liberandoId === v.pagamento!.id ? 'Confirmando...' : 'Confirmar'}
+                              </button>
+                              <button
+                                onClick={() => setNaoCompareceuWidgetId(v.pagamento!.id)}
+                                className="px-3 py-1.5 rounded-lg bg-white border border-red-200 text-danger text-xs font-bold"
+                              >
+                                Não compareceu
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1307,23 +1420,70 @@ function ClinicaPageInner() {
 
                       {mv.descricao && <div className="text-[12.5px] text-gray-500 leading-relaxed line-clamp-2">{mv.descricao}</div>}
 
+                      {/* Aceitou o candidato mas ainda não terminou de cobrar (saiu da tela de
+                          pagamento no meio do caminho) — sem isso não existia jeito de voltar
+                          pra essa etapa depois que "Aceitar e pagar" some da lista de candidatos. */}
+                      {mv.status === 'PREENCHIDA' && mv.pagamento && ['AGUARDANDO_COBRANCA', 'PROCESSANDO', 'FALHOU'].includes(mv.pagamento.status) && (
+                        <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-between gap-3 flex-wrap bg-amber-50 rounded-[13px] px-3.5 py-3">
+                          <div className="flex items-start gap-2 text-xs font-bold text-amber-700">
+                            <WarningIcon className="w-4 h-4 shrink-0 mt-px" />
+                            {mv.pagamento.status === 'FALHOU'
+                              ? 'A cobrança foi recusada — tente de novo pra reservar o pagamento.'
+                              : mv.pagamento.status === 'PROCESSANDO'
+                              ? 'Cobrança gerada, aguardando confirmação.'
+                              : 'Falta escolher a forma de pagamento pra reservar o valor.'}
+                          </div>
+                          <button
+                            onClick={() => hired && irParaPagamento(mv.id, hired.id)}
+                            className="shrink-0 px-3.5 py-2 rounded-lg bg-primary text-white text-xs font-extrabold"
+                          >
+                            Finalizar cobrança
+                          </button>
+                        </div>
+                      )}
+
                       {mv.status === 'PREENCHIDA' && mv.pagamento && mv.pagamento.status === 'RETIDO' && (
                         <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2.5 bg-amber-50 rounded-[13px] px-3.5 py-3">
                           <div className="flex items-start gap-2 text-xs font-bold text-amber-700">
                             <WarningIcon className="w-4 h-4 shrink-0 mt-px" />
                             {hired?.profissional?.nome || 'O profissional'} concluiu o plantão — confirme se ele compareceu.
                           </div>
-                          <div className="flex gap-2 flex-wrap">
-                            <button onClick={() => handleLiberarPagamento(mv.pagamento!.id)} className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-extrabold">
-                              Confirmar presença
-                            </button>
-                            {/* Fluxo de "não compareceu" ainda em desenho (depende de como o pagamento vai
-                                funcionar quando integrarmos um gateway de verdade) — botão fica visível,
-                                sem ação por enquanto. */}
-                            <button className="px-4 py-2 rounded-lg bg-white border border-red-200 text-danger text-xs font-extrabold">
-                              Não compareceu
-                            </button>
-                          </div>
+                          {naoCompareceuId === mv.pagamento.id ? (
+                            <div className="flex flex-col gap-2 bg-white rounded-lg p-3 border border-red-200">
+                              <div className="text-xs font-bold text-danger">
+                                Confirma que {hired?.profissional?.nome || 'o profissional'} não compareceu? O valor retido volta pra você e a vaga é encerrada.
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={() => setNaoCompareceuId(null)} className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-xs font-bold">
+                                  Cancelar
+                                </button>
+                                <button
+                                  onClick={() => confirmarNaoCompareceu(mv.pagamento!.id)}
+                                  disabled={naoCompareceuProcessandoId === mv.pagamento.id}
+                                  className="flex-1 px-3 py-2 rounded-lg bg-danger text-white text-xs font-extrabold disabled:opacity-60"
+                                >
+                                  {naoCompareceuProcessandoId === mv.pagamento.id ? 'Enviando...' : 'Sim, não compareceu'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={() => handleLiberarPagamento(mv.pagamento!.id)}
+                                disabled={liberandoId === mv.pagamento!.id}
+                                className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-extrabold disabled:opacity-60"
+                              >
+                                {liberandoId === mv.pagamento!.id ? 'Confirmando...' : 'Confirmar presença'}
+                              </button>
+                              <button
+                                onClick={() => setNaoCompareceuId(mv.pagamento!.id)}
+                                disabled={liberandoId === mv.pagamento!.id}
+                                className="px-4 py-2 rounded-lg bg-white border border-red-200 text-danger text-xs font-extrabold disabled:opacity-60"
+                              >
+                                Não compareceu
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1478,15 +1638,42 @@ function ClinicaPageInner() {
 
         {tab === 'pagamento' && selectedMv && (() => {
           const valorProfissional = parseFloat(selectedMv.valor) || 0;
-          const taxa = valorProfissional * TAXA_PLATAFORMA;
-          const totalClinica = valorProfissional + taxa;
+          const taxaConectVet = valorProfissional * TAXA_PLATAFORMA;
+          const totalSemGateway = valorProfissional + taxaConectVet;
           const local = localDaVaga(selectedMv);
+          // selectedMv.pagamento é sempre o pagamento MAIS RECENTE da vaga — depois de
+          // uma desistência/não comparecimento a vaga pode ter um pagamento antigo (de
+          // outro candidato, já reembolsado/cancelado) enquanto o candidato que está
+          // sendo revisado agora ainda nem foi aceito. Só conta como "já aceito" se esse
+          // pagamento mais recente for realmente da candidatura que está na tela.
+          const pagamento = selectedMv.pagamento?.candidaturaId === selectedCandId ? selectedMv.pagamento : undefined;
+          const status = pagamento?.status;
+          const jaAceito = !!pagamento;
+          const aguardandoOuFalhou = status === 'AGUARDANDO_COBRANCA' || status === 'FALHOU';
+          const processando = status === 'PROCESSANDO';
+          // Qualquer status que não seja um dos três de cima já é terminal (retido,
+          // liberado, liberado pendente, reembolsado, cancelado, em disputa) — a
+          // clínica só chega aqui de novo voltando/recarregando a tela, então mostra
+          // um resumo do que aconteceu em vez de ficar sem nenhuma ação na tela.
+          const outroTerminal = jaAceito && !aguardandoOuFalhou && !processando;
+          const STATUS_FINAL: Record<string, { titulo: string; sub: string }> = {
+            RETIDO: { titulo: 'Pagamento retido', sub: 'O valor fica retido até você confirmar a presença do profissional.' },
+            LIBERADO: { titulo: 'Pagamento liberado', sub: 'O valor já foi transferido ao profissional.' },
+            LIBERADO_PENDENTE: { titulo: 'Liberação pendente', sub: 'Presença confirmada — falta o profissional configurar onde receber.' },
+            REEMBOLSADO: { titulo: 'Pagamento reembolsado', sub: 'O valor voltou pra você.' },
+            CANCELADO: { titulo: 'Contratação cancelada', sub: 'Nenhum valor chegou a ser cobrado.' },
+            EM_DISPUTA: { titulo: 'Pagamento em disputa', sub: 'Uma contestação está em análise pelo nosso time.' },
+          };
+          const finalInfo = status ? STATUS_FINAL[status] : undefined;
+          const tituloEtapa = !jaAceito ? 'Confirmar contratação' : processando ? 'Aguardando confirmação' : aguardandoOuFalhou ? 'Escolher forma de pagamento' : finalInfo?.titulo || 'Pagamento';
           return (
             <div className="max-w-[1080px] mx-auto p-8">
               <button onClick={voltarAoPainel} className="text-sm font-bold text-white/80 hover:text-white mb-4">← Voltar aos candidatos</button>
               <div className="text-sm font-bold text-primaryTint mb-1">Pagamento</div>
-              <h1 className="text-2xl font-extrabold mb-1 text-white">Confirmar contratação</h1>
-              <p className="text-sm text-white/85 mb-6">Revise os dados antes de reservar o pagamento</p>
+              <h1 className="text-2xl font-extrabold mb-1 text-white">{tituloEtapa}</h1>
+              <p className="text-sm text-white/85 mb-6">
+                {!jaAceito ? 'Revise os dados antes de contratar' : processando ? 'A cobrança foi enviada — aguardando confirmação' : aguardandoOuFalhou ? 'Escolha Pix ou cartão pra cobrar a clínica' : finalInfo?.sub || ''}
+              </p>
 
               <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-5 items-start">
                 <div className="flex flex-col gap-3">
@@ -1534,44 +1721,98 @@ function ClinicaPageInner() {
 
                 <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
                   <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mb-3">Resumo do pagamento</div>
-                  <div className="flex justify-between text-sm"><span>Valor ao profissional</span><span className="font-bold">R$ {valorProfissional.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-sm text-gray-500 mt-1"><span>Taxa da ConectVet (5%)</span><span>+ R$ {taxa.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-base font-extrabold pt-2.5 mt-2 border-t border-gray-200"><span>Total que você paga</span><span>R$ {totalClinica.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-sm"><span>Valor ao profissional</span><span className="font-bold">R$ {(pagamento ? Number(pagamento.valorLiquido) : valorProfissional).toFixed(2)}</span></div>
+                  <div className="flex justify-between text-sm text-gray-500 mt-1"><span>Taxa da ConectVet (5%)</span><span>+ R$ {(pagamento ? Number(pagamento.taxa) : taxaConectVet).toFixed(2)}</span></div>
+                  {pagamento?.valorTotal != null && (
+                    <div className="flex justify-between text-sm text-gray-500 mt-1">
+                      <span>Taxa do gateway ({pagamento.formaPagamento === 'PIX' ? 'Pix' : 'Cartão'})</span>
+                      <span>+ R$ {Number(pagamento.taxaGateway).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-base font-extrabold pt-2.5 mt-2 border-t border-gray-200">
+                    <span>Total que você paga</span>
+                    <span>R$ {(pagamento?.valorTotal != null ? Number(pagamento.valorTotal) : pagamento ? Number(pagamento.valorBruto) : totalSemGateway).toFixed(2)}</span>
+                  </div>
 
-                  <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mt-4 mb-2">Forma de pagamento</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormaPagamento('pix')}
-                      className={`rounded-xl border-[1.5px] p-2.5 text-center transition-colors ${formaPagamento === 'pix' ? 'border-primary bg-primaryTint' : 'border-gray-200 hover:border-gray-300'}`}
-                    >
-                      <div className="text-[13px] font-extrabold text-ink">Pix</div>
-                      <div className="text-[10px] text-gray-400">Aprovação imediata</div>
+                  {/* Etapa 1: ainda não aceitou a candidatura — só confirma a contratação. */}
+                  {!jaAceito && (
+                    <>
+                      <div className="flex items-start gap-2 bg-primaryTint text-primaryDeep text-[11.5px] font-semibold leading-relaxed rounded-xl px-3 py-2.5 mt-4">
+                        <LockIcon className="w-3.5 h-3.5 shrink-0 mt-px" />
+                        Depois de confirmar, você escolhe Pix ou cartão pra gerar a cobrança.
+                      </div>
+                      <button onClick={confirmarContratacao} disabled={confirmandoContratacao} className="w-full mt-4 py-3 rounded-lg bg-ink text-white text-sm font-bold shadow-sm disabled:opacity-60">
+                        {confirmandoContratacao ? 'Confirmando...' : 'Confirmar contratação'}
+                      </button>
+                      <button onClick={voltarAoPainel} className="w-full mt-2 py-2 text-xs font-bold text-gray-400 hover:text-gray-600 underline underline-offset-2">
+                        Cancelar
+                      </button>
+                    </>
+                  )}
+
+                  {/* Etapa 2: candidatura aceita, escolhendo/gerando a cobrança. */}
+                  {aguardandoOuFalhou && (
+                    <>
+                      {status === 'FALHOU' && (
+                        <div className="flex items-start gap-2 bg-red-50 text-danger text-[11.5px] font-bold leading-relaxed rounded-xl px-3 py-2.5 mt-4">
+                          <WarningIcon className="w-3.5 h-3.5 shrink-0 mt-px" />
+                          {pagamento?.motivoFalha || 'Pagamento recusado.'} Confira os dados ou tente outro meio de pagamento.
+                        </div>
+                      )}
+                      <div className="text-xs font-extrabold uppercase tracking-wide text-gray-400 mt-4 mb-2">Forma de pagamento</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormaPagamento('pix')}
+                          className={`rounded-xl border-[1.5px] p-2.5 text-center transition-colors ${formaPagamento === 'pix' ? 'border-primary bg-primaryTint' : 'border-gray-200 hover:border-gray-300'}`}
+                        >
+                          <div className="text-[13px] font-extrabold text-ink">Pix</div>
+                          <div className="text-[10px] text-gray-400">Aprovação imediata</div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormaPagamento('cartao')}
+                          className={`rounded-xl border-[1.5px] p-2.5 text-center transition-colors ${formaPagamento === 'cartao' ? 'border-primary bg-primaryTint' : 'border-gray-200 hover:border-gray-300'}`}
+                        >
+                          <div className="text-[13px] font-extrabold text-ink">Cartão de crédito</div>
+                          <div className="text-[10px] text-gray-400">Mastercard •••• 4242</div>
+                        </button>
+                      </div>
+                      <div className="text-[11px] text-gray-400 font-semibold mt-2">
+                        A taxa do gateway aparece no resumo assim que você gerar a cobrança.
+                      </div>
+                      <button onClick={handleCobrar} disabled={cobrando} className="w-full mt-4 py-3 rounded-lg bg-ink text-white text-sm font-bold shadow-sm disabled:opacity-60">
+                        {cobrando ? 'Gerando cobrança...' : `Cobrar ${formaPagamento === 'pix' ? 'com Pix' : 'no cartão'}`}
+                      </button>
+                    </>
+                  )}
+
+                  {/* Etapa 3: cobrança "enviada" — dev decide o resultado no lugar do gateway/webhook real. */}
+                  {processando && (
+                    <>
+                      <div className="flex items-start gap-2 bg-primaryTint text-primaryDeep text-[11.5px] font-semibold leading-relaxed rounded-xl px-3 py-2.5 mt-4">
+                        <LockIcon className="w-3.5 h-3.5 shrink-0 mt-px" />
+                        {formaPagamento === 'pix' ? 'QR gerado — aguardando o pagamento via Pix.' : 'Cobrança enviada pro cartão — aguardando aprovação da operadora.'}
+                      </div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-wide text-gray-400 mt-4 mb-2">Simulação (sem gateway real ainda)</div>
+                      <div className="flex flex-col gap-2">
+                        <button onClick={() => handleSimular('aprovado')} disabled={simulando} className="w-full py-3 rounded-lg bg-primary text-white text-sm font-bold shadow-sm disabled:opacity-60">
+                          🧪 Simular aprovado
+                        </button>
+                        <button onClick={() => handleSimular('recusado')} disabled={simulando} className="w-full py-2.5 rounded-lg border border-red-200 text-danger text-sm font-bold disabled:opacity-60">
+                          🧪 Simular recusado
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Fallback: pagamento em qualquer status terminal (ex.: página recarregada
+                      depois de já ter retido, liberado, reembolsado ou cancelado). */}
+                  {outroTerminal && (
+                    <button onClick={voltarAoPainel} className="w-full mt-4 py-3 rounded-lg bg-ink text-white text-sm font-bold shadow-sm">
+                      Voltar aos candidatos
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormaPagamento('cartao')}
-                      className={`rounded-xl border-[1.5px] p-2.5 text-center transition-colors ${formaPagamento === 'cartao' ? 'border-primary bg-primaryTint' : 'border-gray-200 hover:border-gray-300'}`}
-                    >
-                      <div className="text-[13px] font-extrabold text-ink">Cartão de crédito</div>
-                      <div className="text-[10px] text-gray-400">Mastercard •••• 4242</div>
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-gray-400 font-semibold mt-2">
-                    {formaPagamento === 'pix' ? 'Você recebe a chave Pix assim que confirmar.' : 'Cobrança na fatura do cartão cadastrado.'}
-                  </div>
-
-                  <div className="flex items-start gap-2 bg-primaryTint text-primaryDeep text-[11.5px] font-semibold leading-relaxed rounded-xl px-3 py-2.5 mt-4">
-                    <LockIcon className="w-3.5 h-3.5 shrink-0 mt-px" />
-                    O valor fica retido até você confirmar a presença do profissional no dia do plantão.
-                  </div>
-
-                  <button onClick={confirmarPagamento} className="w-full mt-4 py-3 rounded-lg bg-ink text-white text-sm font-bold shadow-sm">
-                    Confirmar pagamento {formaPagamento === 'pix' ? 'com Pix' : 'no cartão'}
-                  </button>
-                  <button onClick={voltarAoPainel} className="w-full mt-2 py-2 text-xs font-bold text-gray-400 hover:text-gray-600 underline underline-offset-2">
-                    Cancelar
-                  </button>
+                  )}
                 </div>
               </div>
             </div>

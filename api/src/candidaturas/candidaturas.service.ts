@@ -8,30 +8,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCandidaturaDto } from './dto/create-candidatura.dto';
 import {
   CandidaturaStatus,
+  MotivoReembolso,
   NotificacaoTipo,
   PagamentoStatus,
   VagaStatus,
 } from '../../generated/prisma/enums';
 import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
-
-const TAXA_PLATAFORMA = 0.05;
-
-// Só dá pra desistir antes do plantão começar — depois disso já é um caso de
-// não comparecimento (fluxo diferente, que não reabre a vaga). Mesmo critério
-// de fuso horário (America/Sao_Paulo) usado no front pra "hoje"/"agora".
-function plantaoAindaNaoComecou(vaga: { data: Date; horaInicio: string }): boolean {
-  const hojeBrasil = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-  const dataVaga = vaga.data.toISOString().slice(0, 10);
-  if (dataVaga > hojeBrasil) return true;
-  if (dataVaga < hojeBrasil) return false;
-  const agoraBrasil = new Date().toLocaleTimeString('en-GB', {
-    timeZone: 'America/Sao_Paulo',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  return agoraBrasil < vaga.horaInicio;
-}
+import { TAXA_PLATAFORMA } from '../pagamentos/taxas';
+import {
+  comPagamentoMaisRecente,
+  PAGAMENTO_MAIS_RECENTE_INCLUDE,
+} from '../pagamentos/pagamento.utils';
+import { plantaoAindaNaoComecou } from '../common/plantao.utils';
 
 @Injectable()
 export class CandidaturasService {
@@ -75,13 +64,19 @@ export class CandidaturasService {
     const profissional = await this.prisma.profissional.findUniqueOrThrow({
       where: { userId: profissionalUserId },
     });
-    return this.prisma.candidatura.findMany({
+    const candidaturas = await this.prisma.candidatura.findMany({
       where: { profissionalId: profissional.id },
       include: {
-        vaga: { include: { clinica: { select: { nome: true, logoUrl: true } } } },
+        vaga: {
+          include: {
+            clinica: { select: { nome: true, logoUrl: true } },
+            pagamentos: PAGAMENTO_MAIS_RECENTE_INCLUDE,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
+    return candidaturas.map((c) => ({ ...c, vaga: comPagamentoMaisRecente(c.vaga) }));
   }
 
   /** Desistência da candidatura pelo próprio profissional — só permitida enquanto ainda não houve resposta. */
@@ -161,7 +156,12 @@ export class CandidaturasService {
     return atualizada;
   }
 
-  /** Aceita a candidatura e já retém o pagamento — cada vaga permite apenas um aprovado por enquanto. */
+  /**
+   * Aceita a candidatura e cria o registro de pagamento — ainda sem cobrança
+   * de verdade nenhuma (isso só acontece quando a clínica escolhe Pix/Cartão
+   * na aba de pagamento, ver PagamentosService.cobrar). Cada vaga permite
+   * apenas um aprovado por enquanto.
+   */
   async aceitar(clinicaUserId: string, candidaturaId: string) {
     const candidatura = await this.buscarComDono(clinicaUserId, candidaturaId);
 
@@ -210,7 +210,7 @@ export class CandidaturasService {
           valorBruto,
           taxa,
           valorLiquido,
-          status: PagamentoStatus.RETIDO,
+          status: PagamentoStatus.AGUARDANDO_COBRANCA,
         },
       });
     });
@@ -268,6 +268,10 @@ export class CandidaturasService {
       include: { profissional: { select: { userId: true } } },
     });
 
+    const pagamento = await this.prisma.pagamento.findUnique({
+      where: { candidaturaId },
+    });
+
     await this.prisma.$transaction(async (tx) => {
       await tx.candidatura.update({
         where: { id: candidaturaId },
@@ -281,10 +285,38 @@ export class CandidaturasService {
         });
       }
 
-      // Nenhum valor chegou a ser pago de fato (RETIDO é só controle interno
-      // hoje, sem gateway) — o registro some junto com a desistência, pra
-      // abrir espaço pro pagamento da próxima aceitação nessa mesma vaga.
-      await tx.pagamento.deleteMany({ where: { candidaturaId } });
+      // Se a cobrança já tinha sido aprovada, é reembolso de verdade (a
+      // clínica recebe o valor cheio de volta — política decidida no desenho
+      // do gateway). Se ainda nem tinha sido cobrada, não tem o que devolver:
+      // só cancela. Mantém o registro (não apaga mais) pra ter histórico —
+      // a próxima aceitação nessa mesma vaga cria um Pagamento novo.
+      if (pagamento) {
+        if (pagamento.status === PagamentoStatus.RETIDO) {
+          await tx.pagamento.update({
+            where: { candidaturaId },
+            data: {
+              status: PagamentoStatus.REEMBOLSADO,
+              motivoReembolso: MotivoReembolso.DESISTENCIA,
+              reembolsadoEm: new Date(),
+            },
+          });
+        } else if (
+          (
+            [
+              PagamentoStatus.AGUARDANDO_COBRANCA,
+              PagamentoStatus.PROCESSANDO,
+              PagamentoStatus.FALHOU,
+            ] as PagamentoStatus[]
+          ).includes(pagamento.status)
+        ) {
+          await tx.pagamento.update({
+            where: { candidaturaId },
+            data: { status: PagamentoStatus.CANCELADO },
+          });
+        }
+        // Qualquer outro status (liberado, já reembolsado etc.) não deveria
+        // ser alcançável aqui — plantaoAindaNaoComecou já barrou antes.
+      }
 
       await tx.vaga.update({
         where: { id: candidatura.vagaId },
