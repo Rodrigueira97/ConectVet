@@ -41,8 +41,8 @@ export default function HomePublica() {
               Nenhum <span className="text-[#baf0ea]">profissional</span> sem plantão.
             </h1>
             <p className="text-[13.5px] sm:text-[15.5px] leading-relaxed text-white/90 max-w-[480px] my-4">
-              ConectVet: a maneira mais rápida e segura de conectar clínicas veterinárias e profissionais
-              qualificados, sem burocracia.
+              ConectVet: a maneira mais simples de conectar clínicas veterinárias e profissionais qualificados,
+              de forma rápida e segura.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
               <button
