@@ -120,7 +120,7 @@ export default function HomePublica() {
           <StarIcon className="w-3.5 h-3.5 text-primaryDeep" /> Cadastro grátis, sem mensalidade
         </span>
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-ink bg-gray-50 px-3.5 py-2 rounded-full">
-          <ShieldIcon className="w-3.5 h-3.5 text-primaryDeep" /> Perfis conferidos antes de aparecer
+          <ShieldIcon className="w-3.5 h-3.5 text-primaryDeep" /> Perfis avaliados
         </span>
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-ink bg-gray-50 px-3.5 py-2 rounded-full">
           <LockIcon className="w-3.5 h-3.5 text-primaryDeep" /> Pagamento protegido até confirmar presença
