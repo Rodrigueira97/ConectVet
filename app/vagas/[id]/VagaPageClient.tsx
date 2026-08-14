@@ -10,7 +10,7 @@ import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { VagaCardPublica } from '@/app/components/VagaCardPublica';
 import { VagaDetalheSkeleton } from '@/app/components/skeletons/VagaDetalheSkeleton';
 import { EmptyState } from '@/app/components/EmptyState';
-import { SearchIcon } from '@/app/components/icons';
+import { SearchIcon, WarningIcon } from '@/app/components/icons';
 import { useToast } from '@/app/components/Toast';
 import { useContaLogada } from '@/app/hooks/useContaLogada';
 import {
@@ -37,6 +37,8 @@ function VagaPublicaInner() {
   const [vaga, setVaga] = useState<Vaga | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(false);
+  const [erroCarregamento, setErroCarregamento] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
   const [minhaCandidatura, setMinhaCandidatura] = useState<Candidatura | null>(null);
   const [gateAberto, setGateAberto] = useState(false);
   const [candidatando, setCandidatando] = useState(false);
@@ -46,12 +48,21 @@ function VagaPublicaInner() {
     let cancelado = false;
     setLoading(true);
     setErro(false);
+    setErroCarregamento(false);
     getVaga(vagaId)
       .then((v) => { if (!cancelado) setVaga(v); })
-      .catch(() => { if (!cancelado) setErro(true); })
+      .catch((err) => {
+        if (cancelado) return;
+        // 404 de verdade (vaga removida/link errado) é diferente de uma falha
+        // transitória de rede ou da API fora do ar — tratar as duas como "vaga
+        // não encontrada" escondia o problema real por trás de uma instabilidade
+        // passageira, sem dar chance de tentar de novo.
+        if (err instanceof ApiError && err.status === 404) setErro(true);
+        else setErroCarregamento(true);
+      })
       .finally(() => { if (!cancelado) setLoading(false); });
     return () => { cancelado = true; };
-  }, [vagaId]);
+  }, [vagaId, tentativa]);
 
   useEffect(() => {
     if (!logged) return;
@@ -119,19 +130,29 @@ function VagaPublicaInner() {
     return <VagaDetalheSkeleton sidebar={logged === true} outrasVagas={logged === false} />;
   }
 
-  if (erro || !vaga) {
+  if (erro || erroCarregamento || !vaga) {
     return (
       <div className="min-h-screen bg-paws">
         <PublicHeader />
         <div className="max-w-[720px] mx-auto p-8">
           <div className="bg-white rounded-2xl shadow-sm p-10">
-            <EmptyState
-              icon={<SearchIcon className="w-6 h-6" />}
-              title="Vaga não encontrada"
-              description="Essa vaga pode ter sido removida, ou o link que você seguiu está incorreto."
-              actionLabel="Ver vagas disponíveis"
-              onAction={() => router.push('/vagas')}
-            />
+            {erroCarregamento ? (
+              <EmptyState
+                icon={<WarningIcon className="w-6 h-6" />}
+                title="Não foi possível carregar a vaga"
+                description="Algo deu errado ao buscar os detalhes desse plantão. Tente de novo em instantes."
+                actionLabel="Tentar novamente"
+                onAction={() => setTentativa((t) => t + 1)}
+              />
+            ) : (
+              <EmptyState
+                icon={<SearchIcon className="w-6 h-6" />}
+                title="Vaga não encontrada"
+                description="Essa vaga pode ter sido removida, ou o link que você seguiu está incorreto."
+                actionLabel="Ver vagas disponíveis"
+                onAction={() => router.push('/vagas')}
+              />
+            )}
           </div>
         </div>
         <PublicFooter />
