@@ -37,7 +37,7 @@ export default function HomePublica() {
               🐾 Plantão veterinário, sem enrolação
             </span>
             <h1 className="text-[28px] sm:text-[38px] font-extrabold leading-[1.18] text-white -tracking-[0.01em] mb-1.5">
-              Nenhuma clínica sem cobertura.<br />
+              Nenhuma <span className="text-[#baf0ea]">clínica</span> sem cobertura.<br />
               Nenhum <span className="text-[#baf0ea]">profissional</span> sem plantão.
             </h1>
             <p className="text-[13.5px] sm:text-[15.5px] leading-relaxed text-white/90 max-w-[480px] my-4">
