@@ -1478,7 +1478,7 @@ function ProfissionalPageInner() {
                     {isVeterinarioFormado(perfil.funcao) && perfil.areaAtuacao && (
                       <span className="inline-flex bg-primaryTint text-primaryDeep text-[12.5px] font-bold px-3 py-1.5 rounded-full">{perfil.areaAtuacao}</span>
                     )}
-                    {perfil.observacoes && <p className="text-sm leading-relaxed text-gray-700 mt-3">{perfil.observacoes}</p>}
+                    {perfil.observacoes && <p className="text-sm leading-relaxed text-gray-700 mt-3 whitespace-pre-wrap">{perfil.observacoes}</p>}
                   </div>
                 )}
 

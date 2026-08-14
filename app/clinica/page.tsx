@@ -150,7 +150,7 @@ function PerfilProfissionalView({
               {isVeterinarioFormado(profissional.funcao) && profissional.areaAtuacao && (
                 <span className="inline-flex bg-primaryTint text-primaryDeep text-[12.5px] font-bold px-3 py-1.5 rounded-full mb-2">{profissional.areaAtuacao}</span>
               )}
-              {profissional.observacoes && <p className="text-sm leading-relaxed text-gray-700">{profissional.observacoes}</p>}
+              {profissional.observacoes && <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">{profissional.observacoes}</p>}
             </div>
           )}
           <div className="bg-white border border-gray-200 rounded-2xl p-5">
