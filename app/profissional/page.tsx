@@ -597,15 +597,20 @@ function ProfissionalPageInner() {
       const chips = Array.from(row.querySelectorAll<HTMLButtonElement>('[data-filtro-chip]'));
       const gap = 8;
 
-      chips.forEach((c) => { c.hidden = false; });
-      more.hidden = false;
+      // display via style, não o atributo `hidden` — os chips também têm a classe
+      // `inline-flex` do Tailwind, que é CSS de autor e vence o `[hidden]` do
+      // navegador (CSS de user-agent) mesmo com especificidade igual. Com `hidden`
+      // os chips "escondidos" continuavam ocupando espaço, só cortados pelo
+      // overflow do container — e empurravam o botão "Mais" pra fora da área visível.
+      chips.forEach((c) => { c.style.display = ''; });
+      more.style.display = '';
 
       const containerWidth = row.clientWidth;
       const moreWidth = more.offsetWidth + gap;
       const totalChips = chips.reduce((soma, c, i) => soma + c.offsetWidth + (i > 0 ? gap : 0), 0);
 
       if (totalChips <= containerWidth) {
-        more.hidden = true;
+        more.style.display = 'none';
         setFiltrosOcultos([]);
         return;
       }
@@ -618,7 +623,7 @@ function ProfissionalPageInner() {
         if (acumulado + w <= orcamento) {
           acumulado += w;
         } else {
-          c.hidden = true;
+          c.style.display = 'none';
           ocultos.push(c.dataset.filtroChip as 'TODAS' | StatusCandidatura);
         }
       });
