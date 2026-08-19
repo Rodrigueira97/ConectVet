@@ -334,7 +334,7 @@ export function VagaDetalheView({
             <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primary'}`}>
               <CalendarIcon className="w-[18px] h-[18px]" />
             </div>
-            <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-500 mb-1">Quando</div>
+            <div className={`text-[11.5px] font-extrabold uppercase tracking-wide mb-1 ${apagada ? 'text-gray-400' : 'text-primaryDeep/75'}`}>Quando</div>
             <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>{formatQuando(vaga.data)}</div>
             <div className="text-[13px] font-bold text-gray-500 mt-1">{vaga.horaInicio} – {vaga.horaFim} · {horasLabel}</div>
           </div>
@@ -342,7 +342,7 @@ export function VagaDetalheView({
             <div className={`w-[34px] h-[34px] rounded-[10px] text-white flex items-center justify-center mb-3 ${apagada ? 'bg-gray-400' : 'bg-primary'}`}>
               <PinIcon className="w-[18px] h-[18px]" />
             </div>
-            <div className="text-[11.5px] font-extrabold uppercase tracking-wide text-gray-500 mb-1">Onde</div>
+            <div className={`text-[11.5px] font-extrabold uppercase tracking-wide mb-1 ${apagada ? 'text-gray-400' : 'text-primaryDeep/75'}`}>Onde</div>
             <div className={`text-[22px] font-extrabold leading-tight ${apagada ? 'text-gray-500' : 'text-ink'}`}>{localCurto}</div>
             <a href={mapsLink(local)} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-semibold mt-1 inline-block hover:underline ${apagada ? 'text-gray-400' : 'text-primary'}`}>
               Ver no mapa →
