@@ -8,7 +8,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ContaRecebimentoStatus,
-  MotivoReembolso,
   NotificacaoTipo,
   PagamentoStatus,
   Role,
@@ -17,10 +16,21 @@ import {
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { CobrarPagamentoDto } from './dto/cobrar-pagamento.dto';
 import { SimularPagamentoDto } from './dto/simular-pagamento.dto';
+import { ReportarProblemaDto } from './dto/reportar-problema.dto';
 import { PAYMENT_PROVIDER, PaymentProvider } from './providers/payment-provider.interface';
 import { plantaoJaTerminou } from '../common/plantao.utils';
 
 type AuthUser = { userId: string; role: string };
+
+/** Formato mínimo que `executarLiberacao` precisa — tanto o pagamento "cheio"
+ * vindo de `buscarComDono` quanto o montado à mão em `autoLiberarPorCandidaturaId`
+ * cabem aqui, já que o segundo não tem motivo de carregar vaga.clinica. */
+type PagamentoParaLiberar = {
+  id: string;
+  vagaId: string;
+  valorLiquido: number | string | { toString(): string };
+  candidatura: { profissionalId: string; profissional: { userId: string } };
+};
 
 @Injectable()
 export class PagamentosService {
@@ -109,17 +119,22 @@ export class PagamentosService {
     });
   }
 
-  /** Clínica marca que o profissional não apareceu — reembolsa e fecha a vaga (não reabre). */
-  async naoCompareceu(user: AuthUser, pagamentoId: string) {
+  /**
+   * Clínica reporta um problema com o plantão (ausência, atraso, comportamento
+   * etc.) — não decide nada sozinho: só abre uma disputa e pausa o pagamento
+   * retido até o suporte da ConectVet analisar (resolução manual, fora do
+   * app por enquanto, ver comentário de EM_DISPUTA no schema). Substitui o
+   * antigo botão "Não compareceu", que devolvia o valor na hora sem revisão.
+   */
+  async reportarProblema(user: AuthUser, pagamentoId: string, dto: ReportarProblemaDto) {
     const pagamento = await this.buscarComDono(user, pagamentoId);
-    if (pagamento.status !== PagamentoStatus.RETIDO) {
+    if (
+      !(
+        [PagamentoStatus.RETIDO, PagamentoStatus.LIBERADO_PENDENTE] as PagamentoStatus[]
+      ).includes(pagamento.status)
+    ) {
       throw new ConflictException(
-        'Só é possível marcar "não compareceu" enquanto o pagamento está retido.',
-      );
-    }
-    if (!plantaoJaTerminou(pagamento.vaga)) {
-      throw new ConflictException(
-        'O plantão ainda não terminou — só dá pra marcar "não compareceu" depois do horário.',
+        'Esse pagamento já foi liberado ou resolvido — não dá mais pra reportar por aqui.',
       );
     }
 
@@ -131,20 +146,47 @@ export class PagamentosService {
       return tx.pagamento.update({
         where: { id: pagamentoId },
         data: {
-          status: PagamentoStatus.REEMBOLSADO,
-          motivoReembolso: MotivoReembolso.NAO_COMPARECEU,
-          reembolsadoEm: new Date(),
+          status: PagamentoStatus.EM_DISPUTA,
+          disputaMotivo: dto.motivo,
+          disputaDescricao: dto.descricao || null,
+          disputaAbertaEm: new Date(),
         },
       });
     });
 
     await this.notificacoesService.criar(
       pagamento.candidatura.profissional.userId,
-      NotificacaoTipo.MARCADO_NAO_COMPARECEU,
-      `A clínica marcou que você não compareceu ao plantão de ${pagamento.vaga.clinica.nome}.`,
+      NotificacaoTipo.PROBLEMA_REPORTADO,
+      `A clínica relatou um problema com o plantão de ${pagamento.vaga.clinica.nome}. Nossa equipe vai analisar e volta com uma resposta.`,
     );
 
     return atualizado;
+  }
+
+  /**
+   * Libera automaticamente um pagamento retido cujo check-in já foi feito e
+   * o plantão já terminou — chamado ao carregar "minhas vagas"/"minhas
+   * candidaturas" (não existe cron nesse projeto), nunca por um clique da
+   * clínica. Devolve `null` quando ainda não é elegível.
+   */
+  async autoLiberarPorCandidaturaId(candidaturaId: string) {
+    const candidatura = await this.prisma.candidatura.findUnique({
+      where: { id: candidaturaId },
+      include: { vaga: true, profissional: { select: { userId: true } } },
+    });
+    if (!candidatura || !candidatura.checkInEm) return null;
+    if (!plantaoJaTerminou(candidatura.vaga)) return null;
+
+    const pagamento = await this.prisma.pagamento.findUnique({ where: { candidaturaId } });
+    if (!pagamento || pagamento.status !== PagamentoStatus.RETIDO) return null;
+
+    return this.executarLiberacao({
+      ...pagamento,
+      candidatura: {
+        profissionalId: candidatura.profissionalId,
+        profissional: { userId: candidatura.profissional.userId },
+      },
+    });
   }
 
   async liberar(user: AuthUser, pagamentoId: string) {
@@ -177,9 +219,7 @@ export class PagamentosService {
   }
 
   /** Núcleo da liberação — assume que quem chamou já validou que pode. */
-  private async executarLiberacao(
-    pagamento: Awaited<ReturnType<PagamentosService['buscarComDono']>>,
-  ) {
+  private async executarLiberacao(pagamento: PagamentoParaLiberar) {
     const contaRecebimento = await this.prisma.contaRecebimento.findUnique({
       where: { profissionalId: pagamento.candidatura.profissionalId },
     });

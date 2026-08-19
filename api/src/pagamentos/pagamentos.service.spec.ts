@@ -135,38 +135,81 @@ describe('PagamentosService', () => {
     });
   });
 
-  describe('naoCompareceu', () => {
-    it('bloqueia antes do plantão terminar', async () => {
-      const amanha = new Date();
-      amanha.setDate(amanha.getDate() + 1);
-      const base = pagamentoFixture({ status: PagamentoStatus.RETIDO });
-      prisma.pagamento.findUnique.mockResolvedValue({
-        ...base,
-        vaga: { ...(base as any).vaga, data: amanha },
-      });
-
-      await expect(service.naoCompareceu(clinicaUser, 'pag-1')).rejects.toBeInstanceOf(
-        ConflictException,
+  describe('reportarProblema', () => {
+    it('recusa reportar um pagamento que já foi liberado', async () => {
+      prisma.pagamento.findUnique.mockResolvedValue(
+        pagamentoFixture({ status: PagamentoStatus.LIBERADO }),
       );
+
+      await expect(
+        service.reportarProblema(clinicaUser, 'pag-1', { motivo: 'Não compareceu' }),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
 
-    it('reembolsa e fecha a vaga depois que o plantão termina', async () => {
-      const ontem = new Date();
-      ontem.setDate(ontem.getDate() - 1);
-      const base = pagamentoFixture({ status: PagamentoStatus.RETIDO });
-      const pagamento = { ...base, vaga: { ...(base as any).vaga, data: ontem } };
+    it('abre a disputa, pausa o pagamento e fecha a vaga', async () => {
+      const pagamento = pagamentoFixture({ status: PagamentoStatus.RETIDO });
       prisma.pagamento.findUnique.mockResolvedValue(pagamento);
       prisma.pagamento.update.mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
         ...pagamento,
         ...data,
       }));
 
-      const resultado = await service.naoCompareceu(clinicaUser, 'pag-1');
+      const resultado = await service.reportarProblema(clinicaUser, 'pag-1', {
+        motivo: 'Não compareceu',
+        descricao: 'Combinamos 08:00 e ele não apareceu.',
+      });
 
-      expect(resultado.status).toBe(PagamentoStatus.REEMBOLSADO);
+      expect(resultado.status).toBe(PagamentoStatus.EM_DISPUTA);
+      expect(resultado.disputaMotivo).toBe('Não compareceu');
       expect(prisma.vaga.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'vaga-1' } }),
       );
+      expect(notificacoes.criar).toHaveBeenCalledWith(
+        'prof-user-1',
+        expect.anything(),
+        expect.stringContaining('relatou um problema'),
+      );
+    });
+  });
+
+  describe('autoLiberarPorCandidaturaId', () => {
+    it('não libera se não houve check-in', async () => {
+      prisma.candidatura = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'cand-1',
+          profissionalId: 'prof-1',
+          checkInEm: null,
+          vaga: { data: new Date(), horaInicio: '08:00', horaFim: '18:00' },
+          profissional: { userId: 'prof-user-1' },
+        }),
+      };
+
+      const resultado = await service.autoLiberarPorCandidaturaId('cand-1');
+      expect(resultado).toBeNull();
+    });
+
+    it('libera quando houve check-in e o plantão já terminou', async () => {
+      const ontem = new Date();
+      ontem.setDate(ontem.getDate() - 1);
+      prisma.candidatura = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'cand-1',
+          profissionalId: 'prof-1',
+          checkInEm: new Date(),
+          vaga: { data: ontem, horaInicio: '08:00', horaFim: '18:00' },
+          profissional: { userId: 'prof-user-1' },
+        }),
+      };
+      const pagamento = pagamentoFixture({ status: PagamentoStatus.RETIDO });
+      prisma.pagamento.findUnique.mockResolvedValue(pagamento);
+      prisma.contaRecebimento.findUnique.mockResolvedValue(null);
+      prisma.pagamento.update.mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+        ...pagamento,
+        ...data,
+      }));
+
+      const resultado = await service.autoLiberarPorCandidaturaId('cand-1');
+      expect(resultado?.status).toBe(PagamentoStatus.LIBERADO_PENDENTE);
     });
   });
 });

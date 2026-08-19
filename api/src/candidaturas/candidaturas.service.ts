@@ -15,6 +15,7 @@ import {
 } from '../../generated/prisma/enums';
 import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+import { PagamentosService } from '../pagamentos/pagamentos.service';
 import { TAXA_PLATAFORMA } from '../pagamentos/taxas';
 import {
   comPagamentoMaisRecente,
@@ -22,12 +23,19 @@ import {
 } from '../pagamentos/pagamento.utils';
 import { plantaoAindaNaoComecou } from '../common/plantao.utils';
 
+/** Código de 4 dígitos que a clínica passa pro profissional na chegada —
+ * gerado quando a candidatura é aceita, regenerável enquanto ninguém fez check-in ainda. */
+function gerarCodigoCheckIn(): string {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
 @Injectable()
 export class CandidaturasService {
   constructor(
     private prisma: PrismaService,
     private avaliacoesService: AvaliacoesService,
     private notificacoesService: NotificacoesService,
+    private pagamentosService: PagamentosService,
   ) {}
 
   async candidatar(profissionalUserId: string, dto: CreateCandidaturaDto) {
@@ -76,7 +84,75 @@ export class CandidaturasService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return candidaturas.map((c) => ({ ...c, vaga: comPagamentoMaisRecente(c.vaga) }));
+    const comPagamento = candidaturas.map((c) => ({ ...c, vaga: comPagamentoMaisRecente(c.vaga) }));
+
+    // Sem cron nesse projeto: aproveita quem já está olhando a própria lista
+    // pra liberar sozinho o pagamento de quem fez check-in e cujo plantão já
+    // terminou, em vez de depender de a clínica clicar em algo.
+    for (const c of comPagamento) {
+      if (c.checkInEm && c.vaga.pagamento?.status === 'RETIDO') {
+        const liberado = await this.pagamentosService.autoLiberarPorCandidaturaId(c.id);
+        if (liberado) c.vaga.pagamento = liberado;
+      }
+    }
+
+    return comPagamento;
+  }
+
+  /**
+   * Profissional confirma presença digitando, no dia do plantão, o código
+   * que a clínica passou pra ele — substitui o antigo "Confirmar presença"
+   * manual da clínica. Libera o pagamento na hora se o plantão já tiver
+   * terminado (ver `PagamentosService.autoLiberarPorCandidaturaId`).
+   */
+  async checkIn(profissionalUserId: string, candidaturaId: string, codigo: string) {
+    const profissional = await this.prisma.profissional.findUniqueOrThrow({
+      where: { userId: profissionalUserId },
+    });
+    const candidatura = await this.prisma.candidatura.findUnique({
+      where: { id: candidaturaId },
+      include: { vaga: true },
+    });
+    if (!candidatura) throw new NotFoundException('Candidatura não encontrada.');
+    if (candidatura.profissionalId !== profissional.id) {
+      throw new ForbiddenException('Esta candidatura não pertence a você.');
+    }
+    if (candidatura.status !== CandidaturaStatus.ACEITO) {
+      throw new ConflictException('Check-in só é possível numa candidatura aceita.');
+    }
+    if (candidatura.checkInEm) {
+      throw new ConflictException('Você já fez o check-in desse plantão.');
+    }
+    if (plantaoAindaNaoComecou(candidatura.vaga)) {
+      throw new ConflictException('Ainda não é hoje — o check-in libera a partir do dia do plantão.');
+    }
+    if (!candidatura.codigoCheckIn || candidatura.codigoCheckIn !== codigo.trim()) {
+      throw new ConflictException('Código incorreto. Confira com a clínica e tente de novo.');
+    }
+
+    const atualizada = await this.prisma.candidatura.update({
+      where: { id: candidaturaId },
+      data: { checkInEm: new Date() },
+    });
+
+    const pagamento = await this.pagamentosService.autoLiberarPorCandidaturaId(candidaturaId);
+
+    return { candidatura: atualizada, pagamento };
+  }
+
+  /** Clínica gera um novo código, ex.: passou o errado pro profissional na chegada. */
+  async regenerarCodigo(clinicaUserId: string, candidaturaId: string) {
+    const candidatura = await this.buscarComDono(clinicaUserId, candidaturaId);
+    if (candidatura.status !== CandidaturaStatus.ACEITO) {
+      throw new ConflictException('Só é possível gerar um código pra candidaturas aceitas.');
+    }
+    if (candidatura.checkInEm) {
+      throw new ConflictException('O check-in já foi feito — não dá pra gerar um novo código.');
+    }
+    return this.prisma.candidatura.update({
+      where: { id: candidaturaId },
+      data: { codigoCheckIn: gerarCodigoCheckIn() },
+    });
   }
 
   /** Desistência da candidatura pelo próprio profissional — só permitida enquanto ainda não houve resposta. */
@@ -188,7 +264,7 @@ export class CandidaturasService {
     const pagamento = await this.prisma.$transaction(async (tx) => {
       await tx.candidatura.update({
         where: { id: candidaturaId },
-        data: { status: CandidaturaStatus.ACEITO },
+        data: { status: CandidaturaStatus.ACEITO, codigoCheckIn: gerarCodigoCheckIn() },
       });
 
       if (outrosPendentes.length) {

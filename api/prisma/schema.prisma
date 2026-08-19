@@ -99,6 +99,7 @@ enum NotificacaoTipo {
   VAGA_REABERTA
   MARCADO_NAO_COMPARECEU
   PAGAMENTO_LIBERADO_PENDENTE
+  PROBLEMA_REPORTADO
 }
 
 model User {
@@ -256,6 +257,13 @@ model Candidatura {
 
   status CandidaturaStatus @default(PENDENTE)
 
+  // Código de 4 dígitos gerado quando a clínica aceita — ela passa esse
+  // código pro profissional na chegada, e ele digita no app pra confirmar
+  // presença (substitui o antigo botão manual "Confirmar presença" da
+  // clínica). `checkInEm` fica null até o check-in acontecer.
+  codigoCheckIn String?
+  checkInEm     DateTime?
+
   pagamento  Pagamento?
   avaliacoes Avaliacao[]
 
@@ -290,6 +298,14 @@ model Pagamento {
 
   motivoReembolso MotivoReembolso?
   reembolsadoEm   DateTime?
+
+  // Preenchidos quando a clínica reporta um problema (ausência, atraso,
+  // comportamento etc.) em vez do check-in confirmar a presença sozinho —
+  // status vira EM_DISPUTA e a análise/decisão é manual, fora do app, por
+  // enquanto (mesma ressalva já documentada acima para EM_DISPUTA).
+  disputaMotivo    String?
+  disputaDescricao String?
+  disputaAbertaEm  DateTime?
 
   createdAt  DateTime  @default(now())
   liberadoEm DateTime?

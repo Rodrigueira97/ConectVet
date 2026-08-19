@@ -6,8 +6,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVagaDto } from './dto/create-vaga.dto';
 import { UpdateVagaDto } from './dto/update-vaga.dto';
-import { Categoria, VagaStatus } from '../../generated/prisma/enums';
+import { CandidaturaStatus, Categoria, VagaStatus } from '../../generated/prisma/enums';
 import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
+import { PagamentosService } from '../pagamentos/pagamentos.service';
 import {
   comPagamentoMaisRecente,
   PAGAMENTO_MAIS_RECENTE_INCLUDE,
@@ -18,6 +19,7 @@ export class VagasService {
   constructor(
     private prisma: PrismaService,
     private avaliacoesService: AvaliacoesService,
+    private pagamentosService: PagamentosService,
   ) {}
 
   async criar(clinicaUserId: string, dto: CreateVagaDto) {
@@ -92,7 +94,20 @@ export class VagasService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return vagas.map(comPagamentoMaisRecente);
+    const comPagamento = vagas.map(comPagamentoMaisRecente);
+
+    // Mesma lógica de app/candidaturas.service.ts#minhas: sem cron nesse
+    // projeto, então libera sozinho aproveitando quem já está olhando a
+    // própria lista de vagas, em vez de exigir um clique da clínica.
+    for (const v of comPagamento) {
+      const aceita = v.candidaturas.find((c) => c.status === CandidaturaStatus.ACEITO);
+      if (aceita?.checkInEm && v.pagamento?.status === 'RETIDO') {
+        const liberado = await this.pagamentosService.autoLiberarPorCandidaturaId(aceita.id);
+        if (liberado) v.pagamento = liberado;
+      }
+    }
+
+    return comPagamento;
   }
 
   async buscarPorId(id: string) {

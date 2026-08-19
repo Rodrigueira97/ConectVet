@@ -178,6 +178,11 @@ export type Candidatura = {
   profissionalId: string;
   status: 'PENDENTE' | 'ACEITO' | 'RECUSADO' | 'DESISTIU';
   createdAt: string;
+  // Código de 4 dígitos que a clínica passa pro profissional na chegada, e
+  // `checkInEm` marca quando ele confirmou presença digitando esse código —
+  // ambos só existem numa candidatura ACEITO.
+  codigoCheckIn?: string | null;
+  checkInEm?: string | null;
   profissional?: ProfissionalResumo;
   vaga?: Vaga;
 };
@@ -209,6 +214,11 @@ export type Pagamento = {
   valorTotal: string | null;
   motivoFalha: string | null;
   motivoReembolso: MotivoReembolso | null;
+  // Preenchidos quando a clínica reporta um problema em vez de o check-in
+  // confirmar a presença sozinho — status vira EM_DISPUTA.
+  disputaMotivo?: string | null;
+  disputaDescricao?: string | null;
+  disputaAbertaEm?: string | null;
   createdAt: string;
   liberadoEm: string | null;
   reembolsadoEm: string | null;
@@ -500,6 +510,18 @@ export function desistirCandidatura(id: string) {
   return patch<{ ok: true }>(`/candidaturas/${id}/desistir`);
 }
 
+// Profissional digita, no dia do plantão, o código de 4 dígitos que a clínica
+// passou pra ele — confirma presença e substitui o antigo "Confirmar
+// presença" manual da clínica.
+export function fazerCheckIn(id: string, codigo: string) {
+  return patch<{ candidatura: Candidatura; pagamento: Pagamento | null }>(`/candidaturas/${id}/check-in`, { codigo });
+}
+
+// Clínica gera um novo código — ex.: passou o errado pro profissional na chegada.
+export function regenerarCodigoCheckIn(id: string) {
+  return patch<Candidatura>(`/candidaturas/${id}/regenerar-codigo`);
+}
+
 // ---------- Pagamentos ----------
 
 export function listarPagamentos() {
@@ -514,8 +536,10 @@ export function simularPagamento(id: string, resultado: 'aprovado' | 'recusado',
   return patch<Pagamento>(`/pagamentos/${id}/simular`, { resultado, motivo });
 }
 
-export function marcarNaoCompareceu(id: string) {
-  return patch<Pagamento>(`/pagamentos/${id}/nao-compareceu`);
+// Substitui o antigo "marcarNaoCompareceu" — em vez de devolver o valor retido
+// na hora, abre uma disputa (EM_DISPUTA) que o suporte da ConectVet analisa.
+export function reportarProblema(id: string, motivo: string, descricao?: string) {
+  return patch<Pagamento>(`/pagamentos/${id}/reportar-problema`, { motivo, descricao });
 }
 
 export function liberarPagamento(id: string) {

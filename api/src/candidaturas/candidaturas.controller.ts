@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { CandidaturasService } from './candidaturas.service';
 import { CreateCandidaturaDto } from './dto/create-candidatura.dto';
+import { CheckInDto } from './dto/check-in.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -46,6 +47,18 @@ export class CandidaturasController {
   @Patch(':id/desistir')
   desistir(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.candidaturasService.desistir(user.userId, id);
+  }
+
+  @Roles(Role.PROFISSIONAL)
+  @Patch(':id/check-in')
+  checkIn(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CheckInDto) {
+    return this.candidaturasService.checkIn(user.userId, id, dto.codigo);
+  }
+
+  @Roles(Role.CLINICA)
+  @Patch(':id/regenerar-codigo')
+  regenerarCodigo(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.candidaturasService.regenerarCodigo(user.userId, id);
   }
 
   @Roles(Role.CLINICA)

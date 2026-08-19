@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { PagamentosService } from './pagamentos.service';
 import { CobrarPagamentoDto } from './dto/cobrar-pagamento.dto';
 import { SimularPagamentoDto } from './dto/simular-pagamento.dto';
+import { ReportarProblemaDto } from './dto/reportar-problema.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -43,9 +44,13 @@ export class PagamentosController {
   }
 
   @Roles(Role.CLINICA)
-  @Patch(':id/nao-compareceu')
-  naoCompareceu(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.pagamentosService.naoCompareceu(user, id);
+  @Patch(':id/reportar-problema')
+  reportarProblema(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: ReportarProblemaDto,
+  ) {
+    return this.pagamentosService.reportarProblema(user, id, dto);
   }
 
   @Roles(Role.CLINICA, Role.ADMIN)

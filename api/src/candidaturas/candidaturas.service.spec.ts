@@ -3,6 +3,7 @@ import { CandidaturasService } from './candidaturas.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+import { PagamentosService } from '../pagamentos/pagamentos.service';
 import {
   CandidaturaStatus,
   MotivoReembolso,
@@ -57,6 +58,7 @@ describe('CandidaturasService — desistir', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AvaliacoesService, useValue: {} },
         { provide: NotificacoesService, useValue: { criar: jest.fn() } },
+        { provide: PagamentosService, useValue: { autoLiberarPorCandidaturaId: jest.fn() } },
       ],
     }).compile();
 

@@ -24,8 +24,8 @@ import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE, isVeterinarioFormado,
   Vaga, Candidatura, Clinica, Avaliacao, ProfissionalPublico, AvaliacaoProfissional,
   getClinicaMe, updateClinicaMe, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
-  getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura, liberarPagamento as apiLiberarPagamento,
-  cobrarPagamento, simularPagamento, marcarNaoCompareceu,
+  getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura,
+  cobrarPagamento, simularPagamento, reportarProblema as apiReportarProblema, regenerarCodigoCheckIn as apiRegenerarCodigo,
   getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos, getFeed, getProfissionalPorId, getUltimasAvaliacoesProfissional,
 } from '@/lib/api';
 
@@ -47,6 +47,10 @@ function perfilFormFromClinica(c: Clinica) {
 function formatDataBR(iso: string) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+}
+
+function formatHoraBR(iso: string) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 }
 
 function formatMesAno(iso: string) {
@@ -328,11 +332,12 @@ function ClinicaPageInner() {
   const [confirmandoContratacao, setConfirmandoContratacao] = useState(false);
   const [cobrando, setCobrando] = useState(false);
   const [simulando, setSimulando] = useState(false);
-  const [naoCompareceuId, setNaoCompareceuId] = useState<string | null>(null);
-  const [liberandoId, setLiberandoId] = useState<string | null>(null);
-  const [naoCompareceuWidgetId, setNaoCompareceuWidgetId] = useState<string | null>(null);
-  const [naoCompareceuWidgetProcessandoId, setNaoCompareceuWidgetProcessandoId] = useState<string | null>(null);
-  const [naoCompareceuProcessandoId, setNaoCompareceuProcessandoId] = useState<string | null>(null);
+  // Painel "Reportar problema" — substitui o antigo "Não compareceu". Fica
+  // ligado ao pagamentoId (não é por widget/card separado como antes): a
+  // mesma disputa é a mesma, não importa de onde a clínica abriu o painel.
+  const [reportForm, setReportForm] = useState<{ pagamentoId: string; motivo: string; descricao: string } | null>(null);
+  const [reportEnviando, setReportEnviando] = useState(false);
+  const [regenerandoCodigoId, setRegenerandoCodigoId] = useState<string | null>(null);
 
   function limparErroVaga(campo: string) {
     setVagaErrors((e) => {
@@ -654,7 +659,7 @@ function ClinicaPageInner() {
       await refreshMinhasVagas();
       if (atualizado.status === 'RETIDO') {
         voltarAoPainel();
-        toast.success('Pagamento aprovado', { message: 'O valor fica retido até você confirmar a presença do profissional.' });
+        toast.success('Pagamento aprovado', { message: 'O valor fica retido até o profissional fazer check-in no dia do plantão.' });
       }
     } catch (err) {
       toast.error('Não foi possível simular o pagamento', { message: err instanceof ApiError ? err.message : undefined });
@@ -663,53 +668,80 @@ function ClinicaPageInner() {
     }
   }
 
-  async function handleLiberarPagamento(pagamentoId: string) {
-    setLiberandoId(pagamentoId);
+  function abrirReportForm(pagamentoId: string) {
+    setReportForm({ pagamentoId, motivo: 'Não compareceu', descricao: '' });
+  }
+
+  async function enviarReportForm() {
+    if (!reportForm) return;
+    setReportEnviando(true);
     try {
-      const atualizado = await apiLiberarPagamento(pagamentoId);
+      await apiReportarProblema(reportForm.pagamentoId, reportForm.motivo, reportForm.descricao.trim() || undefined);
       await refreshMinhasVagas();
-      toast.success(
-        atualizado.status === 'LIBERADO' ? 'Pagamento liberado' : 'Presença confirmada',
-        atualizado.status === 'LIBERADO'
-          ? undefined
-          : { message: 'O profissional ainda não configurou onde receber — o valor libera assim que ele configurar.' },
-      );
+      setReportForm(null);
+      toast.success('Problema reportado', { message: 'Nossa equipe vai analisar e volta com uma resposta — o valor retido fica pausado até lá.' });
     } catch (err) {
-      toast.error('Não foi possível confirmar a presença', { message: err instanceof ApiError ? err.message : undefined });
+      toast.error('Não foi possível reportar', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
-      setLiberandoId(null);
+      setReportEnviando(false);
     }
   }
 
-  async function confirmarNaoCompareceu(pagamentoId: string) {
-    setNaoCompareceuProcessandoId(pagamentoId);
+  async function handleRegenerarCodigo(candidaturaId: string) {
+    setRegenerandoCodigoId(candidaturaId);
     try {
-      await marcarNaoCompareceu(pagamentoId);
+      await apiRegenerarCodigo(candidaturaId);
       await refreshMinhasVagas();
-      setNaoCompareceuId(null);
-      toast.success('Marcado como não compareceu', { message: 'O valor retido foi devolvido pra você.' });
+      toast.success('Novo código gerado');
     } catch (err) {
-      toast.error('Não foi possível registrar', { message: err instanceof ApiError ? err.message : undefined });
+      toast.error('Não foi possível gerar um novo código', { message: err instanceof ApiError ? err.message : undefined });
     } finally {
-      setNaoCompareceuProcessandoId(null);
+      setRegenerandoCodigoId(null);
     }
   }
 
-  /** Mesma ação de confirmarNaoCompareceu, só que a partir do widget "Precisa de você"
-   * (estado próprio pra não abrir a confirmação duas vezes se o mesmo pagamento também
-   * estiver visível na lista de vagas mais abaixo, na mesma tela). */
-  async function confirmarNaoCompareceuWidget(pagamentoId: string) {
-    setNaoCompareceuWidgetProcessandoId(pagamentoId);
-    try {
-      await marcarNaoCompareceu(pagamentoId);
-      await refreshMinhasVagas();
-      setNaoCompareceuWidgetId(null);
-      toast.success('Marcado como não compareceu', { message: 'O valor retido foi devolvido pra você.' });
-    } catch (err) {
-      toast.error('Não foi possível registrar', { message: err instanceof ApiError ? err.message : undefined });
-    } finally {
-      setNaoCompareceuWidgetProcessandoId(null);
-    }
+  /** Painel de "Reportar problema" — reaproveitado no widget "Precisa de você" e no
+   * card de "Minhas vagas", por isso mora aqui dentro (fecha sobre reportForm/reportEnviando
+   * sem precisar passar tudo por props). `valorLiquido` só entra pra lembrar a clínica
+   * do valor que fica pausado até a análise. */
+  function renderReportarProblema(pagamentoId: string, valorLiquido: string) {
+    if (!reportForm || reportForm.pagamentoId !== pagamentoId) return null;
+    return (
+      <div className="flex flex-col gap-2 bg-white rounded-lg p-3 border border-red-200">
+        <div className="text-xs font-bold text-danger">O que rolou com esse plantão?</div>
+        <select
+          value={reportForm.motivo}
+          onChange={(e) => setReportForm({ ...reportForm, motivo: e.target.value })}
+          className="text-xs font-semibold border border-gray-300 rounded-lg px-2.5 py-2 bg-white"
+        >
+          <option>Não compareceu</option>
+          <option>Chegou muito atrasado</option>
+          <option>Saiu antes do horário</option>
+          <option>Comportamento inadequado</option>
+          <option>Outro</option>
+        </select>
+        <textarea
+          value={reportForm.descricao}
+          onChange={(e) => setReportForm({ ...reportForm, descricao: e.target.value })}
+          placeholder="Descreva com mais detalhes (opcional, ajuda a gente a decidir mais rápido)"
+          rows={2}
+          className="text-xs font-semibold border border-gray-300 rounded-lg px-2.5 py-2 resize-none"
+        />
+        <div className="text-[11px] font-semibold text-gray-400">Valor retido: R$ {valorLiquido} — fica pausado até concluirmos a análise.</div>
+        <div className="flex gap-2">
+          <button onClick={() => setReportForm(null)} className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-xs font-bold">
+            Cancelar
+          </button>
+          <button
+            onClick={enviarReportForm}
+            disabled={reportEnviando}
+            className="flex-1 px-3 py-2 rounded-lg bg-danger text-white text-xs font-extrabold disabled:opacity-60"
+          >
+            {reportEnviando ? 'Enviando...' : 'Enviar pro suporte'}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   async function salvarPerfil() {
@@ -1222,8 +1254,15 @@ function ClinicaPageInner() {
           // aconteceu, só falta confirmar) com candidatura pendente esperando resposta — as duas
           // coisas que travam a clínica se ela não abrir o app. Corta em 6 linhas pra não empurrar
           // o resto da Home pra baixo da dobra quando a clínica tem muita coisa pendente.
-          const pagamentosRetidos = minhasVagas.filter((v) => v.status === 'PREENCHIDA' && v.pagamento?.status === 'RETIDO');
-          const precisaDeVoce = pagamentosRetidos.length + candidatosPendentes.length;
+          // Antes qualquer plantão com pagamento retido pedia uma confirmação manual da
+          // clínica. Agora o check-in confirma sozinho — só entra aqui quem realmente
+          // precisa de atenção: o horário já passou e ninguém fez check-in.
+          const pagamentosSemCheckIn = minhasVagas.filter((v) => {
+            if (v.status !== 'PREENCHIDA' || v.pagamento?.status !== 'RETIDO') return false;
+            const hired = (v.candidaturas || []).find((c) => c.status === 'ACEITO');
+            return !hired?.checkInEm && plantaoEncerrado(v);
+          });
+          const precisaDeVoce = pagamentosSemCheckIn.length + candidatosPendentes.length;
           const MAX_PRECISA_DE_VOCE = 6;
 
           return (
@@ -1254,53 +1293,33 @@ function ClinicaPageInner() {
                     <span className="bg-amber-100 text-amber-700 text-[11px] font-extrabold px-2 py-0.5 rounded-full">{precisaDeVoce}</span>
                   </div>
                   <div className="flex flex-col">
-                    {pagamentosRetidos.slice(0, MAX_PRECISA_DE_VOCE).map((v) => {
+                    {pagamentosSemCheckIn.slice(0, MAX_PRECISA_DE_VOCE).map((v) => {
                       const hired = (v.candidaturas || []).find((c) => c.status === 'ACEITO');
+                      const aberto = reportForm?.pagamentoId === v.pagamento!.id;
                       return (
-                        <div key={v.pagamento!.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
-                          <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                            <WarningIcon className="w-4 h-4" />
+                        <div key={v.pagamento!.id} className="flex flex-col gap-2.5 py-3 border-b border-gray-50 last:border-b-0">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                              <WarningIcon className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[13px] font-bold text-ink truncate">Plantão de {formatDataBR(v.data)} terminou sem check-in</div>
+                              <div className="text-[12px] text-gray-500 truncate">{hired?.profissional?.nome || 'O profissional'} não confirmou presença pelo app</div>
+                            </div>
+                            {!aberto && (
+                              <button
+                                onClick={() => abrirReportForm(v.pagamento!.id)}
+                                className="px-3 py-1.5 rounded-lg bg-white border border-red-200 text-danger text-xs font-bold shrink-0"
+                              >
+                                Reportar
+                              </button>
+                            )}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[13px] font-bold text-ink truncate">{hired?.profissional?.nome || 'O profissional'} concluiu o plantão de {formatDataBR(v.data)}</div>
-                            <div className="text-[12px] text-gray-500 truncate">
-                              {naoCompareceuWidgetId === v.pagamento!.id ? 'Confirma que não compareceu?' : 'Confirme se ele compareceu pra liberar o pagamento'}
-                            </div>
-                          </div>
-                          {naoCompareceuWidgetId === v.pagamento!.id ? (
-                            <div className="flex gap-1.5 shrink-0">
-                              <button onClick={() => setNaoCompareceuWidgetId(null)} className="px-2.5 py-1.5 rounded-lg border border-gray-300 text-[11px] font-bold">
-                                Cancelar
-                              </button>
-                              <button
-                                onClick={() => confirmarNaoCompareceuWidget(v.pagamento!.id)}
-                                disabled={naoCompareceuWidgetProcessandoId === v.pagamento!.id}
-                                className="px-2.5 py-1.5 rounded-lg bg-danger text-white text-[11px] font-extrabold disabled:opacity-60"
-                              >
-                                {naoCompareceuWidgetProcessandoId === v.pagamento!.id ? 'Enviando...' : 'Sim'}
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-1.5 shrink-0">
-                              <button
-                                onClick={() => handleLiberarPagamento(v.pagamento!.id)}
-                                disabled={liberandoId === v.pagamento!.id}
-                                className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold disabled:opacity-60"
-                              >
-                                {liberandoId === v.pagamento!.id ? 'Confirmando...' : 'Confirmar'}
-                              </button>
-                              <button
-                                onClick={() => setNaoCompareceuWidgetId(v.pagamento!.id)}
-                                className="px-3 py-1.5 rounded-lg bg-white border border-red-200 text-danger text-xs font-bold"
-                              >
-                                Não compareceu
-                              </button>
-                            </div>
-                          )}
+                          {aberto && renderReportarProblema(v.pagamento!.id, v.pagamento!.valorLiquido)}
                         </div>
                       );
                     })}
-                    {candidatosPendentes.slice(0, Math.max(0, MAX_PRECISA_DE_VOCE - pagamentosRetidos.length)).map(({ candidatura: c, vaga: v }) => (
+                    {candidatosPendentes.slice(0, Math.max(0, MAX_PRECISA_DE_VOCE - pagamentosSemCheckIn.length)).map(({ candidatura: c, vaga: v }) => (
                       <div key={c.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
                         <div className="w-8 h-8 rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-xs font-extrabold shrink-0">
                           {(c.profissional?.nome || '?').slice(0, 1).toUpperCase()}
@@ -1442,54 +1461,69 @@ function ClinicaPageInner() {
                         </div>
                       )}
 
-                      {mv.status === 'PREENCHIDA' && mv.pagamento && mv.pagamento.status === 'RETIDO' && (
-                        <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2.5 bg-amber-50 rounded-[13px] px-3.5 py-3">
-                          <div className="flex items-start gap-2 text-xs font-bold text-amber-700">
-                            <WarningIcon className="w-4 h-4 shrink-0 mt-px" />
-                            {hired?.profissional?.nome || 'O profissional'} concluiu o plantão — confirme se ele compareceu.
-                          </div>
-                          {naoCompareceuId === mv.pagamento.id ? (
-                            <div className="flex flex-col gap-2 bg-white rounded-lg p-3 border border-red-200">
-                              <div className="text-xs font-bold text-danger">
-                                Confirma que {hired?.profissional?.nome || 'o profissional'} não compareceu? O valor retido volta pra você e a vaga é encerrada.
+                      {mv.status === 'PREENCHIDA' && mv.pagamento && mv.pagamento.status === 'RETIDO' && (() => {
+                        const semCheckIn = !hired?.checkInEm;
+                        const alerta = semCheckIn && plantaoEncerrado(mv);
+                        const formAberto = reportForm?.pagamentoId === mv.pagamento!.id;
+                        return (
+                          <div onClick={(e) => e.stopPropagation()} className={`flex flex-col gap-2.5 rounded-[13px] px-3.5 py-3 ${alerta ? 'bg-amber-50' : 'bg-primaryTint'}`}>
+                            {alerta && (
+                              <div className="flex items-start gap-2 text-xs font-bold text-amber-700">
+                                <WarningIcon className="w-4 h-4 shrink-0 mt-px" />
+                                O plantão de {hired?.profissional?.nome || 'o profissional'} terminou sem check-in — pode ter sido esquecimento, um problema técnico ou ele não apareceu.
                               </div>
-                              <div className="flex gap-2">
-                                <button onClick={() => setNaoCompareceuId(null)} className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-xs font-bold">
-                                  Cancelar
-                                </button>
+                            )}
+                            {!alerta && semCheckIn && (
+                              <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <div className="flex items-center gap-2 text-xs font-bold text-primaryDeep">
+                                  <ShieldIcon className="w-4 h-4 shrink-0" />
+                                  Código de check-in de {hired?.profissional?.nome || 'o profissional'}
+                                </div>
+                                <span className="font-brand text-xl tracking-[0.2em] text-primaryDeep">{hired?.codigoCheckIn || '----'}</span>
+                              </div>
+                            )}
+                            {!alerta && !semCheckIn && (
+                              <div className="flex items-start gap-2 text-xs font-bold text-primaryDeep">
+                                <CheckCircleIcon className="w-4 h-4 shrink-0 mt-px" />
+                                Check-in feito{hired?.checkInEm ? ` às ${formatHoraBR(hired.checkInEm)}` : ''} — presença confirmada, nada pra você fazer aqui.
+                              </div>
+                            )}
+
+                            {formAberto ? (
+                              renderReportarProblema(mv.pagamento.id, mv.pagamento.valorLiquido)
+                            ) : alerta ? (
+                              <button
+                                onClick={() => abrirReportForm(mv.pagamento!.id)}
+                                className="self-start px-4 py-2 rounded-lg bg-white border border-red-200 text-danger text-xs font-extrabold"
+                              >
+                                Reportar problema
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-3 flex-wrap">
+                                {semCheckIn && (
+                                  <button
+                                    onClick={() => hired && handleRegenerarCodigo(hired.id)}
+                                    disabled={regenerandoCodigoId === hired?.id}
+                                    className="text-[11px] font-bold text-primaryDeep/70 hover:text-primaryDeep underline disabled:opacity-60"
+                                  >
+                                    {regenerandoCodigoId === hired?.id ? 'Gerando...' : 'Gerar novo código'}
+                                  </button>
+                                )}
                                 <button
-                                  onClick={() => confirmarNaoCompareceu(mv.pagamento!.id)}
-                                  disabled={naoCompareceuProcessandoId === mv.pagamento.id}
-                                  className="flex-1 px-3 py-2 rounded-lg bg-danger text-white text-xs font-extrabold disabled:opacity-60"
+                                  onClick={() => abrirReportForm(mv.pagamento!.id)}
+                                  className="text-[11px] font-bold text-primaryDeep/50 hover:text-danger underline ml-auto"
                                 >
-                                  {naoCompareceuProcessandoId === mv.pagamento.id ? 'Enviando...' : 'Sim, não compareceu'}
+                                  Algum problema? Reportar
                                 </button>
                               </div>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2 flex-wrap">
-                              <button
-                                onClick={() => handleLiberarPagamento(mv.pagamento!.id)}
-                                disabled={liberandoId === mv.pagamento!.id}
-                                className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-extrabold disabled:opacity-60"
-                              >
-                                {liberandoId === mv.pagamento!.id ? 'Confirmando...' : 'Confirmar presença'}
-                              </button>
-                              <button
-                                onClick={() => setNaoCompareceuId(mv.pagamento!.id)}
-                                disabled={liberandoId === mv.pagamento!.id}
-                                className="px-4 py-2 rounded-lg bg-white border border-red-200 text-danger text-xs font-extrabold disabled:opacity-60"
-                              >
-                                Não compareceu
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Presença já foi confirmada, mas o profissional ainda não configurou onde
-                          receber — sem isso, o card ficava mudo depois de "Confirmar presença" e
-                          parecia que nada tinha acontecido. */}
+                          receber — sem isso, o card ficava mudo depois do check-in e parecia que
+                          nada tinha acontecido. */}
                       {mv.status === 'CONCLUIDA' && mv.pagamento && mv.pagamento.status === 'LIBERADO_PENDENTE' && (
                         <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2 bg-primaryTint rounded-[13px] px-3.5 py-3">
                           <div className="flex items-center gap-1.5">
@@ -1498,7 +1532,19 @@ function ClinicaPageInner() {
                           </div>
                           <div className="flex items-start gap-2 text-xs font-bold text-primaryDeep leading-relaxed">
                             <LockIcon className="w-4 h-4 shrink-0 mt-px" />
-                            Presença confirmada — o pagamento libera sozinho assim que {hired?.profissional?.nome || 'o profissional'} configurar onde receber no perfil dele. Nada pra você fazer aqui.
+                            Check-in confirmado — o pagamento libera sozinho assim que {hired?.profissional?.nome || 'o profissional'} configurar onde receber no perfil dele. Nada pra você fazer aqui.
+                          </div>
+                        </div>
+                      )}
+
+                      {mv.pagamento && mv.pagamento.status === 'EM_DISPUTA' && (
+                        <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-1 bg-gray-50 border border-gray-200 rounded-[13px] px-3.5 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
+                            <span className="text-[10px] font-extrabold uppercase tracking-wide text-gray-500">Em análise</span>
+                          </div>
+                          <div className="text-xs font-bold text-gray-600 leading-relaxed">
+                            Você reportou um problema com esse plantão{mv.pagamento.disputaAbertaEm ? ` em ${formatDataBR(mv.pagamento.disputaAbertaEm)}` : ''} — nossa equipe está analisando e volta com uma resposta.
                           </div>
                         </div>
                       )}
@@ -1673,7 +1719,7 @@ function ClinicaPageInner() {
           // um resumo do que aconteceu em vez de ficar sem nenhuma ação na tela.
           const outroTerminal = jaAceito && !aguardandoOuFalhou && !processando;
           const STATUS_FINAL: Record<string, { titulo: string; sub: string }> = {
-            RETIDO: { titulo: 'Pagamento retido', sub: 'O valor fica retido até você confirmar a presença do profissional.' },
+            RETIDO: { titulo: 'Pagamento retido', sub: 'O valor fica retido até o profissional fazer check-in no dia do plantão.' },
             LIBERADO: { titulo: 'Pagamento liberado', sub: 'O valor já foi transferido ao profissional.' },
             LIBERADO_PENDENTE: { titulo: 'Liberação pendente', sub: 'Presença confirmada — falta o profissional configurar onde receber.' },
             REEMBOLSADO: { titulo: 'Pagamento reembolsado', sub: 'O valor voltou pra você.' },

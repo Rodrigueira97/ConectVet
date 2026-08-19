@@ -1,8 +1,8 @@
 'use client';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
-  mapsLink, onlyDigits, hojeBrasil, somarDiasISO, agoraBrasil, plantaoEncerrado, plantaoAindaNaoComecou,
+  mapsLink, onlyDigits, hojeBrasil, somarDiasISO, plantaoAindaNaoComecou,
   formatDataBR, localDaVaga, vagaEncerrada, urgenciaLabel, motivoVagaFechada, correspondeAproximado, normalizarBusca,
 } from '@/lib/mockData';
 import { maskTelefone } from '@/lib/validators';
@@ -29,7 +29,7 @@ import {
   Vaga, Candidatura, Profissional, Avaliacao, ContaRecebimento, TipoChavePix,
   getProfissionalMe, updateProfissionalMe, getFeed, getMinhasCandidaturas, candidatar as apiCandidatar,
   getAvaliacoesPorCandidatura, uploadArquivo, cancelarCandidatura, desistirCandidatura, documentoIndisponivel,
-  getContaRecebimento, salvarContaRecebimento,
+  getContaRecebimento, salvarContaRecebimento, fazerCheckIn as apiFazerCheckIn,
 } from '@/lib/api';
 
 const VAGAS_POR_PAGINA = 6;
@@ -55,14 +55,18 @@ function tempoNaPlataforma(createdAt: string) {
 
 const FAVORITOS_KEY = 'conectvet_vagas_favoritas';
 
-type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'NAO_COMPARECEU' | 'RECUSADO' | 'ENCERRADA' | 'DESISTIU';
+type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'NAO_COMPARECEU' | 'EM_DISPUTA' | 'RECUSADO' | 'ENCERRADA' | 'DESISTIU';
 
 // Vaga.status vira CONCLUIDA tanto quando o plantão foi pago normalmente
 // quanto quando a clínica marca "não compareceu" (reembolsa e fecha do mesmo
 // jeito) — a diferença mora só no Pagamento.motivoReembolso, por isso o front
 // não confunde "concluído com sucesso" com "não compareceu" na jornada do profissional.
+// EM_DISPUTA é um terceiro caso: a clínica reportou um problema em vez de o
+// check-in confirmar a presença sozinho — ainda não virou nem sucesso nem
+// reembolso, fica em análise pelo suporte.
 function statusDaCandidatura(c: Candidatura): StatusCandidatura {
   if (c.status === 'ACEITO') {
+    if (c.vaga?.pagamento?.status === 'EM_DISPUTA') return 'EM_DISPUTA';
     if (c.vaga?.status !== 'CONCLUIDA') return 'ACEITO';
     return c.vaga?.pagamento?.motivoReembolso === 'NAO_COMPARECEU' ? 'NAO_COMPARECEU' : 'CONCLUIDA';
   }
@@ -106,11 +110,25 @@ function passosDaCandidatura(c: Candidatura, status: StatusCandidatura): PassoJo
     ];
   }
   if (status === 'ACEITO') {
+    const aindaNaoComecou = v ? plantaoAindaNaoComecou(v) : true;
+    const checkInFeito = !!c.checkInEm;
     return [
       { label: 'Enviada', state: 'done', caption: enviadaCaption },
       { label: 'Em análise', state: 'done' },
-      { label: 'Aceita', state: 'current', caption: v && plantaoAindaNaoComecou(v) ? 'Falta o plantão' : 'Aguardando confirmação' },
-      { label: 'Concluída', state: 'upcoming', caption: v ? `Após ${formatDataBR(v.data)}` : 'Após o plantão' },
+      { label: 'Aceita', state: 'done' },
+      {
+        label: 'Check-in',
+        state: checkInFeito ? 'done' : aindaNaoComecou ? 'upcoming' : 'current',
+        caption: checkInFeito ? formatHoraBR(c.checkInEm!) : aindaNaoComecou ? 'Falta o plantão' : 'Peça o código à clínica',
+      },
+      { label: 'Concluída', state: checkInFeito ? 'current' : 'upcoming', caption: v ? `Após ${formatDataBR(v.data)}` : 'Após o plantão' },
+    ];
+  }
+  if (status === 'EM_DISPUTA') {
+    return [
+      { label: 'Enviada', state: 'done' },
+      { label: 'Aceita', state: 'done' },
+      { label: 'Em análise pelo suporte', state: 'fail', caption: v ? formatDataBR(v.data) : undefined },
     ];
   }
   if (status === 'DESISTIU') {
@@ -147,22 +165,16 @@ function motivoEncerradaLabel(c: Candidatura) {
   return 'A data da vaga já passou e a clínica não respondeu a tempo.';
 }
 
-// "Ainda faltam alguns dias" só faz sentido quando falta mesmo. Um plantão que
-// atravessa a madrugada (ex.: 19:00–07:00) começou "ontem" mas pode continuar em
-// andamento de manhã — por isso o cálculo usa o mesmo critério de fim real do
-// plantão que o `plantaoEncerrado`, não só a data de início.
+function formatHoraBR(iso: string) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+}
+
+// Só chamada enquanto `plantaoAindaNaoComecou` — a partir do dia/hora do
+// plantão, o card troca esse texto passivo pelo botão "Fazer check-in"
+// (ver render de status === 'ACEITO' mais abaixo).
 function mensagemAceito(v: { data: string; horaInicio: string; horaFim: string }) {
-  if (plantaoEncerrado(v)) {
-    return 'Plantão confirmado! O horário já passou — assim que a clínica confirmar sua presença, ele aparece como concluído aqui.';
-  }
   const hoje = hojeBrasil();
   const dataInicio = v.data.slice(0, 10);
-  const overnight = v.horaFim <= v.horaInicio;
-  const dataFim = overnight ? somarDiasISO(dataInicio, 1) : dataInicio;
-  if (dataInicio === hoje || dataFim === hoje) {
-    const emAndamento = dataInicio < hoje || agoraBrasil() >= v.horaInicio;
-    return emAndamento ? 'Plantão confirmado! Está rolando agora — bom plantão!' : 'Plantão confirmado! É hoje — não esqueça de comparecer.';
-  }
   if (dataInicio === somarDiasISO(hoje, 1)) return 'Plantão confirmado! É amanhã.';
   return 'Plantão confirmado! Fique de olho na data — ainda faltam alguns dias.';
 }
@@ -324,6 +336,14 @@ function ProfissionalPageInner() {
   const [cancelandoProcessandoId, setCancelandoProcessandoId] = useState<string | null>(null);
   const [desistindoId, setDesistindoId] = useState<string | null>(null);
   const [desistindoProcessandoId, setDesistindoProcessandoId] = useState<string | null>(null);
+  // Check-in por código — abrirCheckin guarda o id da candidatura sendo confirmada;
+  // checkinSucesso segura o painel de comemoração depois que o código bate.
+  const [checkinAberto, setCheckinAberto] = useState<string | null>(null);
+  const [checkinCodigo, setCheckinCodigo] = useState('');
+  const [checkinErro, setCheckinErro] = useState<string | null>(null);
+  const [checkinEnviando, setCheckinEnviando] = useState(false);
+  const [checkinSucesso, setCheckinSucesso] = useState<{ candidaturaId: string; hora: string; clinica: string } | null>(null);
+  const [checkinConfetti, setCheckinConfetti] = useState<{ dx: number; dy: number; spin: number; delay: number; color: string }[]>([]);
   const [contaRecebimento, setContaRecebimento] = useState<ContaRecebimento | null>(null);
   const [editandoRecebimento, setEditandoRecebimento] = useState(false);
   const [recebimentoForm, setRecebimentoForm] = useState<{ tipoChavePix: TipoChavePix; chavePix: string }>({ tipoChavePix: 'CPF', chavePix: '' });
@@ -419,6 +439,50 @@ function ProfissionalPageInner() {
     }
   }
 
+  function abrirCheckin(candidaturaId: string) {
+    setCheckinAberto(candidaturaId);
+    setCheckinCodigo('');
+    setCheckinErro(null);
+  }
+
+  async function confirmarCheckin(candidaturaId: string, clinicaNome: string) {
+    if (checkinCodigo.length !== 4) {
+      setCheckinErro('Digite os 4 dígitos do código.');
+      return;
+    }
+    setCheckinEnviando(true);
+    setCheckinErro(null);
+    try {
+      const { candidatura } = await apiFazerCheckIn(candidaturaId, checkinCodigo);
+      const checkInEm = candidatura.checkInEm || new Date().toISOString();
+      setCandidaturas((prev) => prev.map((c) => (c.id === candidaturaId ? { ...c, checkInEm } : c)));
+      setCheckinAberto(null);
+
+      // Mesmo confete do "candidatura enviada" (VagaDetalhe.tsx) — pra fechar o
+      // mesmo loop visual de comemoração no momento em que a presença é confirmada.
+      const cores = ['#00a19a', '#00706b', '#2e8cad', '#dcf4f2'];
+      const n = 9;
+      setCheckinConfetti(
+        Array.from({ length: n }, (_, i) => {
+          const angulo = (Math.PI * 2 * i) / n + (Math.random() * 0.5 - 0.25);
+          const dist = 46 + Math.random() * 26;
+          return {
+            dx: Math.cos(angulo) * dist,
+            dy: Math.sin(angulo) * dist - 6,
+            spin: Math.random() * 140 - 70,
+            delay: Math.random() * 0.12,
+            color: cores[i % cores.length],
+          };
+        }),
+      );
+      setCheckinSucesso({ candidaturaId, hora: formatHoraBR(checkInEm), clinica: clinicaNome });
+    } catch (err) {
+      setCheckinErro(err instanceof ApiError ? err.message : 'Não foi possível confirmar. Tenta de novo.');
+    } finally {
+      setCheckinEnviando(false);
+    }
+  }
+
   // Atualiza o Record central de avaliações — é lido tanto por "Minhas candidaturas" quanto pela
   // aba "Avaliações", então enviar uma avaliação em qualquer um dos dois lugares reflete no outro
   // na hora, sem precisar recarregar a página.
@@ -484,6 +548,7 @@ function ProfissionalPageInner() {
     ACEITO: candidaturasComStatus.filter((c) => c.statusExibido === 'ACEITO').length,
     CONCLUIDA: candidaturasComStatus.filter((c) => c.statusExibido === 'CONCLUIDA').length,
     NAO_COMPARECEU: candidaturasComStatus.filter((c) => c.statusExibido === 'NAO_COMPARECEU').length,
+    EM_DISPUTA: candidaturasComStatus.filter((c) => c.statusExibido === 'EM_DISPUTA').length,
     RECUSADO: candidaturasComStatus.filter((c) => c.statusExibido === 'RECUSADO').length,
     ENCERRADA: candidaturasComStatus.filter((c) => c.statusExibido === 'ENCERRADA').length,
     DESISTIU: candidaturasComStatus.filter((c) => c.statusExibido === 'DESISTIU').length,
@@ -1068,7 +1133,7 @@ function ProfissionalPageInner() {
             <div className="flex flex-col gap-[14px]">
               {candidaturasPaginadas.map((c) => {
                 const status = c.statusExibido;
-                const fechada = status === 'RECUSADO' || status === 'ENCERRADA' || status === 'DESISTIU' || status === 'NAO_COMPARECEU';
+                const fechada = status === 'RECUSADO' || status === 'ENCERRADA' || status === 'DESISTIU' || status === 'NAO_COMPARECEU' || status === 'EM_DISPUTA';
                 const v = c.vaga;
                 const local = v ? [v.bairro, `${v.cidade} - ${v.estado}`].filter(Boolean).join(', ') : '';
                 const STATUS_CHIP: Record<StatusCandidatura, { label: string; className: string }> = {
@@ -1076,6 +1141,7 @@ function ProfissionalPageInner() {
                   ACEITO: { label: 'Aceita', className: 'bg-primary text-white' },
                   CONCLUIDA: { label: 'Concluída', className: 'bg-secondary text-white' },
                   NAO_COMPARECEU: { label: 'Não compareceu', className: 'bg-danger text-white' },
+                  EM_DISPUTA: { label: 'Em análise', className: 'bg-gray-500 text-white' },
                   RECUSADO: { label: 'Recusada', className: 'bg-gray-100 text-gray-500' },
                   ENCERRADA: { label: 'Encerrada', className: 'bg-gray-100 text-gray-500' },
                   DESISTIU: { label: 'Desistência', className: 'bg-gray-100 text-gray-500' },
@@ -1162,7 +1228,17 @@ function ProfissionalPageInner() {
                       )}
                       {status === 'ACEITO' && (
                         <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-primaryDeep">
-                          <CheckCircleIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> {v ? mensagemAceito(v) : 'Plantão confirmado!'}
+                          <CheckCircleIcon className="w-[15px] h-[15px] shrink-0 mt-px" />
+                          {!v || plantaoAindaNaoComecou(v)
+                            ? (v ? mensagemAceito(v) : 'Plantão confirmado!')
+                            : c.checkInEm
+                            ? `Check-in feito às ${formatHoraBR(c.checkInEm)} — aproveita o plantão!`
+                            : 'É hoje! Peça o código de check-in pra clínica assim que chegar.'}
+                        </div>
+                      )}
+                      {status === 'EM_DISPUTA' && (
+                        <div className="flex items-start gap-2 text-[12.5px] font-semibold leading-relaxed text-gray-600">
+                          <ClockIcon className="w-[15px] h-[15px] shrink-0 mt-px" /> A clínica relatou um problema com esse plantão — nossa equipe da ConectVet está analisando e volta com uma resposta.
                         </div>
                       )}
                       {status === 'CONCLUIDA' && v && (
@@ -1259,6 +1335,17 @@ function ProfissionalPageInner() {
                         </div>
                       )
                     )}
+
+                    {status === 'ACEITO' && v && !plantaoAindaNaoComecou(v) && !c.checkInEm && (
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => abrirCheckin(c.id)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-white text-xs font-extrabold"
+                        >
+                          <ShieldIcon className="w-3.5 h-3.5" /> Fazer check-in
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1292,6 +1379,97 @@ function ProfissionalPageInner() {
                 <PawTrailLoader label="Carregando mais candidaturas..." />
               </div>
             )}
+
+            {/* Painel de check-in — código de 4 dígitos, depois a comemoração (mesmo
+                confete/carimbo de patinha do "candidatura enviada" em VagaDetalhe.tsx).
+                Um único overlay fixo pra toda a aba, achado pela candidatura em
+                `checkinAberto`/`checkinSucesso` em vez de nascer dentro de cada card. */}
+            {(checkinAberto || checkinSucesso) && (() => {
+              const candidaturaId = checkinAberto || checkinSucesso?.candidaturaId || '';
+              const clinicaNome = candidaturas.find((x) => x.id === candidaturaId)?.vaga?.clinica?.nome || checkinSucesso?.clinica || 'a clínica';
+              return (
+                <div
+                  className="fixed inset-0 z-50 bg-[rgba(4,20,25,0.55)] flex items-end sm:items-center justify-center p-0 sm:p-6"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget && !checkinEnviando) {
+                      setCheckinAberto(null);
+                      setCheckinSucesso(null);
+                    }
+                  }}
+                >
+                  <div className="bg-white w-full sm:max-w-[380px] rounded-t-3xl sm:rounded-3xl p-6 sm:p-7">
+                    {checkinSucesso ? (
+                      <div className="text-center">
+                        <div className="relative h-[110px] flex items-center justify-center mb-1">
+                          <span className="absolute inset-0 pointer-events-none">
+                            {checkinConfetti.map((b, i) => (
+                              <span
+                                key={i}
+                                className="cand-paw-bit"
+                                style={{ '--dx': `${b.dx}px`, '--dy': `${b.dy}px`, '--spin': `${b.spin}deg`, animationDelay: `${b.delay}s`, color: b.color } as CSSProperties}
+                              >
+                                <PawIcon className="w-full h-full" />
+                              </span>
+                            ))}
+                          </span>
+                          <span className="cand-ring absolute w-[88px] h-[88px] rounded-full border-2 border-primary" />
+                          <span className="cand-stamp relative w-[88px] h-[88px] rounded-full bg-primaryTint flex items-center justify-center shadow-[0_8px_20px_-8px_rgba(0,112,107,0.45)]">
+                            <PawIcon className="w-11 h-10 text-primaryDeep" />
+                          </span>
+                          <span className="cand-badge absolute top-[62px] left-[62px] w-[30px] h-[30px] rounded-full bg-primaryDeep border-[3px] border-white flex items-center justify-center">
+                            <CheckIcon className="w-3.5 h-3.5 text-white" />
+                          </span>
+                        </div>
+                        <div className="cand-fade text-[19px] font-extrabold text-ink mt-1 mb-1.5" style={{ animationDelay: '.5s' }}>
+                          Check-in confirmado!
+                        </div>
+                        <p className="cand-fade text-[13px] leading-relaxed text-gray-700 mb-5" style={{ animationDelay: '.58s' }}>
+                          {checkinSucesso.hora} · {clinicaNome} — bom plantão! 🐾
+                        </p>
+                        <div className="cand-fade" style={{ animationDelay: '.68s' }}>
+                          <button
+                            onClick={() => setCheckinSucesso(null)}
+                            className="w-full py-[15px] rounded-2xl text-[14.5px] font-extrabold bg-primary hover:bg-primaryDark text-white"
+                          >
+                            Show, entendi
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-[16px] font-extrabold text-ink mb-1">Check-in</div>
+                        <p className="text-[13px] text-gray-500 font-semibold mb-4">Peça o código de 4 dígitos pra {clinicaNome} e digite abaixo.</p>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={4}
+                          value={checkinCodigo}
+                          onChange={(e) => setCheckinCodigo(onlyDigits(e.target.value).slice(0, 4))}
+                          placeholder="0000"
+                          autoFocus
+                          className="w-full text-center text-[28px] font-extrabold tracking-[0.5em] border-2 border-primary bg-primaryTint rounded-2xl py-3 text-primaryDeep mb-3"
+                        />
+                        {checkinErro && <div className="text-[12px] font-bold text-danger mb-3">{checkinErro}</div>}
+                        <button
+                          disabled={checkinEnviando}
+                          onClick={() => confirmarCheckin(candidaturaId, clinicaNome)}
+                          className="w-full py-[15px] rounded-2xl text-[14.5px] font-extrabold bg-primary hover:bg-primaryDark text-white disabled:opacity-70"
+                        >
+                          {checkinEnviando ? 'Confirmando...' : 'Confirmar check-in'}
+                        </button>
+                        <button
+                          disabled={checkinEnviando}
+                          onClick={() => setCheckinAberto(null)}
+                          className="w-full py-3 mt-1.5 rounded-2xl text-[13px] font-extrabold text-gray-500 hover:text-ink disabled:opacity-40"
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
