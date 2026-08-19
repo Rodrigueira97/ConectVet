@@ -182,6 +182,7 @@ function VagaPublicaInner() {
           clinicaLogoUrl: vaga.clinica?.logoUrl,
           clinicaFotos: vaga.clinica?.fotosEstrutura,
           categoria: CATEGORIA_LABEL[vaga.categoria],
+          codigo: vaga.codigo,
           status: vaga.status,
           rua: vaga.rua, numero: vaga.numero, complemento: vaga.complemento,
           bairro: vaga.bairro, cidade: vaga.cidade, estado: vaga.estado,

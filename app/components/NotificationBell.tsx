@@ -1,7 +1,8 @@
 'use client';
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getNotificacoes, marcarNotificacoesLidas, Notificacao, NotificacaoTipo } from '@/lib/api';
-import { BellIcon, CheckCircleIcon, MoneyIcon, HeartIcon, XCircleIcon, WarningIcon } from './icons';
+import { BellIcon, CheckCircleIcon, MoneyIcon, HeartIcon, XCircleIcon, WarningIcon, ArrowRightIcon } from './icons';
 
 const ICON_POR_TIPO: Record<NotificacaoTipo, { icon: (c: string) => ReactNode; bg: string; fg: string }> = {
   CANDIDATURA_ACEITA: { icon: (c) => <CheckCircleIcon className={c} />, bg: 'bg-primaryTint', fg: 'text-primaryDeep' },
@@ -11,6 +12,11 @@ const ICON_POR_TIPO: Record<NotificacaoTipo, { icon: (c: string) => ReactNode; b
   AVALIACAO_RECEBIDA: { icon: (c) => <HeartIcon className={c} />, bg: 'bg-amber-100', fg: 'text-amber-700' },
   PROFISSIONAL_DESISTIU: { icon: (c) => <WarningIcon className={c} />, bg: 'bg-amber-100', fg: 'text-amber-700' },
   VAGA_REABERTA: { icon: (c) => <BellIcon className={c} />, bg: 'bg-primaryTint', fg: 'text-primaryDeep' },
+  MARCADO_NAO_COMPARECEU: { icon: (c) => <WarningIcon className={c} />, bg: 'bg-amber-100', fg: 'text-amber-700' },
+  PAGAMENTO_LIBERADO_PENDENTE: { icon: (c) => <MoneyIcon className={c} />, bg: 'bg-amber-100', fg: 'text-amber-700' },
+  PROBLEMA_REPORTADO: { icon: (c) => <WarningIcon className={c} />, bg: 'bg-gray-100', fg: 'text-gray-500' },
+  // Clínica (favorito ou do ranking) convidando pra uma vaga aberta.
+  CONVITE_PARA_VAGA: { icon: (c) => <HeartIcon className={c} />, bg: 'bg-primaryTint', fg: 'text-primaryDeep' },
 };
 
 function tempoRelativo(iso: string) {
@@ -26,6 +32,7 @@ function tempoRelativo(iso: string) {
 }
 
 export function NotificationBell() {
+  const router = useRouter();
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -53,6 +60,14 @@ export function NotificationBell() {
   function marcarLidas() {
     marcarNotificacoesLidas().catch(() => {});
     setNotificacoes((ns) => ns.map((n) => ({ ...n, lida: true })));
+  }
+
+  // "Ver detalhes da vaga" (só existe em CONVITE_PARA_VAGA, que é a única que vem com
+  // vagaId) — leva pra página pública da vaga antes de qualquer decisão de se
+  // candidatar; ver detalhes não avisa a clínica de nada, só a candidatura avisa.
+  function verDetalhesVaga(vagaId: string) {
+    setOpen(false);
+    router.push(`/vagas/${vagaId}`);
   }
 
   return (
@@ -92,6 +107,14 @@ export function NotificationBell() {
                     <div className="min-w-0 flex-1">
                       <div className="text-[12.5px] font-semibold text-ink leading-snug">{n.texto}</div>
                       <div className="text-[11px] text-gray-400 mt-0.5">{tempoRelativo(n.createdAt)}</div>
+                      {n.vagaId && (
+                        <button
+                          onClick={() => verDetalhesVaga(n.vagaId!)}
+                          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-extrabold text-primaryDeep hover:underline"
+                        >
+                          Ver detalhes da vaga <ArrowRightIcon className="w-2.5 h-2.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

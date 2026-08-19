@@ -13,6 +13,7 @@ import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { ContaRecebimentoModule } from './conta-recebimento/conta-recebimento.module';
+import { FavoritosModule } from './favoritos/favoritos.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ContaRecebimentoModule } from './conta-recebimento/conta-recebimento.mo
     UploadsModule,
     NotificacoesModule,
     ContaRecebimentoModule,
+    FavoritosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

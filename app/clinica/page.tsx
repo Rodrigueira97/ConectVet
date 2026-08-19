@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { CATEGORIAS, MIN_VALORES, TAXA_PLATAFORMA, ESTADOS_CIDADES, onlyDigits, buildEndereco, mapsLink, statusBadge, hojeBrasil, plantaoEncerrado, isPlantaoNoturno, valorSugeridoNoturno } from '@/lib/mockData';
 import { Categoria } from '@/lib/types';
 import { Sidebar } from '@/app/components/Sidebar';
-import { HomeIcon, PlusIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, DownloadIcon, LockIcon, PawIcon, StarIcon, ArrowRightIcon, InfoIcon } from '@/app/components/icons';
+import { HomeIcon, PlusIcon, UserIcon, BuildingIcon, CloseIcon, PinIcon, ShieldIcon, HeartIcon, GraduationCapIcon, EyeIcon, WarningIcon, PencilIcon, PhoneIcon, CheckCircleIcon, SearchIcon, UsersIcon, CalendarIcon, ClockIcon, MoneyIcon, MoonIcon, DownloadIcon, LockIcon, PawIcon, StarIcon, ArrowRightIcon, InfoIcon, GridIcon, BellIcon, XCircleIcon } from '@/app/components/icons';
 import { maskCEP, maskTelefone } from '@/lib/validators';
 import { VagaDetalheView, VagaDetalheData } from '@/app/components/VagaDetalhe';
 import { QuemSomosView } from '@/app/components/QuemSomos';
@@ -22,16 +22,26 @@ import { PawTrailLoader } from '@/app/components/PawTrailLoader';
 import { useToast } from '@/app/components/Toast';
 import {
   ApiError, getToken, clearSession, CATEGORIA_LABEL, CATEGORIA_VALUE, isVeterinarioFormado,
-  Vaga, Candidatura, Clinica, Avaliacao, ProfissionalPublico, AvaliacaoProfissional,
+  Vaga, Candidatura, Clinica, Avaliacao, ProfissionalPublico, ProfissionalResumo, AvaliacaoProfissional, FavoritoItem,
   getClinicaMe, updateClinicaMe, getMinhasVagas, criarVaga, atualizarVaga, cancelarVaga as apiCancelarVaga,
   getCandidatosDaVaga, aceitarCandidatura, recusarCandidatura,
   cobrarPagamento, simularPagamento, reportarProblema as apiReportarProblema, regenerarCodigoCheckIn as apiRegenerarCodigo,
   getAvaliacoesPorCandidatura, uploadArquivo, uploadArquivos, getFeed, getProfissionalPorId, getUltimasAvaliacoesProfissional,
+  getFavoritos, favoritarProfissional as apiFavoritar, desfavoritarProfissional as apiDesfavoritar,
+  getRankingProfissionais, convidarParaVaga as apiConvidar,
 } from '@/lib/api';
 
-type Tab = 'home' | 'criar-vaga' | 'candidatos' | 'pagamento' | 'avaliacoes' | 'perfil' | 'quem-somos';
+type Tab = 'home' | 'minhas-vagas' | 'criar-vaga' | 'candidatos' | 'pagamento' | 'avaliacoes' | 'perfil' | 'quem-somos';
 type CepStatus = 'idle' | 'loading' | 'success' | 'error';
 type PainelFiltro = 'todas' | 'aberta' | 'encerrada' | 'preenchida' | 'concluida' | 'cancelada' | 'retido';
+
+// Mesmo padrão de scroll infinito da Home do profissional (ver app/profissional/page.tsx):
+// mostra os N primeiros já carregados e revela mais N conforme o scroll chega perto do fim,
+// em vez de paginar no backend — as listas aqui não costumam ser grandes o bastante pra
+// justificar isso.
+const VAGAS_POR_PAGINA_CLINICA = 6;
+const FAVORITOS_POR_PAGINA = 4;
+const RANKING_POR_PAGINA = 5;
 
 function withCurrent(list: string[], current: string) {
   return current && !list.includes(current) ? [...list, current] : list;
@@ -77,6 +87,7 @@ function buildVagaDetalhe(mv: Vaga): VagaDetalheData {
     clinicaLogoUrl: mv.clinica?.logoUrl,
     clinicaFotos: mv.clinica?.fotosEstrutura,
     categoria: CATEGORIA_LABEL[mv.categoria],
+    codigo: mv.codigo,
     status: mv.status,
     rua: mv.rua, numero: mv.numero, complemento: mv.complemento, bairro: mv.bairro, cidade: mv.cidade, estado: mv.estado,
     data: mv.data, horaInicio: mv.horaInicio, horaFim: mv.horaFim,
@@ -339,6 +350,18 @@ function ClinicaPageInner() {
   const [reportEnviando, setReportEnviando] = useState(false);
   const [regenerandoCodigoId, setRegenerandoCodigoId] = useState<string | null>(null);
 
+  // Favoritos + ranking (Home) e busca por código + scroll infinito (Minhas vagas / Home).
+  const [favoritos, setFavoritos] = useState<FavoritoItem[]>([]);
+  const [ranking, setRanking] = useState<ProfissionalResumo[]>([]);
+  const [favoritando, setFavoritando] = useState<Record<string, boolean>>({});
+  const [convidando, setConvidando] = useState<Record<string, boolean>>({});
+  const [convidados, setConvidados] = useState<Record<string, string>>({}); // profissionalId -> vagaId
+  const [buscaCodigo, setBuscaCodigo] = useState('');
+  const [visiveisVagas, setVisiveisVagas] = useState(VAGAS_POR_PAGINA_CLINICA);
+  const [visiveisFavoritos, setVisiveisFavoritos] = useState(FAVORITOS_POR_PAGINA);
+  const [visiveisRanking, setVisiveisRanking] = useState(RANKING_POR_PAGINA);
+  const [favoritosParaConvidar, setFavoritosParaConvidar] = useState<string[]>([]);
+
   function limparErroVaga(campo: string) {
     setVagaErrors((e) => {
       if (!e[campo]) return e;
@@ -365,11 +388,17 @@ function ClinicaPageInner() {
     if (!getToken()) { router.push('/entrar'); return; }
     (async () => {
       try {
-        const [c, mv, f] = await Promise.all([getClinicaMe(), getMinhasVagas(), getFeed()]);
+        const [c, mv, f, favs, rank] = await Promise.all([
+          getClinicaMe(), getMinhasVagas(), getFeed(),
+          getFavoritos().catch(() => []),
+          getRankingProfissionais().catch(() => []),
+        ]);
         setClinica(c);
         setPerfilForm(perfilFormFromClinica(c));
         setMinhasVagas(mv);
         setFeed(f);
+        setFavoritos(favs);
+        setRanking(rank);
 
         const hiredIds = mv
           .filter((v) => v.status === 'CONCLUIDA')
@@ -395,6 +424,47 @@ function ClinicaPageInner() {
 
   async function refreshMinhasVagas() {
     setMinhasVagas(await getMinhasVagas());
+  }
+
+  async function handleFavoritar(profissionalId: string) {
+    setFavoritando((f) => ({ ...f, [profissionalId]: true }));
+    try {
+      await apiFavoritar(profissionalId);
+      setFavoritos(await getFavoritos());
+      toast.success('Adicionado aos favoritos');
+    } catch (err) {
+      toast.error('Não foi possível favoritar', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setFavoritando((f) => ({ ...f, [profissionalId]: false }));
+    }
+  }
+
+  async function handleDesfavoritar(profissionalId: string) {
+    setFavoritando((f) => ({ ...f, [profissionalId]: true }));
+    try {
+      await apiDesfavoritar(profissionalId);
+      setFavoritos((fs) => fs.filter((f) => f.profissional.id !== profissionalId));
+    } catch (err) {
+      toast.error('Não foi possível remover dos favoritos', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setFavoritando((f) => ({ ...f, [profissionalId]: false }));
+    }
+  }
+
+  // Convite avulso (card de favorito ou linha do ranking) — o backend trava por
+  // categoria (mesma regra da candidatura), então só ofertamos aqui vagas abertas
+  // já filtradas pra categoria do profissional (ver vagasAbertasPorCategoria).
+  async function handleConvidar(vagaId: string, profissionalId: string) {
+    setConvidando((c) => ({ ...c, [profissionalId]: true }));
+    try {
+      await apiConvidar(vagaId, profissionalId);
+      setConvidados((c) => ({ ...c, [profissionalId]: vagaId }));
+      toast.success('Convite enviado', { message: 'O profissional recebeu uma notificação sobre a vaga.' });
+    } catch (err) {
+      toast.error('Não foi possível enviar o convite', { message: err instanceof ApiError ? err.message : undefined });
+    } finally {
+      setConvidando((c) => ({ ...c, [profissionalId]: false }));
+    }
   }
 
   // Atualiza o Record central de avaliações — é lido tanto pelo "Painel" quanto pela aba
@@ -539,6 +609,9 @@ function ClinicaPageInner() {
       horaFim: vagaForm.horaFim,
       valor,
       descricao: vagaForm.descricao || undefined,
+      // Só se aplica a vaga nova (editar não passa por aqui) — favoritos marcados no
+      // passo "Convidar favoritos", já restritos à categoria desta vaga no form.
+      convidarFavoritos: !editingId && favoritosParaConvidar.length ? favoritosParaConvidar : undefined,
     };
     try {
       const eraEdicao = !!editingId;
@@ -548,13 +621,19 @@ function ClinicaPageInner() {
       } else {
         await criarVaga(payload);
       }
+      const convidados = payload.convidarFavoritos?.length || 0;
       setVagaForm(vagaFormInicial);
       setVagaCepStatus('idle');
       setVagaErrors({});
+      setFavoritosParaConvidar([]);
       await refreshMinhasVagas();
       voltarAoPainel();
       toast.success(eraEdicao ? 'Vaga atualizada' : 'Vaga publicada', {
-        message: eraEdicao ? 'As alterações já estão visíveis pros profissionais.' : 'Profissionais da região já podem se candidatar.',
+        message: eraEdicao
+          ? 'As alterações já estão visíveis pros profissionais.'
+          : convidados > 0
+            ? `Profissionais da região já podem se candidatar. ${convidados} favorito${convidados > 1 ? 's' : ''} notificado${convidados > 1 ? 's' : ''}.`
+            : 'Profissionais da região já podem se candidatar.',
       });
     } catch (err) {
       toast.error('Não foi possível publicar a vaga', {
@@ -897,6 +976,125 @@ function ClinicaPageInner() {
     .filter((v) => v.status === 'ABERTA' && !vagaExpirada(v))
     .flatMap((v) => (v.candidaturas || []).filter((c) => c.status === 'PENDENTE').map((c) => ({ candidatura: c, vaga: v })));
 
+  // "Precisa de você": pagamento retido cujo plantão já passou sem check-in, mais
+  // candidatura pendente esperando resposta — as duas coisas que travam a clínica se
+  // ela não abrir o app. Mora aqui (fora da IIFE da Home) porque tanto o widget da Home
+  // quanto o contador da sidebar precisam do mesmo número.
+  const pagamentosSemCheckIn = minhasVagas.filter((v) => {
+    if (v.status !== 'PREENCHIDA' || v.pagamento?.status !== 'RETIDO') return false;
+    const hired = (v.candidaturas || []).find((c) => c.status === 'ACEITO');
+    return !hired?.checkInEm && plantaoEncerrado(v);
+  });
+  const precisaDeVoce = pagamentosSemCheckIn.length + candidatosPendentes.length;
+
+  // Contagens por status — usadas nos filtros de "Minhas vagas" e no gráfico de
+  // composição da Home, por isso ficam hoisted em vez de dentro de cada aba.
+  const totalVagas = minhasVagas.length;
+  const abertaCount = minhasVagas.filter((v) => v.status === 'ABERTA' && !vagaExpirada(v)).length;
+  const encerradaCount = minhasVagas.filter((v) => vagaExpirada(v)).length;
+  const concluidaCount = minhasVagas.filter((v) => v.status === 'CONCLUIDA').length;
+  const preenchidaCount = minhasVagas.filter((v) => v.status === 'PREENCHIDA').length;
+  const canceladaCount = minhasVagas.filter((v) => v.status === 'CANCELADA').length;
+  const finalizadasCount = concluidaCount + encerradaCount + canceladaCount;
+
+  const filtrosVagas: { key: PainelFiltro; label: string; count: number }[] = [
+    { key: 'todas', label: 'Todas', count: totalVagas },
+    { key: 'aberta', label: 'Abertas', count: abertaCount },
+    { key: 'encerrada', label: 'Encerradas', count: encerradaCount },
+    { key: 'preenchida', label: 'Aguardando presença', count: preenchidaCount },
+    { key: 'concluida', label: 'Concluídas', count: concluidaCount },
+    { key: 'cancelada', label: 'Canceladas', count: canceladaCount },
+  ];
+  const buscaCodigoNorm = buscaCodigo.trim().toUpperCase();
+  const vagasFiltradas = minhasVagas
+    .filter((v) => {
+      if (painelFiltro === 'todas') return true;
+      if (painelFiltro === 'retido') return v.status === 'PREENCHIDA' && v.pagamento?.status === 'RETIDO';
+      if (painelFiltro === 'encerrada') return vagaExpirada(v);
+      if (painelFiltro === 'aberta') return v.status === 'ABERTA' && !vagaExpirada(v);
+      return v.status.toLowerCase() === painelFiltro;
+    })
+    .filter((v) => !buscaCodigoNorm || (v.codigo || '').toUpperCase().includes(buscaCodigoNorm));
+  const vagasPaginadas = vagasFiltradas.slice(0, visiveisVagas);
+  const temMaisVagas = visiveisVagas < vagasFiltradas.length;
+
+  // Vagas abertas por categoria — é o que faz o botão "Convidar" (favorito ou ranking)
+  // só oferecer vagas que o profissional realmente pode aceitar (mesma trava de
+  // categoria que o backend aplica em VagasService#convidar).
+  function vagasAbertasPorCategoria(funcao: string) {
+    return minhasVagas.filter((v) => v.status === 'ABERTA' && !vagaExpirada(v) && v.categoria === funcao);
+  }
+
+  const favoritosVisiveis = favoritos.slice(0, visiveisFavoritos);
+  const temMaisFavoritos = visiveisFavoritos < favoritos.length;
+  const favoritosIds = new Set(favoritos.map((f) => f.profissional.id));
+  const rankingVisivel = ranking.slice(0, visiveisRanking);
+  const temMaisRanking = visiveisRanking < ranking.length;
+
+  // Últimos 6 meses (mês corrente incluso) — alimenta o gráfico "Vagas por mês" da Home.
+  const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const hoje = new Date();
+  const ultimosMeses = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - (5 - i), 1));
+    return { ano: d.getUTCFullYear(), mes: d.getUTCMonth(), label: MESES_CURTOS[d.getUTCMonth()] };
+  });
+  const vagasPorMes = ultimosMeses.map(({ ano, mes, label }) => {
+    const doMes = minhasVagas.filter((v) => {
+      const c = new Date(v.createdAt);
+      return c.getUTCFullYear() === ano && c.getUTCMonth() === mes;
+    });
+    const preenchidas = doMes.filter((v) => v.status === 'PREENCHIDA' || v.status === 'CONCLUIDA').length;
+    return { label, publicadas: doMes.length, preenchidas };
+  });
+  const maxVagasPorMes = Math.max(1, ...vagasPorMes.map((m) => m.publicadas));
+
+  // Categoria mais contratada — conta candidaturas aceitas (contratações de verdade,
+  // não só vagas publicadas naquela categoria).
+  const contratacoesPorCategoria = minhasVagas
+    .flatMap((v) => (v.candidaturas || []).filter((c) => c.status === 'ACEITO').map(() => v.categoria))
+    .reduce<Record<string, number>>((acc, cat) => ({ ...acc, [cat]: (acc[cat] || 0) + 1 }), {});
+  const rankingCategorias = Object.entries(contratacoesPorCategoria)
+    .sort((a, b) => b[1] - a[1])
+    .map(([categoria, total]) => ({ categoria: categoria as keyof typeof CATEGORIA_LABEL, total }));
+  const maxContratacoes = Math.max(1, ...rankingCategorias.map((c) => c.total));
+
+  // Scroll infinito — mesmo padrão da Home do profissional: revela mais N itens já
+  // carregados conforme o scroll se aproxima do fim, em vez de paginar no backend.
+  // "Minhas vagas" tem uma lista só; a Home tem duas (favoritos e ranking) soltas na
+  // mesma página, então as duas avançam juntas quando o fim se aproxima.
+  useEffect(() => {
+    if (tab !== 'minhas-vagas' && tab !== 'home') return;
+    const el = mainRef.current;
+    function faltamParaFim() {
+      if (el && el.scrollHeight > el.clientHeight + 1) return el.scrollHeight - el.scrollTop - el.clientHeight;
+      return document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+    }
+    function verificarScroll() {
+      if (faltamParaFim() > 200) return;
+      if (tab === 'minhas-vagas') {
+        setVisiveisVagas((v) => (v < vagasFiltradas.length ? Math.min(v + VAGAS_POR_PAGINA_CLINICA, vagasFiltradas.length) : v));
+      } else {
+        setVisiveisFavoritos((v) => (v < favoritos.length ? Math.min(v + FAVORITOS_POR_PAGINA, favoritos.length) : v));
+        setVisiveisRanking((v) => (v < ranking.length ? Math.min(v + RANKING_POR_PAGINA, ranking.length) : v));
+      }
+    }
+    el?.addEventListener('scroll', verificarScroll, { passive: true });
+    window.addEventListener('scroll', verificarScroll, { passive: true });
+    window.addEventListener('resize', verificarScroll);
+    return () => {
+      el?.removeEventListener('scroll', verificarScroll);
+      window.removeEventListener('scroll', verificarScroll);
+      window.removeEventListener('resize', verificarScroll);
+    };
+  }, [tab, vagasFiltradas.length, favoritos.length, ranking.length]);
+
+  // Trocar de filtro/busca em "Minhas vagas" reseta quantos itens estão visíveis —
+  // senão um filtro mais restrito podia deixar "temMaisVagas" mentindo (sem itens
+  // suficientes pra justificar o loader, mas a paginação continuava lá do filtro anterior).
+  useEffect(() => {
+    setVisiveisVagas(VAGAS_POR_PAGINA_CLINICA);
+  }, [painelFiltro, buscaCodigo]);
+
   if (loading || !clinica) {
     return <FeedPageSkeleton sidebarItems={4} />;
   }
@@ -908,6 +1106,7 @@ function ClinicaPageInner() {
         subtitle="Clínica"
         items={[
           { key: 'home', label: 'Home', icon: <HomeIcon />, count: pendingTotal },
+          { key: 'minhas-vagas', label: 'Minhas vagas', icon: <GridIcon /> },
           { key: 'criar-vaga', label: 'Criar vaga', icon: <PlusIcon /> },
           { key: 'perfil', label: 'Perfil', icon: <UserIcon /> },
           { key: 'avaliacoes', label: 'Avaliações', icon: <StarIcon />, count: avaliacoesPendentes.length },
@@ -1132,6 +1331,45 @@ function ClinicaPageInner() {
                     </label>
                   </div>
 
+                  {/* Só faz sentido convidar ao publicar (não editar) e só depois de escolher a
+                      categoria — é ela que decide quais favoritos podem ser convidados. */}
+                  {!editingId && vagaForm.categoria && favoritos.length > 0 && (
+                    <div className="mt-6 pt-6 border-t border-gray-100">
+                      <SectionHead num={5} title="Convidar favoritos" sub="Opcional" />
+                      <p className="text-xs text-gray-500 mb-3 -mt-2">
+                        Eles recebem uma notificação assim que a vaga for publicada, antes de aparecer pro resto da plataforma.
+                      </p>
+                      <div className="flex flex-col gap-1.5">
+                        {favoritos.map((f) => {
+                          const compativel = CATEGORIA_LABEL[f.profissional.funcao] === vagaForm.categoria;
+                          const marcado = favoritosParaConvidar.includes(f.profissional.id);
+                          return (
+                            <label
+                              key={f.favoritoId}
+                              className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 border ${compativel ? 'bg-white border-gray-200 cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-50'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={marcado}
+                                disabled={!compativel}
+                                onChange={() => setFavoritosParaConvidar((ids) => (
+                                  ids.includes(f.profissional.id) ? ids.filter((id) => id !== f.profissional.id) : [...ids, f.profissional.id]
+                                ))}
+                                className="w-4 h-4 accent-primary"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[12.5px] font-extrabold text-ink truncate">{f.profissional.nome}</div>
+                                <div className="text-[10.5px] text-gray-400 font-semibold">
+                                  {CATEGORIA_LABEL[f.profissional.funcao]}{!compativel ? ' · categoria diferente' : ''}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {Object.keys(vagaErrors).length > 0 && (
                     <div className="mt-6 pt-6 border-t border-gray-100">
                       <div className="flex items-start gap-2.5 bg-red-50 rounded-xl px-3.5 py-3 text-sm font-semibold text-danger">
@@ -1224,59 +1462,28 @@ function ClinicaPageInner() {
         )}
 
         {tab === 'home' && (() => {
-          const totalVagas = minhasVagas.length;
-          const abertaCount = minhasVagas.filter((v) => v.status === 'ABERTA' && !vagaExpirada(v)).length;
-          const encerradaCount = minhasVagas.filter((v) => vagaExpirada(v)).length;
-          const concluidaCount = minhasVagas.filter((v) => v.status === 'CONCLUIDA').length;
-          const preenchidaCount = minhasVagas.filter((v) => v.status === 'PREENCHIDA').length;
-          const canceladaCount = minhasVagas.filter((v) => v.status === 'CANCELADA').length;
-
-          const filtradas = painelFiltro === 'todas'
-            ? minhasVagas
-            : painelFiltro === 'retido'
-              ? minhasVagas.filter((v) => v.status === 'PREENCHIDA' && v.pagamento?.status === 'RETIDO')
-              : painelFiltro === 'encerrada'
-                ? minhasVagas.filter((v) => vagaExpirada(v))
-                : painelFiltro === 'aberta'
-                  ? minhasVagas.filter((v) => v.status === 'ABERTA' && !vagaExpirada(v))
-                  : minhasVagas.filter((v) => v.status.toLowerCase() === painelFiltro);
-
-          const filtros: { key: typeof painelFiltro; label: string; count: number }[] = [
-            { key: 'todas', label: 'Todas', count: totalVagas },
-            { key: 'aberta', label: 'Abertas', count: abertaCount },
-            { key: 'encerrada', label: 'Encerradas', count: encerradaCount },
-            { key: 'preenchida', label: 'Aguardando presença', count: preenchidaCount },
-            { key: 'concluida', label: 'Concluídas', count: concluidaCount },
-            { key: 'cancelada', label: 'Canceladas', count: canceladaCount },
-          ];
-
-          // "Precisa de você": junta pagamento retido esperando confirmação de presença (já
-          // aconteceu, só falta confirmar) com candidatura pendente esperando resposta — as duas
-          // coisas que travam a clínica se ela não abrir o app. Corta em 6 linhas pra não empurrar
-          // o resto da Home pra baixo da dobra quando a clínica tem muita coisa pendente.
-          // Antes qualquer plantão com pagamento retido pedia uma confirmação manual da
-          // clínica. Agora o check-in confirma sozinho — só entra aqui quem realmente
-          // precisa de atenção: o horário já passou e ninguém fez check-in.
-          const pagamentosSemCheckIn = minhasVagas.filter((v) => {
-            if (v.status !== 'PREENCHIDA' || v.pagamento?.status !== 'RETIDO') return false;
-            const hired = (v.candidaturas || []).find((c) => c.status === 'ACEITO');
-            return !hired?.checkInEm && plantaoEncerrado(v);
-          });
-          const precisaDeVoce = pagamentosSemCheckIn.length + candidatosPendentes.length;
-          const MAX_PRECISA_DE_VOCE = 6;
-
+          const iniciais = clinica.nome.trim().slice(0, 2).toUpperCase();
           return (
             <div className="max-w-[1080px] mx-auto p-8">
-              <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
-                <div>
-                  <h1 className="text-2xl font-extrabold mb-1 text-white">Olá, {clinica.nome} 👋</h1>
-                  {(precisaDeVoce > 0 || minhasVagas.length === 0) && (
-                    <p className="text-sm text-white/85">
-                      {precisaDeVoce > 0
-                        ? `${precisaDeVoce} coisa${precisaDeVoce > 1 ? 's' : ''} esperando sua resposta hoje`
-                        : 'Publique sua primeira vaga pra começar a receber candidaturas'}
-                    </p>
-                  )}
+              {/* Cabeçalho: foto + nome + avaliação logo abaixo (antes disso não existia
+                  nenhum dos dois na Home). */}
+              <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-14 h-14 rounded-full bg-white/90 text-primaryDeep flex items-center justify-center text-lg font-extrabold shrink-0 overflow-hidden">
+                    {clinica.logoUrl ? (
+                      <img src={clinica.logoUrl} alt={clinica.nome} className="w-full h-full object-cover" />
+                    ) : iniciais}
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="text-2xl font-extrabold text-white leading-tight truncate">Olá, {clinica.nome} 👋</h1>
+                    <div className="flex items-center gap-1.5 text-[12.5px] font-bold text-white/80 mt-0.5">
+                      {notaMedia !== null ? (
+                        <>★ {notaMedia.toFixed(1)} <span className="text-white/60 font-semibold">({avaliacoesRecebidas.length} avaliaç{avaliacoesRecebidas.length > 1 ? 'ões' : 'ão'} de profissionais)</span></>
+                      ) : (
+                        <span className="text-white/70 font-semibold">Sem avaliações ainda</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <button
                   onClick={() => setTab('criar-vaga')}
@@ -1293,7 +1500,7 @@ function ClinicaPageInner() {
                     <span className="bg-amber-100 text-amber-700 text-[11px] font-extrabold px-2 py-0.5 rounded-full">{precisaDeVoce}</span>
                   </div>
                   <div className="flex flex-col">
-                    {pagamentosSemCheckIn.slice(0, MAX_PRECISA_DE_VOCE).map((v) => {
+                    {pagamentosSemCheckIn.slice(0, 6).map((v) => {
                       const hired = (v.candidaturas || []).find((c) => c.status === 'ACEITO');
                       const aberto = reportForm?.pagamentoId === v.pagamento!.id;
                       return (
@@ -1319,7 +1526,7 @@ function ClinicaPageInner() {
                         </div>
                       );
                     })}
-                    {candidatosPendentes.slice(0, Math.max(0, MAX_PRECISA_DE_VOCE - pagamentosSemCheckIn.length)).map(({ candidatura: c, vaga: v }) => (
+                    {candidatosPendentes.slice(0, Math.max(0, 6 - pagamentosSemCheckIn.length)).map(({ candidatura: c, vaga: v }) => (
                       <div key={c.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-b-0">
                         <div className="w-8 h-8 rounded-full bg-primaryTint text-primaryDeep flex items-center justify-center text-xs font-extrabold shrink-0">
                           {(c.profissional?.nome || '?').slice(0, 1).toUpperCase()}
@@ -1337,9 +1544,9 @@ function ClinicaPageInner() {
                       </div>
                     ))}
                   </div>
-                  {precisaDeVoce > MAX_PRECISA_DE_VOCE && (
+                  {precisaDeVoce > 6 && (
                     <div className="text-xs font-bold text-gray-400 text-center pt-3 mt-1 border-t border-gray-50">
-                      + {precisaDeVoce - MAX_PRECISA_DE_VOCE} outro{precisaDeVoce - MAX_PRECISA_DE_VOCE > 1 ? 's' : ''} na lista de vagas abaixo
+                      + {precisaDeVoce - 6} outro{precisaDeVoce - 6 > 1 ? 's' : ''} na lista de vagas — veja em Minhas vagas
                     </div>
                   )}
                 </div>
@@ -1368,8 +1575,264 @@ function ClinicaPageInner() {
                 </div>
               </div>
 
+              {/* Gráficos — vagas por mês e composição por status, pra clínica enxergar
+                  como ela está indo sem precisar abrir Minhas vagas e contar na mão. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-white rounded-2xl p-5">
+                  <div className="text-sm font-extrabold text-ink mb-3">Vagas por mês</div>
+                  <div className="flex items-end gap-3 h-[90px]">
+                    {vagasPorMes.map((m) => (
+                      <div key={m.label} className="flex-1 flex items-end justify-center gap-[3px] h-full">
+                        <div className="w-2.5 rounded-t-[3px] bg-primary" style={{ height: `${Math.max(4, (m.publicadas / maxVagasPorMes) * 100)}%` }} title={`${m.publicadas} publicadas`} />
+                        <div className="w-2.5 rounded-t-[3px] bg-secondary" style={{ height: `${Math.max(4, (m.preenchidas / maxVagasPorMes) * 100)}%` }} title={`${m.preenchidas} preenchidas`} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-3 mt-2">
+                    {vagasPorMes.map((m) => (
+                      <span key={m.label} className="flex-1 text-center text-[10px] font-bold text-gray-400">{m.label}</span>
+                    ))}
+                  </div>
+                  <div className="flex gap-4 mt-3 pt-3 border-t border-gray-50">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-gray-500"><span className="w-2 h-2 rounded-[2px] bg-primary" /> Publicadas</span>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-gray-500"><span className="w-2 h-2 rounded-[2px] bg-secondary" /> Preenchidas</span>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-5">
+                  <div className="text-sm font-extrabold text-ink mb-3">Composição das vagas <span className="text-gray-400 font-semibold">· {totalVagas} no total</span></div>
+                  {totalVagas > 0 ? (
+                    <>
+                      <div className="flex h-5 rounded-lg overflow-hidden bg-gray-100">
+                        {abertaCount > 0 && <div className="bg-primary" style={{ width: `${(abertaCount / totalVagas) * 100}%` }} />}
+                        {preenchidaCount > 0 && <div className="bg-secondary border-l-2 border-white" style={{ width: `${(preenchidaCount / totalVagas) * 100}%` }} />}
+                        {finalizadasCount > 0 && <div className="bg-gray-400 border-l-2 border-white" style={{ width: `${(finalizadasCount / totalVagas) * 100}%` }} />}
+                      </div>
+                      <div className="flex flex-col gap-2 mt-3">
+                        <div className="flex items-center gap-2 text-[12.5px]"><span className="w-2 h-2 rounded-[2px] bg-primary shrink-0" /><span className="font-bold text-gray-600 flex-1">Abertas</span><span className="font-extrabold text-ink">{abertaCount}</span></div>
+                        <div className="flex items-center gap-2 text-[12.5px]"><span className="w-2 h-2 rounded-[2px] bg-secondary shrink-0" /><span className="font-bold text-gray-600 flex-1">Aguardando presença</span><span className="font-extrabold text-ink">{preenchidaCount}</span></div>
+                        <div className="flex items-center gap-2 text-[12.5px]"><span className="w-2 h-2 rounded-[2px] bg-gray-400 shrink-0" /><span className="font-bold text-gray-600 flex-1">Finalizadas</span><span className="font-extrabold text-ink">{finalizadasCount}</span></div>
+                        <div className="text-[10.5px] text-gray-400 ml-4">{concluidaCount} concluídas · {encerradaCount} encerrada{encerradaCount === 1 ? '' : 's'} sem preencher · {canceladaCount} cancelada{canceladaCount === 1 ? '' : 's'}</div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[12.5px] text-gray-400 py-4">Publique sua primeira vaga pra ver a composição aqui.</div>
+                  )}
+                </div>
+              </div>
+
+              {rankingCategorias.length > 0 && (
+                <div className="bg-white rounded-2xl p-5 mb-6">
+                  <div className="text-sm font-extrabold text-ink mb-3">Categoria que você mais contrata</div>
+                  <div className="flex flex-col gap-2.5">
+                    {rankingCategorias.map(({ categoria, total }) => (
+                      <div key={categoria} className="flex items-center gap-2.5 text-[12.5px]">
+                        <span className="w-[110px] shrink-0 font-bold text-gray-600 truncate">{CATEGORIA_LABEL[categoria]}</span>
+                        <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-primary" style={{ width: `${(total / maxContratacoes) * 100}%` }} />
+                        </div>
+                        <span className="w-5 text-right font-extrabold text-ink">{total}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Favoritos — convidar só oferece vagas abertas da mesma categoria do
+                  profissional (mesma trava da candidatura de verdade). */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-extrabold text-white">Profissionais favoritos</div>
+                </div>
+                {favoritos.length === 0 ? (
+                  <div className="bg-white/10 rounded-2xl p-5 text-[12.5px] font-semibold text-white/75">
+                    Favorite profissionais no ranking abaixo (ou no perfil de quem se candidatar) pra poder convidá-los direto quando abrir uma vaga compatível.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {favoritosVisiveis.map((f) => {
+                        const p = f.profissional;
+                        const compativeis = vagasAbertasPorCategoria(p.funcao);
+                        const jaConvidado = convidados[p.id];
+                        return (
+                          <div key={f.favoritoId} className="bg-white rounded-2xl p-4 flex flex-col gap-2.5">
+                            <div className="flex items-start gap-2.5">
+                              <div className="w-10 h-10 rounded-xl bg-primaryDeep text-white flex items-center justify-center text-sm font-extrabold shrink-0 overflow-hidden">
+                                {p.fotoUrl ? <img src={p.fotoUrl} alt={p.nome} className="w-full h-full object-cover" /> : p.nome.slice(0, 1).toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <button onClick={() => abrirPerfilProfissional(p.id)} className="text-[13px] font-extrabold text-ink hover:text-primary text-left truncate block w-full">{p.nome}</button>
+                                <span className="inline-block text-[10.5px] font-bold text-primaryDeep bg-primaryTint px-2 py-0.5 rounded-full mt-0.5">
+                                  {CATEGORIA_LABEL[p.funcao]}{p.especialidade ? ` · ${p.especialidade}` : ''}
+                                </span>
+                                <div className="text-[11px] text-gray-400 font-semibold mt-1">
+                                  {p.notaMedia ? <>★ {p.notaMedia.toFixed(1)} · </> : ''}{p.plantoesJuntos} plantõe{p.plantoesJuntos === 1 ? '' : 's'} com você
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleDesfavoritar(p.id)}
+                                disabled={favoritando[p.id]}
+                                title="Remover dos favoritos"
+                                className="shrink-0 text-danger/60 hover:text-danger disabled:opacity-40"
+                              >
+                                <HeartIcon className="w-4 h-4" filled />
+                              </button>
+                            </div>
+                            {jaConvidado ? (
+                              <div className="flex items-center gap-1.5 text-[11.5px] font-bold text-primaryDeep bg-primaryTint rounded-lg px-3 py-2">
+                                <CheckCircleIcon className="w-3.5 h-3.5 shrink-0" /> Convite enviado
+                              </div>
+                            ) : compativeis.length === 0 ? (
+                              <div className="text-[11px] text-gray-400 font-semibold text-center py-2">Nenhuma vaga aberta de {CATEGORIA_LABEL[p.funcao]} agora</div>
+                            ) : (
+                              <details className="group">
+                                <summary className="list-none cursor-pointer">
+                                  <span className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg bg-primary text-white text-[12px] font-extrabold group-open:bg-primaryDeep">
+                                    <BellIcon className="w-3.5 h-3.5" /> Convidar para vaga
+                                  </span>
+                                </summary>
+                                <div className="flex flex-col gap-1.5 mt-2 bg-gray-50 rounded-lg p-2">
+                                  {compativeis.map((v) => (
+                                    <div key={v.id} className="flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-[11.5px] font-bold text-ink">
+                                      <span>{v.codigo ? `${v.codigo} · ` : ''}{formatDataBR(v.data)} · {v.horaInicio}–{v.horaFim}</span>
+                                      <button
+                                        onClick={() => handleConvidar(v.id, p.id)}
+                                        disabled={convidando[p.id]}
+                                        className="shrink-0 text-[10.5px] font-extrabold text-primaryDeep bg-primaryTint rounded px-2 py-1 disabled:opacity-50"
+                                      >
+                                        {convidando[p.id] ? '...' : 'Convidar'}
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {temMaisFavoritos && (
+                      <div className="flex items-center justify-center py-5">
+                        <PawTrailLoader label="Carregando mais favoritos..." />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Ranking da plataforma — é daqui que a clínica descobre gente nova pra favoritar. */}
+              {ranking.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-sm font-extrabold text-white mb-3">Mais bem avaliados da plataforma</div>
+                  <div className="bg-white rounded-2xl p-2">
+                    {rankingVisivel.map((p, i) => {
+                      const favoritado = favoritosIds.has(p.id);
+                      const compativeis = vagasAbertasPorCategoria(p.funcao);
+                      const jaConvidado = convidados[p.id];
+                      return (
+                        <div key={p.id} className={`flex items-center gap-3 p-3 ${i > 0 ? 'border-t border-gray-50' : ''}`}>
+                          <span className={`w-5 text-center text-xs font-extrabold shrink-0 ${i === 0 ? 'text-amber-500' : 'text-gray-300'}`}>{i + 1}</span>
+                          <div className="w-9 h-9 rounded-xl bg-primaryDeep text-white flex items-center justify-center text-xs font-extrabold shrink-0 overflow-hidden">
+                            {p.fotoUrl ? <img src={p.fotoUrl} alt={p.nome} className="w-full h-full object-cover" /> : p.nome.slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <button onClick={() => abrirPerfilProfissional(p.id)} className="text-[12.5px] font-extrabold text-ink hover:text-primary text-left truncate block w-full">{p.nome}</button>
+                            <div className="text-[11px] text-gray-400 font-semibold truncate">
+                              {CATEGORIA_LABEL[p.funcao]} · {p.totalAvaliacoes} avaliaç{p.totalAvaliacoes === 1 ? 'ão' : 'ões'}
+                            </div>
+                          </div>
+                          <div className="text-[12.5px] font-extrabold text-ink shrink-0">★ {p.notaMedia?.toFixed(1)}</div>
+                          <button
+                            onClick={() => (favoritado ? handleDesfavoritar(p.id) : handleFavoritar(p.id))}
+                            disabled={favoritando[p.id]}
+                            title={favoritado ? 'Remover dos favoritos' : 'Favoritar'}
+                            className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 disabled:opacity-40 ${favoritado ? 'bg-danger/10 border-transparent text-danger' : 'bg-white border-gray-200 text-gray-400 hover:text-danger'}`}
+                          >
+                            <HeartIcon className="w-3.5 h-3.5" filled={favoritado} />
+                          </button>
+                          {jaConvidado ? (
+                            <span className="w-8 h-8 rounded-lg bg-primaryTint text-primaryDeep flex items-center justify-center shrink-0" title="Convite enviado">
+                              <CheckCircleIcon className="w-3.5 h-3.5" />
+                            </span>
+                          ) : compativeis.length > 0 ? (
+                            <details className="relative shrink-0">
+                              <summary className="list-none cursor-pointer w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-400 hover:text-primary flex items-center justify-center">
+                                <BellIcon className="w-3.5 h-3.5" />
+                              </summary>
+                              <div className="absolute right-0 top-9 z-20 w-[220px] bg-white border border-gray-200 rounded-xl shadow-lg p-2 flex flex-col gap-1.5">
+                                {compativeis.map((v) => (
+                                  <div key={v.id} className="flex items-center justify-between gap-2 bg-gray-50 rounded-lg px-2 py-1.5 text-[11px] font-bold text-ink">
+                                    <span>{v.codigo ? `${v.codigo} · ` : ''}{formatDataBR(v.data)}</span>
+                                    <button
+                                      onClick={() => handleConvidar(v.id, p.id)}
+                                      disabled={convidando[p.id]}
+                                      className="shrink-0 text-[10px] font-extrabold text-primaryDeep bg-primaryTint rounded px-1.5 py-1 disabled:opacity-50"
+                                    >
+                                      Convidar
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          ) : (
+                            <span className="w-8 h-8 shrink-0" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {temMaisRanking && (
+                    <div className="flex items-center justify-center py-5">
+                      <PawTrailLoader label="Carregando mais profissionais..." />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {tab === 'minhas-vagas' && (
+            <div className="max-w-[1080px] mx-auto p-8">
+              <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
+                <div>
+                  <h1 className="text-2xl font-extrabold mb-1 text-white">Minhas vagas</h1>
+                  <p className="text-sm text-white/85">{totalVagas} vaga{totalVagas === 1 ? '' : 's'} publicada{totalVagas === 1 ? '' : 's'} ao todo</p>
+                </div>
+                <button
+                  onClick={() => setTab('criar-vaga')}
+                  className="inline-flex items-center gap-2 bg-white text-primaryDeep text-sm font-extrabold px-4 py-2.5 rounded-xl shadow-sm shrink-0"
+                >
+                  <PlusIcon className="w-4 h-4" /> Criar vaga
+                </button>
+              </div>
+
+              <div className="flex gap-2 mb-4">
+                <div className="flex-1 flex items-center gap-2 bg-white rounded-xl px-3.5 py-2.5">
+                  <SearchIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                  <input
+                    value={buscaCodigo}
+                    onChange={(e) => setBuscaCodigo(e.target.value)}
+                    placeholder="Buscar pelo código da vaga (ex.: VC-4821)"
+                    className="flex-1 min-w-0 text-[13px] font-semibold text-ink outline-none placeholder:text-gray-400 placeholder:font-semibold"
+                  />
+                  {buscaCodigo && (
+                    <button onClick={() => setBuscaCodigo('')} className="shrink-0 text-gray-400 hover:text-gray-600">
+                      <XCircleIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setBuscaCodigo((b) => b)}
+                  className="hidden sm:inline-flex items-center gap-1.5 bg-white text-primaryDeep text-[13px] font-extrabold px-4 rounded-xl shadow-sm"
+                >
+                  <SearchIcon className="w-3.5 h-3.5" /> Buscar
+                </button>
+              </div>
+
               <div className="flex gap-2 flex-wrap mb-5">
-                {filtros.map((f) => (
+                {filtrosVagas.map((f) => (
                   <button
                     key={f.key}
                     onClick={() => setPainelFiltro(f.key)}
@@ -1381,7 +1844,7 @@ function ClinicaPageInner() {
               </div>
 
               <div className="flex flex-col gap-4">
-                {filtradas.map((mv) => {
+                {vagasPaginadas.map((mv) => {
                   const expirada = vagaExpirada(mv);
                   const badge = statusBadge(expirada ? 'encerrada' : mv.status.toLowerCase());
                   const local = localDaVaga(mv);
@@ -1393,22 +1856,21 @@ function ClinicaPageInner() {
                       onClick={() => abrirDetalheVaga(mv.id)}
                       className={`flex flex-col gap-3 bg-white border border-gray-200 rounded-2xl shadow-sm p-5 cursor-pointer hover:border-primary/40 transition-colors duration-150 ${expirada ? 'rounded-l-md border-l-4 border-l-gray-300' : ''}`}
                     >
-                      {/* Categoria e status, mesma linguagem de chip do card de vaga do profissional */}
-                      <div className="flex gap-1.5 flex-wrap">
-                        <span className="bg-primaryTint text-primaryDeep text-[10px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">
-                          {CATEGORIA_LABEL[mv.categoria]}
-                        </span>
-                        <span className={`${badge.className} rounded-full`}>{badge.label}</span>
+                      {/* Categoria + código em destaque (é o que muda de card pra card); o
+                          endereço da própria clínica, sempre igual, vira legenda pequena. */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-lg font-extrabold text-ink">{CATEGORIA_LABEL[mv.categoria]}</span>
+                        {mv.codigo && <span className="font-mono text-[11px] font-extrabold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">{mv.codigo}</span>}
+                        <span className={`${badge.className} rounded-full ml-auto`}>{badge.label}</span>
                       </div>
-
                       <a
                         href={mapsLink(local)}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-start gap-1.5 text-lg font-extrabold hover:text-primary hover:underline"
+                        className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-gray-500 hover:text-primary hover:underline -mt-1.5"
                       >
-                        <PinIcon className="w-4 h-4 shrink-0 text-primary mt-1" />
+                        <PinIcon className="w-3.5 h-3.5 shrink-0 text-gray-400" />
                         {local}
                       </a>
 
@@ -1595,7 +2057,7 @@ function ClinicaPageInner() {
                     </div>
                   );
                 })}
-                {filtradas.length === 0 && (
+                {vagasFiltradas.length === 0 && (
                   <div className="bg-white rounded-2xl shadow-sm p-10">
                     {minhasVagas.length === 0 ? (
                       <EmptyState
@@ -1610,19 +2072,23 @@ function ClinicaPageInner() {
                       <EmptyState
                         icon={<SearchIcon className="w-6 h-6" />}
                         title="Nenhuma vaga encontrada"
-                        description="Nenhuma vaga bate com esse filtro."
+                        description={buscaCodigo ? 'Nenhuma vaga com esse código.' : 'Nenhuma vaga bate com esse filtro.'}
                         actionLabel="Ver todas"
                         actionIcon={<CloseIcon className="w-3.5 h-3.5" />}
-                        onAction={() => setPainelFiltro('todas')}
+                        onAction={() => { setPainelFiltro('todas'); setBuscaCodigo(''); }}
                         actionVariant="ghost"
                       />
                     )}
                   </div>
                 )}
               </div>
+              {temMaisVagas && (
+                <div className="flex items-center justify-center py-6">
+                  <PawTrailLoader label="Carregando mais vagas..." />
+                </div>
+              )}
             </div>
-          );
-        })()}
+        )}
 
         {tab === 'candidatos' && selectedMv && (
           <div className="max-w-[1080px] mx-auto p-8">

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { ProfissionaisService } from './profissionais.service';
 import { UpdateProfissionalDto } from './dto/update-profissional.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -29,6 +29,15 @@ export class ProfissionaisController {
     @Body() dto: UpdateProfissionalDto,
   ) {
     return this.profissionaisService.atualizar(user.userId, dto);
+  }
+
+  // Precisa vir antes de ":id" — senão o Nest tentaria casar "ranking" como um id de profissional.
+  @Get('ranking')
+  ranking(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.profissionaisService.ranking(
+      limit ? Number(limit) : undefined,
+      offset ? Number(offset) : undefined,
+    );
   }
 
   @Get(':id')

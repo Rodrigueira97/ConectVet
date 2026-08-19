@@ -70,4 +70,15 @@ export class VagasController {
   cancelar(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.vagasService.cancelar(user.userId, id);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.CLINICA)
+  @Post(':id/convidar')
+  convidar(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body('profissionalId') profissionalId: string,
+  ) {
+    return this.vagasService.convidar(user.userId, id, profissionalId);
+  }
 }

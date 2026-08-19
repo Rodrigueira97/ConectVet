@@ -14,6 +14,8 @@ export type VagaDetalheData = {
   clinicaLogoUrl?: string | null;
   clinicaFotos?: FotoEstrutura[];
   categoria: string;
+  // Vagas publicadas antes dessa coluna existir ficam sem código pra sempre.
+  codigo?: string | null;
   status?: 'ABERTA' | 'PREENCHIDA' | 'CONCLUIDA' | 'CANCELADA';
   rua: string;
   numero: string;
@@ -206,6 +208,7 @@ export function VagaDetalheView({
               </span>
             )}
             <span className="text-white bg-white/15 text-xs font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">{vaga.categoria}</span>
+            {vaga.codigo && <span className="font-mono text-white/85 bg-white/10 text-[11px] font-extrabold tracking-wide px-2.5 py-1 rounded-full">{vaga.codigo}</span>}
             {vaga.perto && <span className="bg-secondary text-white text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full">Perto de você</span>}
           </div>
           {vaga.id && (

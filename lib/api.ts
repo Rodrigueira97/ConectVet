@@ -247,10 +247,21 @@ export type ContaRecebimento = {
   chavePix: string | null;
 };
 
+// Prefixo pela categoria + 4 dígitos (ex.: "VC-4821") — mesmo código em todo lugar que
+// a vaga aparece: painel da clínica, feed do profissional, página pública deslogada.
+export const CATEGORIA_PREFIXO_CODIGO: Record<Categoria, string> = {
+  VETERINARIO_CLINICO: 'VC',
+  VETERINARIO_ESPECIALISTA: 'VE',
+  ESTAGIARIO: 'ES',
+  AUXILIAR: 'AU',
+};
+
 export type Vaga = {
   id: string;
   clinicaId: string;
   categoria: Categoria;
+  // Vagas publicadas antes dessa coluna existir ficam sem código pra sempre.
+  codigo?: string | null;
   cep?: string | null;
   estado: string;
   cidade: string;
@@ -480,6 +491,40 @@ export function cancelarVaga(id: string) {
   return post<Vaga>(`/vagas/${id}/cancelar`);
 }
 
+// Convida um profissional (favorito ou do ranking) a se candidatar a uma vaga aberta —
+// manda uma notificação com link direto pra ela. Backend trava por categoria: só é
+// possível convidar alguém da mesma categoria da vaga.
+export function convidarParaVaga(vagaId: string, profissionalId: string) {
+  return post<{ ok: true }>(`/vagas/${vagaId}/convidar`, { profissionalId });
+}
+
+// ---------- Favoritos ----------
+
+export type FavoritoItem = {
+  favoritoId: string;
+  favoritadoEm: string;
+  // plantoesJuntos = candidaturas aceitas dele em vagas dessa mesma clínica.
+  profissional: ProfissionalResumo & { plantoesJuntos: number };
+};
+
+export function getFavoritos() {
+  return get<FavoritoItem[]>('/favoritos');
+}
+
+export function favoritarProfissional(profissionalId: string) {
+  return post<{ id: string }>(`/favoritos/${profissionalId}`);
+}
+
+export function desfavoritarProfissional(profissionalId: string) {
+  return request<{ ok: true }>(`/favoritos/${profissionalId}`, { method: 'DELETE' });
+}
+
+// ---------- Ranking (mais bem avaliados da plataforma) ----------
+
+export function getRankingProfissionais(limit = 10, offset = 0) {
+  return get<ProfissionalResumo[]>(`/profissionais/ranking?limit=${limit}&offset=${offset}`);
+}
+
 // ---------- Candidaturas ----------
 
 export function candidatar(vagaId: string) {
@@ -611,13 +656,20 @@ export type NotificacaoTipo =
   | 'PAGAMENTO_LIBERADO'
   | 'AVALIACAO_RECEBIDA'
   | 'PROFISSIONAL_DESISTIU'
-  | 'VAGA_REABERTA';
+  | 'VAGA_REABERTA'
+  | 'MARCADO_NAO_COMPARECEU'
+  | 'PAGAMENTO_LIBERADO_PENDENTE'
+  | 'PROBLEMA_REPORTADO'
+  | 'CONVITE_PARA_VAGA';
 
 export type Notificacao = {
   id: string;
   userId: string;
   tipo: NotificacaoTipo;
   texto: string;
+  // Só preenchido em CONVITE_PARA_VAGA — é o que faz o "Ver detalhes da vaga" no
+  // sininho levar direto pra ela.
+  vagaId?: string | null;
   lida: boolean;
   createdAt: string;
 };

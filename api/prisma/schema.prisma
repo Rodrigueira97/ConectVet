@@ -100,6 +100,9 @@ enum NotificacaoTipo {
   MARCADO_NAO_COMPARECEU
   PAGAMENTO_LIBERADO_PENDENTE
   PROBLEMA_REPORTADO
+  // Clínica convidando um favorito (ou um bem avaliado do ranking) pra se candidatar
+  // a uma vaga aberta — ver VagasService#convidar.
+  CONVITE_PARA_VAGA
 }
 
 model User {
@@ -154,7 +157,8 @@ model Clinica {
   sistemas       String?
   observacoes    String?
 
-  vagas Vaga[]
+  vagas     Vaga[]
+  favoritos Favorito[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -194,11 +198,28 @@ model Profissional {
   candidaturas      Candidatura[]
   avaliacoes        Avaliacao[]
   contaRecebimento  ContaRecebimento?
+  favoritadoPor     Favorito[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("profissionais")
+}
+
+// Profissionais que uma clínica marcou como favorito — alimenta a seção "Profissionais
+// favoritos" da Home e o botão de convidar direto pra uma vaga aberta (ver
+// VagasService#convidar, que exige a mesma categoria da vaga, favoritado ou não).
+model Favorito {
+  id             String       @id @default(cuid())
+  clinicaId      String
+  clinica        Clinica      @relation(fields: [clinicaId], references: [id], onDelete: Cascade)
+  profissionalId String
+  profissional   Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([clinicaId, profissionalId])
+  @@map("favoritos")
 }
 
 model ContaRecebimento {
@@ -221,6 +242,12 @@ model Vaga {
   clinicaId String
   clinica   Clinica @relation(fields: [clinicaId], references: [id], onDelete: Cascade)
 
+  // Prefixo pela categoria (VC/VE/AU/ES) + 4 dígitos, ex. "VC-4821" — mostrado igual pra
+  // clínica, profissional e visitante deslogado. Opcional só porque vagas criadas antes
+  // dessa coluna existir ficam sem código pra sempre (não vale a pena inventar um
+  // retroativamente); toda vaga nova sempre ganha um, ver VagasService#gerarCodigo.
+  codigo String? @unique
+
   categoria Categoria
 
   cep         String?
@@ -239,8 +266,9 @@ model Vaga {
 
   status VagaStatus @default(ABERTA)
 
-  candidaturas Candidatura[]
-  pagamentos   Pagamento[]
+  candidaturas  Candidatura[]
+  pagamentos    Pagamento[]
+  notificacoes  Notificacao[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -321,6 +349,12 @@ model Notificacao {
 
   tipo  NotificacaoTipo
   texto String
+
+  // Só preenchido em CONVITE_PARA_VAGA — é o que permite o botão "Ver detalhes da
+  // vaga" levar direto pra ela. onDelete SetNull: se a vaga sumir, a notificação
+  // continua existindo (só perde o link), não faz sentido apagá-la em cascata.
+  vagaId String?
+  vaga   Vaga?   @relation(fields: [vagaId], references: [id], onDelete: SetNull)
 
   lida Boolean @default(false)
 

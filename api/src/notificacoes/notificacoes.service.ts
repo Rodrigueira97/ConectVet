@@ -18,9 +18,11 @@ export class NotificacoesService {
     private whatsapp: WhatsappService,
   ) {}
 
-  /** Usada pelos outros serviços (candidaturas, pagamentos, avaliações) pra registrar um evento. */
-  async criar(userId: string, tipo: NotificacaoTipo, texto: string) {
-    const notificacao = await this.prisma.notificacao.create({ data: { userId, tipo, texto } });
+  /** Usada pelos outros serviços (candidaturas, pagamentos, avaliações, convites) pra
+   * registrar um evento. `vagaId` só se aplica a CONVITE_PARA_VAGA — é o que permite o
+   * botão "Ver detalhes da vaga" no sininho levar direto pra ela. */
+  async criar(userId: string, tipo: NotificacaoTipo, texto: string, vagaId?: string) {
+    const notificacao = await this.prisma.notificacao.create({ data: { userId, tipo, texto, vagaId } });
     // Não aguardamos o envio de propósito: a notificação no banco (que já
     // alimenta o sininho) não pode ficar mais lenta esperando a API da Meta.
     this.enviarWhatsapp(userId, texto).catch((err) =>

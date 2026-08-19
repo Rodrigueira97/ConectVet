@@ -754,6 +754,11 @@ function ProfissionalPageInner() {
           {urgencia && (
             <span className="bg-amber-100 text-amber-700 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wide">{urgencia}</span>
           )}
+          {v.codigo && (
+            <span className={`font-mono text-[10px] font-extrabold px-2.5 py-1 rounded-full tracking-wide ${fechada ? 'bg-gray-100 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+              {v.codigo}
+            </span>
+          )}
         </div>
 
         {/* Data, horário e local — colunas fixas no desktop, empilhado no mobile,
@@ -889,6 +894,7 @@ function ProfissionalPageInner() {
                 clinicaLogoUrl: vagaSelecionada.clinica?.logoUrl,
                 clinicaFotos: vagaSelecionada.clinica?.fotosEstrutura,
                 categoria: CATEGORIA_LABEL[vagaSelecionada.categoria],
+                codigo: vagaSelecionada.codigo,
                 status: vagaSelecionada.status,
                 rua: vagaSelecionada.rua, numero: vagaSelecionada.numero, complemento: vagaSelecionada.complemento,
                 bairro: vagaSelecionada.bairro, cidade: vagaSelecionada.cidade, estado: vagaSelecionada.estado,

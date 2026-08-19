@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsNumberString,
@@ -50,4 +51,11 @@ export class CreateVagaDto {
   @IsOptional()
   @IsString()
   descricao?: string;
+
+  // IDs de profissionais favoritos (da categoria desta vaga) pra notificar assim que
+  // ela for publicada — ver VagasService#criar. Opcional, nunca bloqueia a publicação.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  convidarFavoritos?: string[];
 }

@@ -26,6 +26,46 @@ export class ProfissionaisService {
     return { ...resto, email: user.email };
   }
 
+  /** Mais bem avaliados da plataforma (por nota média dada por clínicas) — alimenta a
+   * seção "Mais bem avaliados" da Home da clínica, de onde ela favorita/convida. Só
+   * entram profissionais com pelo menos uma avaliação; sem isso a "nota média" de quem
+   * nunca trabalhou empataria em 0 com todo mundo e a ordenação não diria nada. */
+  async ranking(limit = 10, offset = 0) {
+    const grupos = await this.prisma.avaliacao.groupBy({
+      by: ['profissionalId'],
+      where: { autor: 'CLINICA' },
+      _avg: { nota: true },
+      _count: true,
+      orderBy: { _avg: { nota: 'desc' } },
+      skip: offset,
+      take: limit,
+    });
+    if (!grupos.length) return [];
+
+    const profissionais = await this.prisma.profissional.findMany({
+      where: { id: { in: grupos.map((g) => g.profissionalId) } },
+      select: {
+        id: true, nome: true, funcao: true, especialidade: true,
+        areaAtuacao: true, regioesAtendimento: true, fotoUrl: true,
+      },
+    });
+    const porId = new Map(profissionais.map((p) => [p.id, p]));
+
+    // groupBy já devolve na ordem certa — só precisa juntar com os dados do profissional,
+    // preservando essa ordem (o Map acima não garante isso sozinho).
+    return grupos
+      .map((g) => {
+        const profissional = porId.get(g.profissionalId);
+        if (!profissional) return null;
+        return {
+          ...profissional,
+          notaMedia: Number((g._avg.nota ?? 0).toFixed(1)),
+          totalAvaliacoes: g._count,
+        };
+      })
+      .filter((p): p is NonNullable<typeof p> => !!p);
+  }
+
   async buscarPorId(id: string) {
     const profissional = await this.prisma.profissional.findUnique({
       where: { id },
