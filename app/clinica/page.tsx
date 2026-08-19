@@ -1231,13 +1231,13 @@ function ClinicaPageInner() {
               <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
                 <div>
                   <h1 className="text-2xl font-extrabold mb-1 text-white">Olá, {clinica.nome} 👋</h1>
-                  <p className="text-sm text-white/85">
-                    {precisaDeVoce > 0
-                      ? `${precisaDeVoce} coisa${precisaDeVoce > 1 ? 's' : ''} esperando sua resposta hoje`
-                      : minhasVagas.length > 0
-                        ? 'Tudo em dia — nenhuma pendência agora'
+                  {(precisaDeVoce > 0 || minhasVagas.length === 0) && (
+                    <p className="text-sm text-white/85">
+                      {precisaDeVoce > 0
+                        ? `${precisaDeVoce} coisa${precisaDeVoce > 1 ? 's' : ''} esperando sua resposta hoje`
                         : 'Publique sua primeira vaga pra começar a receber candidaturas'}
-                  </p>
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => setTab('criar-vaga')}
@@ -1326,7 +1326,7 @@ function ClinicaPageInner() {
                 </div>
               ) : minhasVagas.length > 0 ? (
                 <div className="flex items-center gap-2.5 bg-white/15 text-white text-[13px] font-bold rounded-2xl px-4 py-3 mb-5">
-                  <CheckCircleIcon className="w-4 h-4 shrink-0" /> Tudo em dia por aqui — nenhuma pendência no momento.
+                  <CheckCircleIcon className="w-4 h-4 shrink-0" /> Tudo em dia, nenhuma pendência neste momento
                 </div>
               ) : null}
 
