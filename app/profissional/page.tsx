@@ -11,6 +11,7 @@ import {
   HomeIcon, ClockIcon, UserIcon, SearchIcon, PinIcon, CalendarIcon, FilterIcon, CloseIcon,
   PencilIcon, PhoneIcon, MailIcon, ShieldIcon, DownloadIcon, HeartIcon, FileIcon, CheckIcon,
   CheckCircleIcon, XCircleIcon, LockIcon, ArrowRightIcon, BuildingIcon, PawIcon, EyeIcon, StarIcon, WarningIcon, UploadIcon,
+  ChevronLeftIcon,
 } from '@/app/components/icons';
 import { VagaDetalheView } from '@/app/components/VagaDetalhe';
 import { ShareVagaButton } from '@/app/components/ShareVagaButton';
@@ -56,6 +57,22 @@ function tempoNaPlataforma(createdAt: string) {
 const FAVORITOS_KEY = 'conectvet_vagas_favoritas';
 
 type StatusCandidatura = 'PENDENTE' | 'ACEITO' | 'CONCLUIDA' | 'NAO_COMPARECEU' | 'EM_DISPUTA' | 'RECUSADO' | 'ENCERRADA' | 'DESISTIU';
+
+// "Todas" fica sempre fixa em primeiro (nunca cai no overflow) — o resto é o que os
+// chips de filtro de "Minhas candidaturas" mostram, nessa ordem. "Em disputa" estava
+// faltando aqui antes: o status existe (contagemStatus já calculava) mas não tinha
+// como ser escolhido como filtro.
+const FILTROS_CANDIDATURA: { key: 'TODAS' | StatusCandidatura; label: string }[] = [
+  { key: 'TODAS', label: 'Todas' },
+  { key: 'PENDENTE', label: 'Pendentes' },
+  { key: 'ACEITO', label: 'Aceitas' },
+  { key: 'CONCLUIDA', label: 'Concluídas' },
+  { key: 'NAO_COMPARECEU', label: 'Não compareceu' },
+  { key: 'EM_DISPUTA', label: 'Em disputa' },
+  { key: 'RECUSADO', label: 'Recusadas' },
+  { key: 'ENCERRADA', label: 'Encerradas' },
+  { key: 'DESISTIU', label: 'Desistências' },
+];
 
 // Vaga.status vira CONCLUIDA tanto quando o plantão foi pago normalmente
 // quanto quando a clínica marca "não compareceu" (reembolsa e fecha do mesmo
@@ -329,6 +346,14 @@ function ProfissionalPageInner() {
   }
   const [visiveis, setVisiveis] = useState(VAGAS_POR_PAGINA);
   const [visiveisCandidaturas, setVisiveisCandidaturas] = useState(CANDIDATURAS_POR_PAGINA);
+
+  // Filtros de "Minhas candidaturas": mostra só quantos chips cabem na largura real da
+  // tela — os que não couberem entram no menu "Mais" em vez de quebrar linha ou
+  // sumir num scroll horizontal sem indício de que dá pra arrastar.
+  const filtrosRowRef = useRef<HTMLDivElement | null>(null);
+  const filtrosMoreRef = useRef<HTMLButtonElement | null>(null);
+  const [filtrosOcultos, setFiltrosOcultos] = useState<('TODAS' | StatusCandidatura)[]>([]);
+  const [menuFiltrosAberto, setMenuFiltrosAberto] = useState(false);
   const mainRef = useRef<HTMLElement | null>(null);
   const vagaSelecionada = vagaDetalheId ? feed.find((v) => v.id === vagaDetalheId) || null : null;
   const [candidatandoId, setCandidatandoId] = useState<string | null>(null);
@@ -557,7 +582,62 @@ function ProfissionalPageInner() {
   function selecionarFiltroCandidaturas(f: 'TODAS' | StatusCandidatura) {
     goTo({ statusCand: f === 'TODAS' ? null : f }, 'replace');
     setVisiveisCandidaturas(CANDIDATURAS_POR_PAGINA);
+    setMenuFiltrosAberto(false);
   }
+
+  // Mede quantos chips de filtro cabem numa linha só e manda o resto pro menu "Mais".
+  // Sempre reseta tudo visível ANTES de medir (senão um chip que ficou escondido na
+  // rodada anterior mede largura 0) e só decide o que esconder depois de somar tudo.
+  useEffect(() => {
+    if (tab !== 'historico') return;
+    function medir() {
+      const row = filtrosRowRef.current;
+      const more = filtrosMoreRef.current;
+      if (!row || !more) return;
+      const chips = Array.from(row.querySelectorAll<HTMLButtonElement>('[data-filtro-chip]'));
+      const gap = 8;
+
+      chips.forEach((c) => { c.hidden = false; });
+      more.hidden = false;
+
+      const containerWidth = row.clientWidth;
+      const moreWidth = more.offsetWidth + gap;
+      const totalChips = chips.reduce((soma, c, i) => soma + c.offsetWidth + (i > 0 ? gap : 0), 0);
+
+      if (totalChips <= containerWidth) {
+        more.hidden = true;
+        setFiltrosOcultos([]);
+        return;
+      }
+
+      const orcamento = containerWidth - moreWidth;
+      let acumulado = 0;
+      const ocultos: ('TODAS' | StatusCandidatura)[] = [];
+      chips.forEach((c, i) => {
+        const w = c.offsetWidth + (i > 0 ? gap : 0);
+        if (acumulado + w <= orcamento) {
+          acumulado += w;
+        } else {
+          c.hidden = true;
+          ocultos.push(c.dataset.filtroChip as 'TODAS' | StatusCandidatura);
+        }
+      });
+      setFiltrosOcultos(ocultos);
+    }
+
+    medir();
+    const row = filtrosRowRef.current;
+    const ro = row ? new ResizeObserver(medir) : null;
+    if (row && ro) ro.observe(row);
+    window.addEventListener('resize', medir);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', medir);
+    };
+    // candidaturas.length (não o objeto contagemStatus, que é recriado a cada render)
+    // é o que de fato muda a largura dos números nos chips e merece remedir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, candidaturas.length]);
 
   useEffect(() => {
     if (tab !== 'home' && tab !== 'historico') return;
@@ -1111,16 +1191,15 @@ function ProfissionalPageInner() {
             <h1 className="text-2xl font-extrabold mb-1 text-white">Minhas candidaturas</h1>
             <p className="text-sm text-white/85 mb-5">Acompanhe o status das vagas que você se candidatou</p>
 
-            {/* Rolagem horizontal em vez de quebrar linha — com 7 chips, um flex-wrap normal
-                sobrava o último sozinho numa segunda linha em telas mais estreitas. O gradiente
-                na borda direita avisa que dá pra arrastar pra ver mais. */}
+            {/* Mostra só quantos chips cabem numa linha só (medido de verdade, não chutado
+                por breakpoint) — o resto entra no botão "Mais". Substitui o scroll horizontal
+                de antes, que em telas sem trackpad deixava os últimos chips inalcançáveis. */}
             <div className="relative mb-5">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-                {([
-                  ['TODAS', 'Todas'], ['PENDENTE', 'Pendentes'], ['ACEITO', 'Aceitas'], ['CONCLUIDA', 'Concluídas'], ['NAO_COMPARECEU', 'Não compareceu'], ['RECUSADO', 'Recusadas'], ['ENCERRADA', 'Encerradas'], ['DESISTIU', 'Desistências'],
-                ] as const).map(([key, label]) => (
+              <div ref={filtrosRowRef} className="flex flex-nowrap items-center gap-2 overflow-hidden">
+                {FILTROS_CANDIDATURA.map(({ key, label }) => (
                   <button
                     key={key}
+                    data-filtro-chip={key}
                     onClick={() => selecionarFiltroCandidaturas(key)}
                     className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap shrink-0 ${
                       filtroCandidaturas === key ? 'bg-white text-primaryDeep' : 'bg-white/15 text-white hover:bg-white/25'
@@ -1132,8 +1211,47 @@ function ProfissionalPageInner() {
                     </span>
                   </button>
                 ))}
+                <button
+                  ref={filtrosMoreRef}
+                  onClick={() => setMenuFiltrosAberto((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13.5px] font-bold whitespace-nowrap shrink-0 relative ${
+                    filtrosOcultos.includes(filtroCandidaturas) ? 'bg-white text-primaryDeep' : 'bg-white/15 text-white hover:bg-white/25'
+                  }`}
+                >
+                  <FilterIcon className="w-3.5 h-3.5" /> Mais
+                  <ChevronLeftIcon className={`w-3 h-3 -rotate-90 transition-transform ${menuFiltrosAberto ? 'rotate-90' : ''}`} />
+                  {/* Bolinha de aviso: o filtro ativo está escondido dentro do "Mais" — sem isso,
+                      escolher um filtro que caiu no overflow parecia não ter feito nada. */}
+                  {filtrosOcultos.includes(filtroCandidaturas) && (
+                    <span className="absolute top-1 right-1 w-[7px] h-[7px] rounded-full bg-amber-400" />
+                  )}
+                </button>
               </div>
-              <div className="absolute top-0 right-0 bottom-0.5 w-8 bg-gradient-to-r from-transparent to-primary pointer-events-none" />
+
+              {menuFiltrosAberto && filtrosOcultos.length > 0 && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setMenuFiltrosAberto(false)} />
+                  <div className="absolute top-[calc(100%+8px)] right-0 w-[240px] max-w-[calc(100vw-3rem)] bg-white border border-gray-100 rounded-2xl shadow-[0_12px_32px_rgba(4,45,76,0.14)] overflow-hidden z-30">
+                    <div className="px-3.5 py-2.5 text-[10.5px] font-extrabold uppercase tracking-wide text-gray-400 border-b border-gray-50">Mais filtros</div>
+                    {filtrosOcultos.map((key) => {
+                      const item = FILTROS_CANDIDATURA.find((f) => f.key === key);
+                      if (!item) return null;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => selecionarFiltroCandidaturas(key)}
+                          className={`flex items-center gap-2.5 w-full text-left px-3.5 py-2.5 text-[13px] font-bold ${
+                            filtroCandidaturas === key ? 'bg-primaryTint text-primaryDeep' : 'text-ink hover:bg-gray-50'
+                          }`}
+                        >
+                          <span className="flex-1">{item.label}</span>
+                          <span className="text-[11px] font-extrabold text-gray-400">{contagemStatus[key]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex flex-col gap-[14px]">
