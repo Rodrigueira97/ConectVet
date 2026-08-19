@@ -1558,18 +1558,30 @@ function ClinicaPageInner() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
                 <div className="bg-white rounded-2xl p-4">
+                  <div className="w-8 h-8 rounded-lg bg-primaryTint text-primaryDeep flex items-center justify-center mb-2">
+                    <GridIcon className="w-4 h-4" />
+                  </div>
                   <div className="text-xl font-extrabold text-ink">{vagasAtivas}</div>
                   <div className="text-[11px] font-bold text-gray-500 mt-0.5">Vagas ativas</div>
                 </div>
                 <div className="bg-white rounded-2xl p-4">
+                  <div className="w-8 h-8 rounded-lg bg-primaryTint text-primaryDeep flex items-center justify-center mb-2">
+                    <CheckCircleIcon className="w-4 h-4" />
+                  </div>
                   <div className="text-xl font-extrabold text-ink">{taxaPreenchimento !== null ? `${taxaPreenchimento}%` : '—'}</div>
                   <div className="text-[11px] font-bold text-gray-500 mt-0.5">Taxa de preenchimento</div>
                 </div>
                 <div className="bg-white rounded-2xl p-4">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mb-2">
+                    <StarIcon className="w-4 h-4" />
+                  </div>
                   <div className="text-xl font-extrabold text-ink">{notaMedia !== null ? notaMedia.toFixed(1) : '—'}</div>
                   <div className="text-[11px] font-bold text-gray-500 mt-0.5">Avaliação recebida</div>
                 </div>
                 <div className="bg-white rounded-2xl p-4">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mb-2">
+                    <LockIcon className="w-4 h-4" />
+                  </div>
                   <div className="text-xl font-extrabold text-ink">R$ {retidoTotal.toFixed(2)}</div>
                   <div className="text-[11px] font-bold text-gray-500 mt-0.5">Retido, aguardando confirmação</div>
                 </div>
